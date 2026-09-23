@@ -20,7 +20,7 @@ jobs:
       - name: Restore Android source
         run: |
           mkdir -p android-app
-          unzip -q -o ARUNO-CLICKER-v0.3.8-source-release.zip -d android-app
+          unzip -q -o ARUNO-CLICKER-v0.3.8-source-release2.zip -d android-app
           chmod +x android-app/gradlew
 
       - uses: gradle/actions/setup-gradle@v4
