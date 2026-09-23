@@ -570,7 +570,22 @@ class ArunoAccessibilityService : AccessibilityService() {
         onFinished: (Boolean) -> Unit,
     ) {
         if (!isSessionActive(generation)) return
+        // HyperOS returns to the home screen as soon as the last recent-app card
+        // is removed. The launcher can still expose a TikTok Lite home-screen
+        // icon, so stop card discovery when the recents surface disappears.
         val targetCardBounds = findTargetRecentsCardBounds(bounds)
+        if (
+            targetCardBounds == null &&
+            prefersHorizontalRecentsDismissal() &&
+            !hasBottomRecentsClearIndicator(bounds)
+        ) {
+            AutomationRuntime.markWaiting(
+                this,
+                "カードタスクキル\nTikTokカード残り0件",
+            )
+            onFinished(true)
+            return
+        }
         if (targetCardBounds == null) {
             val searchLimit = if (searchDirection == RECENTS_SEARCH_FORWARD) {
                 MAX_RECENTS_CARDS_TO_SEARCH
@@ -580,7 +595,7 @@ class ArunoAccessibilityService : AccessibilityService() {
             if (searchIndex >= searchLimit) {
                 if (searchDirection == RECENTS_SEARCH_FORWARD) {
                     AutomationRuntime.markWaiting(this, "カードを反対方向へ探索\n1/${MAX_RECENTS_CARDS_TO_SEARCH * 2}")
-                    swipeRecentsHorizontally(generation, bounds, RECENTS_SEARCH_REVERSE) { moved ->
+                    swipeRecentsForSearch(generation, bounds, RECENTS_SEARCH_REVERSE) { moved ->
                         if (!moved) {
                             onFinished(false)
                         } else {
@@ -606,13 +621,9 @@ class ArunoAccessibilityService : AccessibilityService() {
             } else {
                 AutomationRuntime.markWaiting(
                     this,
-                    if (searchDirection == RECENTS_SEARCH_FORWARD) {
-                        "カードを右方向へ探索\n${searchIndex + 1}/$searchLimit"
-                    } else {
-                        "カードを左方向へ探索\n${searchIndex + 1}/$searchLimit"
-                    },
+                    recentsSearchLabel(bounds, searchDirection, searchIndex + 1, searchLimit),
                 )
-                swipeRecentsHorizontally(generation, bounds, searchDirection) { moved ->
+                swipeRecentsForSearch(generation, bounds, searchDirection) { moved ->
                     if (!moved) {
                         onFinished(false)
                     } else {
@@ -643,7 +654,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         ) { dismissed ->
             if (!isSessionActive(generation)) return@dismissVisibleTargetRecentsCard
             if (!dismissed) {
-                onFinished(false)
+                clearAllRecentsAsFallback(generation, bounds, onFinished)
             } else {
                 AutomationRuntime.markWaiting(
                     this,
@@ -775,9 +786,15 @@ class ArunoAccessibilityService : AccessibilityService() {
      * It is used only as a layout signal; the app never taps it because that would
      * also close unrelated LINE/Chrome cards.
      */
-    private fun hasBottomRecentsClearIndicator(screen: Rect): Boolean {
+    private fun hasBottomRecentsClearIndicator(screen: Rect): Boolean =
+        findRecentsClearAllNode(screen) != null
+
+    private fun findRecentsClearAllNode(screen: Rect): AccessibilityNodeInfo? {
+        val activePackage = rootInActiveWindow?.packageName?.toString() ?: return null
         val queue = ArrayDeque<AccessibilityNodeInfo>()
-        windows.mapNotNullTo(queue) { it.root }
+        windows.mapNotNullTo(queue) { window ->
+            window.root?.takeIf { it.packageName?.toString() == activePackage }
+        }
         var visited = 0
         val minY = screen.top + (screen.height() * 0.68f).toInt()
         val minX = screen.left + (screen.width() * 0.22f).toInt()
@@ -799,12 +816,12 @@ class ArunoAccessibilityService : AccessibilityService() {
                     val exactX = label in RECENTS_CLEAR_LABELS
                     val clearAllHint = RECENTS_CLEAR_RESOURCE_HINTS.any(resourceId::contains) ||
                         RECENTS_CLEAR_WORD_HINTS.any(label::contains)
-                    if (exactX || clearAllHint) return true
+                    if (exactX || clearAllHint) return node
                 }
             }
             for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
         }
-        return false
+        return null
     }
 
     private fun sameRecentsCard(before: Rect, after: Rect): Boolean {
@@ -849,6 +866,92 @@ class ArunoAccessibilityService : AccessibilityService() {
         if (!accepted) onFinished(false)
     }
 
+    private fun swipeRecentsVertically(
+        generation: Long,
+        bounds: Rect,
+        direction: Int,
+        onFinished: (Boolean) -> Unit,
+    ) {
+        if (!isSessionActive(generation)) return
+        val x = bounds.width() * 0.50f
+        val path = Path().apply {
+            if (direction == RECENTS_SEARCH_FORWARD) {
+                moveTo(x, bounds.height() * 0.72f)
+                lineTo(x, bounds.height() * 0.28f)
+            } else {
+                moveTo(x, bounds.height() * 0.28f)
+                lineTo(x, bounds.height() * 0.72f)
+            }
+        }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, RECENTS_SEARCH_DURATION_MS))
+            .build()
+        val accepted = dispatchGesture(
+            gesture,
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) = onFinished(true)
+                override fun onCancelled(gestureDescription: GestureDescription?) = onFinished(false)
+            },
+            handler,
+        )
+        if (!accepted) onFinished(false)
+    }
+
+    private fun swipeRecentsForSearch(
+        generation: Long,
+        bounds: Rect,
+        direction: Int,
+        onFinished: (Boolean) -> Unit,
+    ) {
+        if (usesHorizontalRecentsDismissal(bounds)) {
+            swipeRecentsVertically(generation, bounds, direction, onFinished)
+        } else {
+            swipeRecentsHorizontally(generation, bounds, direction, onFinished)
+        }
+    }
+
+    private fun recentsSearchLabel(bounds: Rect, direction: Int, index: Int, limit: Int): String {
+        val directionLabel = if (usesHorizontalRecentsDismissal(bounds)) {
+            if (direction == RECENTS_SEARCH_FORWARD) "下側" else "上側"
+        } else {
+            if (direction == RECENTS_SEARCH_FORWARD) "右方向" else "左方向"
+        }
+        return "カードを${directionLabel}へ探索\n$index/$limit"
+    }
+
+    private fun clearAllRecentsAsFallback(
+        generation: Long,
+        bounds: Rect,
+        onFinished: (Boolean) -> Unit,
+    ) {
+        if (!isSessionActive(generation)) return
+        val clearNode = findRecentsClearAllNode(bounds)
+        if (clearNode == null) {
+            onFinished(false)
+            return
+        }
+        var clicked = false
+        var current: AccessibilityNodeInfo? = clearNode
+        repeat(MAX_CLICKABLE_PARENT_DEPTH) {
+            val candidate = current ?: return@repeat
+            if (!clicked && candidate.isClickable) {
+                clicked = candidate.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            current = candidate.parent
+        }
+        if (!clicked) clicked = clearNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (!clicked) {
+            onFinished(false)
+            return
+        }
+        AutomationRuntime.markWaiting(this, "カードタスクキル\n全カード消去で再確認")
+        handler.postDelayed({
+            if (isSessionActive(generation)) {
+                onFinished(findTargetRecentsCardBounds(bounds) == null)
+            }
+        }, RECENTS_AFTER_DISMISS_MS)
+    }
+
     private fun waitForRecentsSurface(generation: Long, onFinished: (Boolean) -> Unit) {
         val deadline = android.os.SystemClock.elapsedRealtime() + RECENTS_READY_TIMEOUT_MS
         val check = object : Runnable {
@@ -868,18 +971,25 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     private fun findTargetRecentsCardBounds(screen: Rect): Rect? {
+        val activePackage = rootInActiveWindow?.packageName?.toString() ?: return null
         val queue = ArrayDeque<AccessibilityNodeInfo>()
-        windows.mapNotNullTo(queue) { it.root }
+        windows.mapNotNullTo(queue) { window ->
+            window.root?.takeIf { it.packageName?.toString() == activePackage }
+        }
         var visited = 0
         while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
             val node = queue.removeFirst()
             visited += 1
+            val labelBounds = Rect().also(node::getBoundsInScreen)
+            val visibleOnScreen = node.isVisibleToUser &&
+                !labelBounds.isEmpty &&
+                screen.contains(labelBounds.centerX(), labelBounds.centerY())
             val label = buildString {
                 append(node.text?.toString().orEmpty())
                 append(' ')
                 append(node.contentDescription?.toString().orEmpty())
             }
-            if (TARGET_CARD_LABELS.any { label.contains(it, ignoreCase = true) }) {
+            if (visibleOnScreen && TARGET_CARD_LABELS.any { label.contains(it, ignoreCase = true) }) {
                 var current: AccessibilityNodeInfo? = node
                 var best: Rect? = null
                 repeat(MAX_CARD_PARENT_DEPTH) {
@@ -894,7 +1004,9 @@ class ArunoAccessibilityService : AccessibilityService() {
                     }
                     current = candidate.parent
                 }
-                return best ?: Rect().also(node::getBoundsInScreen).takeIf { !it.isEmpty }
+                // A launcher icon can carry exactly the same accessible label as
+                // a recents card. Only a card-sized ancestor is a valid match.
+                best?.let { return it }
             }
             for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
         }
@@ -1590,6 +1702,7 @@ class ArunoAccessibilityService : AccessibilityService() {
             "すべて消去",
             "すべて閉じる",
             "全て消去",
+            "クリア",
             "clear all",
             "close all",
         )
@@ -1599,6 +1712,8 @@ class ArunoAccessibilityService : AccessibilityService() {
             "clean_all",
             "cleanall",
             "dismiss_all",
+            "clear_anim",
+            "clearanimview",
         )
 
         @Volatile var instance: ArunoAccessibilityService? = null
