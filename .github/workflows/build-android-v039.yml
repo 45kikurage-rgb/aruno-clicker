@@ -21,6 +21,8 @@ jobs:
         run: |
           base64 -d aruno-clicker-v0.3.9.patch.gz.b64 | gzip -d > /tmp/aruno-clicker-v0.3.9.patch
           git apply /tmp/aruno-clicker-v0.3.9.patch
+          base64 -d aruno-clicker-v0.3.9-hotfix.patch.gz.b64 | gzip -d > /tmp/aruno-clicker-v0.3.9-hotfix.patch
+          git apply /tmp/aruno-clicker-v0.3.9-hotfix.patch
 
       - name: Prepare Android source
         run: chmod +x android-app/gradlew
