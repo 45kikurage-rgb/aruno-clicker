@@ -78,6 +78,7 @@ class SettingsRepository(context: Context) {
     private fun AppSettings.sanitized() = copy(
         scrollIntervalSeconds = scrollIntervalSeconds.coerceIn(3, 120),
         swipeDurationMillis = swipeDurationMillis.coerceIn(80, 1_500),
+        classificationConfirmationCount = classificationConfirmationCount.coerceIn(1, 3),
         fastIntervalSeconds = fastIntervalSeconds.coerceIn(1, 7),
         fastSwipeDurationMillis = fastSwipeDurationMillis.coerceIn(80, 300),
         runMinutes = runMinutes.coerceIn(0, 720),
@@ -103,6 +104,7 @@ class SettingsRepository(context: Context) {
         runMinutes = getInt("run_minutes", defaultRunMinutes),
         randomInterval = getBoolean("random_interval", true),
         fastContentEnabled = getBoolean("fast_content_enabled", true),
+        classificationConfirmationCount = getInt("classification_confirmation_count", 2),
         fastIntervalSeconds = getInt("fast_interval_seconds", 2),
         fastSwipeDurationMillis = getInt("fast_swipe_duration_millis", 150),
         floatingController = getBoolean("floating_controller", true),
@@ -143,6 +145,7 @@ class SettingsRepository(context: Context) {
         putInt("run_minutes", value.runMinutes)
         putBoolean("random_interval", value.randomInterval)
         putBoolean("fast_content_enabled", value.fastContentEnabled)
+        putInt("classification_confirmation_count", value.classificationConfirmationCount)
         putInt("fast_interval_seconds", value.fastIntervalSeconds)
         putInt("fast_swipe_duration_millis", value.fastSwipeDurationMillis)
         putBoolean("floating_controller", value.floatingController)

@@ -7,6 +7,7 @@ data class AppSettings(
     val runMinutes: Int = 120,
     val randomInterval: Boolean = true,
     val fastContentEnabled: Boolean = true,
+    val classificationConfirmationCount: Int = 2,
     val fastIntervalSeconds: Int = 2,
     val fastSwipeDurationMillis: Int = 150,
     val floatingController: Boolean = true,

@@ -12,8 +12,8 @@ android {
         applicationId = "jp.aruno.clicker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.3.8"
+        versionCode = 12
+        versionName = "0.3.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

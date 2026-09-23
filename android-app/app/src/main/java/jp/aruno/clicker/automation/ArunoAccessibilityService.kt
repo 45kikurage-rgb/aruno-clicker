@@ -52,6 +52,8 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var pendingSwipePageToken = -1L
     private var contentVisibleSinceMs = 0L
     private var contentPageToken = 0L
+    private var classificationCandidate: String? = null
+    private var classificationMatchCount = 0
     private var slidePhaseActive = false
     private var popupDismissInProgress = false
     private var popupCheckScheduled = false
@@ -205,6 +207,8 @@ class ArunoAccessibilityService : AccessibilityService() {
         lastPopupDismissAtMs = 0L
         pendingSwipeReason = null
         pendingSwipePageToken = -1L
+        classificationCandidate = null
+        classificationMatchCount = 0
         contentPageToken += 1L
         lastSwipeDelayMs = 0L
         handler.removeCallbacksAndMessages(null)
@@ -373,6 +377,8 @@ class ArunoAccessibilityService : AccessibilityService() {
         contentPageToken += 1L
         pendingSwipeReason = null
         pendingSwipePageToken = -1L
+        classificationCandidate = null
+        classificationMatchCount = 0
         handler.removeCallbacks(swipeRunnable)
         handler.removeCallbacks(popupCheckRunnable)
         val phaseLabel = if (completedWarmupCycles < WARMUP_CYCLE_COUNT) {
@@ -1062,34 +1068,33 @@ class ArunoAccessibilityService : AccessibilityService() {
         if (!isSessionActive(generation) || restartInProgress) return
         pendingSwipeReason = null
         pendingSwipePageToken = -1L
+        classificationCandidate = null
+        classificationMatchCount = 0
         handler.removeCallbacks(swipeRunnable)
         contentVisibleSinceMs = android.os.SystemClock.elapsedRealtime()
         val pageToken = ++contentPageToken
+        val regularDelay = nextRegularSwipeDelayMs(activeConfig)
+        lastSwipeDelayMs = regularDelay
+        pendingSwipePageToken = pageToken
         AutomationRuntime.markWaiting(
             this,
-            phaseLabel?.let { "$it\n画面を確認しています" } ?: "次の画面\n判定待機中",
+            phaseLabel?.let { "$it\n通常画面 ${regularDelay / 1_000L}秒待機" }
+                ?: "通常画面\n${regularDelay / 1_000L}秒待機",
         )
+        handler.postDelayed(swipeRunnable, regularDelay)
+        if (!activeConfig.fastContentEnabled) return
         handler.postDelayed(
             { evaluateContentAndScheduleSwipe(generation, pageToken) },
             activeConfig.pageSettleMs,
         )
-        handler.postDelayed({
-            if (
-                isCurrentContentPage(generation, pageToken) &&
-                isTargetForeground() &&
-                pendingSwipePageToken != pageToken
-            ) {
-                performConfiguredSwipe(ContentClassifier.CLASSIFICATION_TIMEOUT, generation)
-            }
-        }, CLASSIFICATION_TIMEOUT_MS)
     }
 
     private fun evaluateContentAndScheduleSwipe(generation: Long, pageToken: Long) {
         if (!isCurrentContentPage(generation, pageToken)) return
         if (dismissBlockingPopupIfPresent(generation)) return
-        val accessibilitySignal = if (activeConfig.fastContentEnabled) detectFastContent() else null
+        val accessibilitySignal = detectFastContent()
         if (accessibilitySignal != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            scheduleSwipeForCurrentContent(accessibilitySignal, generation, pageToken)
+            handleClassificationResult(accessibilitySignal, generation, pageToken)
             return
         }
         runCatching { takeScreenshot(
@@ -1105,7 +1110,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     hardwareBuffer.close()
                     if (bitmap == null) {
                         if (isCurrentContentPage(generation, pageToken) && isTargetForeground()) {
-                            scheduleSwipeForCurrentContent(null, generation, pageToken)
+                            handleClassificationResult(null, generation, pageToken)
                         }
                         return
                     }
@@ -1134,7 +1139,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                             }
                             handler.post {
                                 if (isCurrentContentPage(generation, pageToken) && isTargetForeground()) {
-                                    scheduleSwipeForCurrentContent(
+                                    handleClassificationResult(
                                         when {
                                             pageDotsFound -> ContentClassifier.PAGE_DOTS
                                             gaugeFound == false -> ContentClassifier.NO_GAUGE
@@ -1149,52 +1154,105 @@ class ArunoAccessibilityService : AccessibilityService() {
                     }.onFailure {
                         bitmap.recycle()
                         if (isCurrentContentPage(generation, pageToken) && isTargetForeground()) {
-                            scheduleSwipeForCurrentContent(null, generation, pageToken)
+                            handleClassificationResult(null, generation, pageToken)
                         }
                     }
                 }
 
                 override fun onFailure(errorCode: Int) {
                     if (isCurrentContentPage(generation, pageToken) && isTargetForeground()) {
-                        scheduleSwipeForCurrentContent(null, generation, pageToken)
+                        handleClassificationResult(null, generation, pageToken)
                     }
                 }
             },
         ) }.onFailure {
             if (isCurrentContentPage(generation, pageToken) && isTargetForeground()) {
-                scheduleSwipeForCurrentContent(null, generation, pageToken)
+                handleClassificationResult(null, generation, pageToken)
             }
         }
     }
 
-    private fun scheduleSwipeForCurrentContent(
+    private fun handleClassificationResult(
         reason: String?,
         generation: Long,
         pageToken: Long,
     ) {
         if (!isCurrentContentPage(generation, pageToken) || !isTargetForeground()) return
-        val fastContent = isForcedSwipeReason(reason)
-        val totalDelay = if (fastContent) activeConfig.fastIntervalMs else nextRegularSwipeDelayMs(activeConfig)
+        val requiredMatches = activeConfig.classificationConfirmationCount
+        if (isForcedSwipeReason(reason)) {
+            val confirmedReason = requireNotNull(reason)
+            if (classificationCandidate == confirmedReason) {
+                classificationMatchCount += 1
+            } else {
+                classificationCandidate = confirmedReason
+                classificationMatchCount = 1
+            }
+            val label = classificationLabel(confirmedReason)
+            if (classificationMatchCount >= requiredMatches) {
+                scheduleConfirmedFastSwipe(confirmedReason, label, generation, pageToken)
+                return
+            }
+            AutomationRuntime.markWaiting(
+                this,
+                "${label}を確認中\n$classificationMatchCount/$requiredMatches",
+            )
+        } else {
+            classificationCandidate = null
+            classificationMatchCount = 0
+            markRegularWaiting()
+        }
+
         val elapsed = android.os.SystemClock.elapsedRealtime() - contentVisibleSinceMs
-        val remainingDelay = (totalDelay - elapsed).coerceAtLeast(MIN_SWIPE_SCHEDULE_DELAY_MS)
+        if (elapsed + CLASSIFICATION_RECHECK_MS < lastSwipeDelayMs) {
+            handler.postDelayed(
+                { evaluateContentAndScheduleSwipe(generation, pageToken) },
+                CLASSIFICATION_RECHECK_MS,
+            )
+        }
+    }
+
+    private fun scheduleConfirmedFastSwipe(
+        reason: String,
+        label: String,
+        generation: Long,
+        pageToken: Long,
+    ) {
+        if (!isCurrentContentPage(generation, pageToken) || !isTargetForeground()) return
+        val elapsed = android.os.SystemClock.elapsedRealtime() - contentVisibleSinceMs
+        val regularRemaining = (lastSwipeDelayMs - elapsed).coerceAtLeast(MIN_SWIPE_SCHEDULE_DELAY_MS)
+        val fastRemaining = (activeConfig.fastIntervalMs - elapsed).coerceAtLeast(MIN_SWIPE_SCHEDULE_DELAY_MS)
+        if (fastRemaining >= regularRemaining) {
+            pendingSwipeReason = null
+            markRegularWaiting()
+            return
+        }
         pendingSwipeReason = reason
         pendingSwipePageToken = pageToken
-        lastSwipeDelayMs = totalDelay
-        val label = when (reason) {
-            ContentClassifier.AD -> "広告確認"
-            ContentClassifier.PHOTO -> "写真確認"
-            ContentClassifier.TEXT_IMAGE -> "テキスト画像確認"
-            ContentClassifier.PAGE_DOTS -> "ページ表示確認"
-            ContentClassifier.NO_GAUGE -> "サークルゲージなし"
-            ContentClassifier.CLASSIFICATION_TIMEOUT -> "判定待機5秒"
-            else -> "通常画面"
-        }
         AutomationRuntime.markWaiting(
             this,
-            "$label\n${(remainingDelay + 999L) / 1_000L}秒後にスライド",
+            "$label $classificationMatchCount/${activeConfig.classificationConfirmationCount}・確定\n" +
+                "${(fastRemaining + 999L) / 1_000L}秒後にスライド",
         )
         handler.removeCallbacks(swipeRunnable)
-        handler.postDelayed(swipeRunnable, remainingDelay)
+        handler.postDelayed(swipeRunnable, fastRemaining)
+    }
+
+    private fun markRegularWaiting() {
+        val elapsed = android.os.SystemClock.elapsedRealtime() - contentVisibleSinceMs
+        val remaining = (lastSwipeDelayMs - elapsed).coerceAtLeast(0L)
+        AutomationRuntime.markWaiting(
+            this,
+            "通常画面\n${(remaining + 999L) / 1_000L}秒待機",
+        )
+    }
+
+    private fun classificationLabel(reason: String?): String = when (reason) {
+        ContentClassifier.AD -> "広告"
+        ContentClassifier.PHOTO -> "写真"
+        ContentClassifier.TEXT_IMAGE -> "テキスト画像"
+        ContentClassifier.PAGE_DOTS -> "ページ表示"
+        ContentClassifier.NO_GAUGE -> "サークルゲージなし"
+        else -> "高速対象"
     }
 
     private fun performConfiguredSwipe(fastReason: String?, generation: Long) {
@@ -1305,10 +1363,10 @@ class ArunoAccessibilityService : AccessibilityService() {
         val width = bitmap.width
         val height = bitmap.height
         if (width < 100 || height < 200) return false
-        val left = (width * 0.32f).toInt()
-        val right = (width * 0.68f).toInt()
-        val top = (height * 0.56f).toInt()
-        val bottom = (height * 0.84f).toInt()
+        val left = (width * 0.37f).toInt()
+        val right = (width * 0.63f).toInt()
+        val top = (height * 0.60f).toInt()
+        val bottom = (height * 0.80f).toInt()
         val roiWidth = right - left
         val roiHeight = bottom - top
         if (roiWidth <= 0 || roiHeight <= 0) return false
@@ -1323,7 +1381,7 @@ class ArunoAccessibilityService : AccessibilityService() {
             val blue = Color.blue(pixel)
             val maximum = maxOf(red, green, blue)
             val minimum = minOf(red, green, blue)
-            bright[index] = maximum >= 145 && maximum - minimum <= 65
+            bright[index] = maximum >= 165 && maximum - minimum <= 45
         }
 
         val visited = BooleanArray(pixels.size)
@@ -1363,15 +1421,15 @@ class ArunoAccessibilityService : AccessibilityService() {
             }
             val componentWidth = maxX - minX + 1
             val componentHeight = maxY - minY + 1
-            val maxDotSize = (width * 0.045f).toInt().coerceAtLeast(8)
-            val minDotSize = (width * 0.006f).toInt().coerceAtLeast(2)
+            val maxDotSize = (width * 0.030f).toInt().coerceAtLeast(8)
+            val minDotSize = (width * 0.008f).toInt().coerceAtLeast(2)
             val fillRatio = area.toFloat() / (componentWidth * componentHeight).coerceAtLeast(1)
             val aspectRatio = componentWidth.toFloat() / componentHeight.coerceAtLeast(1)
             if (
                 componentWidth in minDotSize..maxDotSize &&
                 componentHeight in minDotSize..maxDotSize &&
-                aspectRatio in 0.55f..1.80f &&
-                fillRatio >= 0.35f
+                aspectRatio in 0.72f..1.38f &&
+                fillRatio >= 0.48f
             ) {
                 candidates += DotCandidate(
                     x = left + (minX + maxX) / 2,
@@ -1382,20 +1440,33 @@ class ArunoAccessibilityService : AccessibilityService() {
             }
         }
 
-        val maxRowDifference = (width * 0.025f).toInt().coerceAtLeast(5)
-        val minSpacing = (width * 0.012f).toInt().coerceAtLeast(4)
-        val maxSpacing = (width * 0.10f).toInt().coerceAtLeast(18)
+        val maxRowDifference = (width * 0.014f).toInt().coerceAtLeast(4)
+        val minSpacing = (width * 0.015f).toInt().coerceAtLeast(4)
+        val maxSpacing = (width * 0.075f).toInt().coerceAtLeast(16)
+        val centerMin = (width * 0.44f).toInt()
+        val centerMax = (width * 0.56f).toInt()
         val sorted = candidates.sortedBy { it.x }
         for (firstIndex in sorted.indices) {
             var alignedCount = 1
             var previous = sorted[firstIndex]
+            var groupMinX = previous.x
+            var groupMaxX = previous.x
             for (nextIndex in firstIndex + 1 until sorted.size) {
                 val next = sorted[nextIndex]
                 val spacing = next.x - previous.x
-                if (kotlin.math.abs(next.y - previous.y) <= maxRowDifference && spacing in minSpacing..maxSpacing) {
+                val similarWidth = maxOf(next.width, previous.width) <= minOf(next.width, previous.width) * 1.7f
+                val similarHeight = maxOf(next.height, previous.height) <= minOf(next.height, previous.height) * 1.7f
+                if (
+                    kotlin.math.abs(next.y - previous.y) <= maxRowDifference &&
+                    spacing in minSpacing..maxSpacing &&
+                    similarWidth &&
+                    similarHeight
+                ) {
                     alignedCount += 1
                     previous = next
-                    if (alignedCount >= 2) return true
+                    groupMaxX = next.x
+                    val groupCenter = (groupMinX + groupMaxX) / 2
+                    if (alignedCount >= 2 && groupCenter in centerMin..centerMax) return true
                 }
             }
         }
@@ -1493,7 +1564,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         private const val MAX_CARD_PARENT_DEPTH = 7
         private const val MAX_NODES_TO_SCAN = 500
         private const val MIN_SWIPE_SCHEDULE_DELAY_MS = 100L
-        private const val CLASSIFICATION_TIMEOUT_MS = 5_000L
+        private const val CLASSIFICATION_RECHECK_MS = 400L
         private const val GESTURE_RETRY_DELAY_MS = 500L
         private const val POPUP_EVENT_DEBOUNCE_MS = 180L
         private const val POPUP_SCAN_THROTTLE_MS = 500L

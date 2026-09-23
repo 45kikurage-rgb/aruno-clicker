@@ -443,9 +443,23 @@ private fun HomeScreen(
             item { SectionTitle("現在の設定") }
             item {
                 MatrixCard {
-                    SummaryLine(Icons.Rounded.Refresh, "スライド間隔", "約 ${settings.scrollIntervalSeconds} 秒")
+                    SummaryLine(
+                        Icons.Rounded.Refresh,
+                        "通常スライド",
+                        if (settings.randomInterval) "7・8・9秒（優先）" else "${settings.scrollIntervalSeconds} 秒",
+                    )
                     HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    SummaryLine(Icons.Rounded.Bolt, "操作速度", "${settings.swipeDurationMillis} ms")
+                    SummaryLine(
+                        Icons.Rounded.Bolt,
+                        "高速スライド",
+                        if (settings.fastContentEnabled) {
+                            "${settings.fastIntervalSeconds}秒・${settings.classificationConfirmationCount}回一致"
+                        } else {
+                            "OFF"
+                        },
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                    SummaryLine(Icons.Rounded.SwipeUp, "スワイプ速度", "${settings.swipeDurationMillis} ms")
                     HorizontalDivider(color = Color.White.copy(alpha = .07f))
                     SummaryLine(
                         Icons.Rounded.Alarm,
@@ -517,12 +531,21 @@ private fun SettingsScreen(
             item { SectionTitle("基本動作") }
             item {
                 MatrixCard {
+                    SettingSwitchRow(
+                        title = "通常画面を7・8・9秒でランダムスライド",
+                        subtitle = "ONの間は下の指定秒数より優先されます",
+                        checked = settings.randomInterval,
+                        onCheckedChange = { checked -> onUpdate { it.copy(randomInterval = checked) } },
+                        icon = Icons.Rounded.AutoAwesome,
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
                     SliderSetting(
-                        title = "スライド間隔",
-                        valueLabel = if (settings.randomInterval) "7・8・9秒" else "${settings.scrollIntervalSeconds} 秒",
+                        title = "通常画面の指定秒数",
+                        valueLabel = if (settings.randomInterval) "ランダム優先" else "${settings.scrollIntervalSeconds} 秒",
                         value = settings.scrollIntervalSeconds.toFloat(),
                         range = 3f..60f,
                         steps = 56,
+                        enabled = !settings.randomInterval,
                         onChange = { value ->
                             onUpdate { it.copy(scrollIntervalSeconds = value.roundToInt()) }
                         },
@@ -714,6 +737,13 @@ private fun SettingsScreen(
                         onCheckedChange = { checked -> onUpdate { it.copy(fastContentEnabled = checked) } },
                         icon = Icons.Rounded.Bolt,
                     )
+                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                    ClassificationCountSetting(
+                        selected = settings.classificationConfirmationCount,
+                        onSelected = { count ->
+                            onUpdate { it.copy(classificationConfirmationCount = count) }
+                        },
+                    )
                     Column {
                         HorizontalDivider(color = Color.White.copy(alpha = .07f))
                         SliderSetting(
@@ -744,14 +774,6 @@ private fun SettingsScreen(
             item { SectionTitle("安定動作", Modifier.padding(top = 6.dp)) }
             item {
                 MatrixCard {
-                    SettingSwitchRow(
-                        title = "7・8・9秒をランダムにする",
-                        subtitle = "サークルゲージがない画面も強制スライドします",
-                        checked = settings.randomInterval,
-                        onCheckedChange = { checked -> onUpdate { it.copy(randomInterval = checked) } },
-                        icon = Icons.Rounded.AutoAwesome,
-                    )
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
                     SettingSwitchRow(
                         title = "ポップアップの×を自動で閉じる",
                         subtitle = "画面上端から90%以内の閉じる要素を押して動作を再開します",
@@ -907,6 +929,7 @@ private fun DetailsScreen(
                                 swipeDurationMillis = 300,
                                 randomInterval = true,
                                 fastContentEnabled = true,
+                                classificationConfirmationCount = 2,
                                 fastIntervalSeconds = 2,
                                 fastSwipeDurationMillis = 150,
                                 swipeStartPercent = 56,
@@ -946,14 +969,71 @@ private fun SliderSetting(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     steps: Int,
+    enabled: Boolean = true,
     onChange: (Float) -> Unit,
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Text(valueLabel, color = MatrixGreen, fontWeight = FontWeight.Bold)
+            Text(
+                title,
+                color = if (enabled) Color.White else MatrixTextMuted,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                valueLabel,
+                color = if (enabled) MatrixGreen else MatrixTextMuted,
+                fontWeight = FontWeight.Bold,
+            )
         }
-        Slider(value = value, onValueChange = onChange, valueRange = range, steps = steps)
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps,
+            enabled = enabled,
+        )
+    }
+}
+
+@Composable
+private fun ClassificationCountSetting(
+    selected: Int,
+    onSelected: (Int) -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
+        Text("スライド条件判定", fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            (1..3).forEach { count ->
+                if (selected == count) {
+                    Button(
+                        onClick = { onSelected(count) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 11.dp),
+                    ) {
+                        Text("${count}回", fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onSelected(count) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 11.dp),
+                    ) {
+                        Text("${count}回", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        Text(
+            "1回：誤判定が起きやすい　2回：推奨　3回：安定版",
+            style = MaterialTheme.typography.labelSmall,
+            color = MatrixTextMuted,
+            modifier = Modifier.padding(top = 9.dp),
+        )
     }
 }
 

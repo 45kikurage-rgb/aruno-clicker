@@ -10,6 +10,7 @@ data class AutomationConfig(
     val timeLimitMs: Long = DEFAULT_TIME_LIMIT_MS,
     val randomInterval: Boolean = true,
     val fastContentEnabled: Boolean = true,
+    val classificationConfirmationCount: Int = 2,
     val fastIntervalMs: Long = DEFAULT_FAST_INTERVAL_MS,
     val fastGestureDurationMs: Long = DEFAULT_FAST_GESTURE_MS,
     val keepScreenAwake: Boolean = true,
@@ -58,6 +59,7 @@ data class AutomationConfig(
     fun sanitized(): AutomationConfig = copy(
         intervalMs = intervalMs.coerceIn(500L, 60_000L),
         gestureDurationMs = gestureDurationMs.coerceIn(50L, 2_000L),
+        classificationConfirmationCount = classificationConfirmationCount.coerceIn(1, 3),
         fastIntervalMs = fastIntervalMs.coerceIn(1_000L, 7_000L),
         fastGestureDurationMs = fastGestureDurationMs.coerceIn(80L, 300L),
         timeLimitMs = if (timeLimitMs == 0L) 0L else timeLimitMs.coerceIn(60_000L, 12L * 60L * 60L * 1_000L),
@@ -110,6 +112,7 @@ class AutomationConfigStore(context: Context) {
         },
         randomInterval = prefs.getBoolean(KEY_UI_RANDOM_INTERVAL, true),
         fastContentEnabled = prefs.getBoolean(KEY_FAST_CONTENT_ENABLED, true),
+        classificationConfirmationCount = prefs.getInt(KEY_CLASSIFICATION_CONFIRMATION_COUNT, 2),
         fastIntervalMs = prefs.getInt(KEY_FAST_INTERVAL_SECONDS, 2) * 1_000L,
         fastGestureDurationMs = prefs.getInt(KEY_FAST_GESTURE_MS, 150).toLong(),
         keepScreenAwake = prefs.getBoolean(KEY_UI_KEEP_AWAKE, true),
@@ -168,6 +171,7 @@ class AutomationConfigStore(context: Context) {
             .putInt(KEY_UI_END_PERCENT, (safe.endYRatio * 100).toInt())
             .putBoolean(KEY_UI_RANDOM_INTERVAL, safe.randomInterval)
             .putBoolean(KEY_FAST_CONTENT_ENABLED, safe.fastContentEnabled)
+            .putInt(KEY_CLASSIFICATION_CONFIRMATION_COUNT, safe.classificationConfirmationCount)
             .putInt(KEY_FAST_INTERVAL_SECONDS, (safe.fastIntervalMs / 1_000L).toInt())
             .putInt(KEY_FAST_GESTURE_MS, safe.fastGestureDurationMs.toInt())
             .putBoolean(KEY_UI_KEEP_AWAKE, safe.keepScreenAwake)
@@ -230,6 +234,7 @@ class AutomationConfigStore(context: Context) {
         private const val KEY_UI_END_PERCENT = "swipe_end_percent"
         private const val KEY_UI_RANDOM_INTERVAL = "random_interval"
         private const val KEY_FAST_CONTENT_ENABLED = "fast_content_enabled"
+        private const val KEY_CLASSIFICATION_CONFIRMATION_COUNT = "classification_confirmation_count"
         private const val KEY_FAST_INTERVAL_SECONDS = "fast_interval_seconds"
         private const val KEY_FAST_GESTURE_MS = "fast_swipe_duration_millis"
         private const val KEY_UI_KEEP_AWAKE = "keep_screen_awake"

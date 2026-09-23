@@ -24,9 +24,6 @@ internal object ContentClassifier {
         "promoted",
         "advertisement",
         "プロモーション",
-        "詳しくはこちら",
-        "今すぐ購入",
-        "shop now",
     )
 
     private val photoLabels = setOf(
