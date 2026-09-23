@@ -1,0 +1,10 @@
+name = "aruno-clicker-config"
+main = "src/index.js"
+compatibility_date = "2026-09-22"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "aruno-clicker-config"
+database_id = "2a15bb15-cff5-46e5-b8e4-df38846580d1"
+migrations_dir = "migrations"
