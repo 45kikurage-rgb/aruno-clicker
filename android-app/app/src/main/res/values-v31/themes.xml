@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.ArunoClicker.Starting" parent="Theme.ArunoClicker">
+        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/aruno_clicker_icon_maskable</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#FFFFFF</item>
+    </style>
+</resources>
