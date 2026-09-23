@@ -1,6 +1,7 @@
 const MAX_BODY_BYTES = 8 * 1024;
 const MAX_URL_LENGTH = 2048;
 const SCHEMA_VERSION = 1;
+const ADMIN_KEY_PATTERN = /^[A-Za-z0-9]{8}$/;
 const ALLOWED_TIKTOK_HOSTS = new Set([
   "tiktok.com", "www.tiktok.com", "lite.tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com",
 ]);
@@ -30,6 +31,11 @@ async function route(request, env) {
   if (url.pathname === "/v1/history") {
     if (request.method !== "GET") return methodNotAllowed(request, env, "GET, OPTIONS");
     return getHistory(request, env);
+  }
+  if (url.pathname === "/v1/admin-key") {
+    if (request.method === "GET") return getAdminKeyStatus(request, env);
+    if (request.method === "PUT") return registerAdminKey(request, env);
+    return methodNotAllowed(request, env, "GET, PUT, OPTIONS");
   }
   return jsonResponse({ error: { code: "not_found", message: "Not found" } }, 404, request, env);
 }
@@ -128,6 +134,48 @@ async function getHistory(request, env) {
   }, 200, request, env, { "Cache-Control": "no-store, max-age=0" });
 }
 
+async function getAdminKeyStatus(request, env) {
+  requireDb(env);
+  const current = await readStoredAdminKey(env);
+  return jsonResponse({ configured: Boolean(current), schemaVersion: SCHEMA_VERSION }, 200, request, env,
+    { "Cache-Control": "no-store, max-age=0" });
+}
+
+async function registerAdminKey(request, env) {
+  requireDb(env);
+  const contentType = request.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return apiError(415, "unsupported_media_type", "Content-Type must be application/json", request, env);
+  }
+  const rawBody = await request.text();
+  if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+    return apiError(413, "payload_too_large", "Request body is too large", request, env);
+  }
+  let body;
+  try { body = JSON.parse(rawBody); }
+  catch { return apiError(400, "invalid_json", "Request body is not valid JSON", request, env); }
+  if (!isPlainObject(body) || Object.keys(body).some((key) => key !== "newKey")) {
+    return validationError("Only newKey may be supplied", request, env);
+  }
+  if (typeof body.newKey !== "string" || !ADMIN_KEY_PATTERN.test(body.newKey)) {
+    return validationError("newKey must be exactly 8 ASCII letters or digits", request, env);
+  }
+  if (await readStoredAdminKey(env)) {
+    return apiError(409, "admin_key_already_configured", "Administrator key is already configured", request, env);
+  }
+  const keyHash = await sha256Hex(body.newKey);
+  const updatedAt = new Date().toISOString();
+  const result = await env.DB.prepare(
+    `INSERT OR IGNORE INTO admin_settings (id, key_hash, updated_at) VALUES (1, ?, ?)`,
+  ).bind(keyHash, updatedAt).run();
+  if (!result?.success) throw new Error("Administrator key registration failed");
+  if (Number(result?.meta?.changes || 0) !== 1) {
+    return apiError(409, "admin_key_already_configured", "Administrator key is already configured", request, env);
+  }
+  return jsonResponse({ configured: true, updatedAt, schemaVersion: SCHEMA_VERSION }, 201, request, env,
+    { "Cache-Control": "no-store, max-age=0" });
+}
+
 function toPublicConfig(row) {
   return { url1: row.url1, url2: row.url2, configVersion: Number(row.config_version),
     updatedAt: row.updated_at, schemaVersion: SCHEMA_VERSION };
@@ -148,13 +196,28 @@ function validateStartupUrl(value, fieldName) {
 }
 
 async function authenticate(request, env) {
-  if (!env.ADMIN_TOKEN) return apiError(503, "server_not_configured", "ADMIN_TOKEN is not configured", request, env);
   const suppliedToken = readBearerToken(request.headers.get("Authorization"));
-  if (!suppliedToken || !(await secureEqual(suppliedToken, env.ADMIN_TOKEN))) {
+  const stored = await readStoredAdminKey(env);
+  const authenticated = stored
+    ? Boolean(suppliedToken && await secureEqual(await sha256Hex(suppliedToken), stored.key_hash))
+    : Boolean(env.ADMIN_TOKEN && suppliedToken && await secureEqual(suppliedToken, env.ADMIN_TOKEN));
+  if (!stored && !env.ADMIN_TOKEN) {
+    return apiError(503, "server_not_configured", "Administrator key is not configured", request, env);
+  }
+  if (!authenticated) {
     return jsonResponse({ error: { code: "unauthorized", message: "Invalid administrator token" } },
       401, request, env, { "WWW-Authenticate": "Bearer" });
   }
   return null;
+}
+
+async function readStoredAdminKey(env) {
+  return env.DB.prepare("SELECT key_hash, updated_at FROM admin_settings WHERE id = 1").first();
+}
+
+async function sha256Hex(value) {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function readBearerToken(authorization) {
