@@ -71,10 +71,12 @@ jobs:
 
       - name: Commit verified source and APKs
         run: |
-          rm .github/workflows/bootstrap-v050.yml aruno-v050.patch.gz
+          rm .github/workflows/bootstrap-v050.yml \
+            .github/workflows/build-android-v050.yml \
+            aruno-v050.patch.gz
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
+          git add -A -- . ':(exclude)dist'
           git commit -m "Add ARUNO CLICKER v0.5.0 dual-install builds"
           git push
 
