@@ -57,12 +57,14 @@ jobs:
       - name: Verify and store the two APKs
         run: |
           mkdir -p ci dist
+          APKANALYZER_BIN="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$APKANALYZER_BIN"
           cp android-app/app/build/outputs/apk/atlas/release/app-atlas-release.apk \
             ci/ARUNO_CLICKER_v0.5.0.apk
           cp android-app/app/build/outputs/apk/lumen/release/app-lumen-release.apk \
             'ci/ARUNO_CLICKER_ver.S_v0.5.0.apk'
-          test "$(apkanalyzer manifest application-id ci/ARUNO_CLICKER_v0.5.0.apk)" = "jp.aruno.clicker"
-          test "$(apkanalyzer manifest application-id 'ci/ARUNO_CLICKER_ver.S_v0.5.0.apk')" = "jp.aruno.x7c41"
+          test "$("$APKANALYZER_BIN" manifest application-id ci/ARUNO_CLICKER_v0.5.0.apk)" = "jp.aruno.clicker"
+          test "$("$APKANALYZER_BIN" manifest application-id 'ci/ARUNO_CLICKER_ver.S_v0.5.0.apk')" = "jp.aruno.x7c41"
           cp ci/ARUNO_CLICKER_v0.5.0.apk dist/
           cp 'ci/ARUNO_CLICKER_ver.S_v0.5.0.apk' dist/
           sha256sum dist/*.apk > dist/SHA256SUMS.txt
