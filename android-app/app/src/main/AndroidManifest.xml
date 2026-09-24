@@ -19,9 +19,9 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/aruno_clicker_icon_maskable"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/aruno_clicker_icon_maskable"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ArunoClicker.Starting">
         <activity

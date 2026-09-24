@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseKeystorePath = providers.environmentVariable("ARUNO_KEYSTORE_PATH")
+val releaseSigningPassword = providers.environmentVariable("ARUNO_SIGNING_PASSWORD")
+
 android {
     namespace = "jp.aruno.clicker"
     compileSdk = 35
@@ -12,16 +15,31 @@ android {
         applicationId = "jp.aruno.clicker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.4.0"
+        versionCode = 14
+        versionName = "0.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        create("stableRelease") {
+            if (
+                releaseKeystorePath.isPresent &&
+                releaseSigningPassword.isPresent
+            ) {
+                storeFile = file(releaseKeystorePath.get())
+                storePassword = releaseSigningPassword.get()
+                keyAlias = "aruno-stable"
+                keyPassword = releaseSigningPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stableRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
