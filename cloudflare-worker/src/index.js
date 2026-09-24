@@ -1,6 +1,7 @@
 const MAX_BODY_BYTES = 8 * 1024;
 const MAX_URL_LENGTH = 2048;
-const SCHEMA_VERSION = 1;
+const MAX_NAME_LENGTH = 80;
+const SCHEMA_VERSION = 2;
 const ADMIN_KEY_PATTERN = /^[A-Za-z0-9]{8}$/;
 const ALLOWED_TIKTOK_HOSTS = new Set([
   "tiktok.com", "www.tiktok.com", "lite.tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com",
@@ -43,7 +44,8 @@ async function route(request, env) {
 async function getConfig(request, env) {
   requireDb(env);
   const row = await env.DB.prepare(
-    "SELECT url1, url2, config_version, updated_at FROM remote_config WHERE id = 1",
+    `SELECT name1, url1, name2, url2, share_name, share_url,
+            config_version, updated_at FROM remote_config WHERE id = 1`,
   ).first();
   if (!row) throw new Error("D1 migration has not been applied");
   return jsonResponse(toPublicConfig(row), 200, request, env, { "Cache-Control": "no-store, max-age=0" });
@@ -72,13 +74,23 @@ async function updateConfig(request, env) {
   catch { return apiError(400, "invalid_json", "Request body is not valid JSON", request, env); }
   if (!isPlainObject(body)) return validationError("Request body must be a JSON object", request, env);
 
-  const allowedKeys = new Set(["url1", "url2", "expectedConfigVersion"]);
+  const allowedKeys = new Set([
+    "name1", "url1", "name2", "url2", "shareName", "shareUrl", "expectedConfigVersion",
+  ]);
   const unexpectedKey = Object.keys(body).find((key) => !allowedKeys.has(key));
   if (unexpectedKey) return validationError(`Unexpected field: ${unexpectedKey}`, request, env);
   const url1 = validateStartupUrl(body.url1, "url1");
   if (!url1.ok) return validationError(url1.message, request, env);
   const url2 = validateStartupUrl(body.url2, "url2");
   if (!url2.ok) return validationError(url2.message, request, env);
+  const shareUrl = validateStartupUrl(body.shareUrl, "shareUrl");
+  if (!shareUrl.ok) return validationError(shareUrl.message, request, env);
+  const name1 = validateName(body.name1, "name1");
+  if (!name1.ok) return validationError(name1.message, request, env);
+  const name2 = validateName(body.name2, "name2");
+  if (!name2.ok) return validationError(name2.message, request, env);
+  const shareName = validateName(body.shareName, "shareName");
+  if (!shareName.ok) return validationError(shareName.message, request, env);
   if (body.expectedConfigVersion !== undefined &&
       (!Number.isSafeInteger(body.expectedConfigVersion) || body.expectedConfigVersion < 1)) {
     return validationError("expectedConfigVersion must be a positive integer", request, env);
@@ -97,12 +109,17 @@ async function updateConfig(request, env) {
   const results = await env.DB.batch([
     env.DB.prepare(
       `UPDATE remote_config
-       SET url1 = ?, url2 = ?, config_version = ?, updated_at = ?, update_id = ?
+       SET name1 = ?, url1 = ?, name2 = ?, url2 = ?, share_name = ?, share_url = ?,
+           config_version = ?, updated_at = ?, update_id = ?
        WHERE id = 1 AND config_version = ?`,
-    ).bind(url1.value, url2.value, nextVersion, updatedAt, updateId, currentVersion),
+    ).bind(
+      name1.value, url1.value, name2.value, url2.value, shareName.value, shareUrl.value,
+      nextVersion, updatedAt, updateId, currentVersion,
+    ),
     env.DB.prepare(
-      `INSERT INTO config_history (config_version, url1, url2, updated_at)
-       SELECT config_version, url1, url2, updated_at
+      `INSERT INTO config_history
+         (config_version, name1, url1, name2, url2, share_name, share_url, updated_at)
+       SELECT config_version, name1, url1, name2, url2, share_name, share_url, updated_at
        FROM remote_config WHERE id = 1 AND update_id = ?`,
     ).bind(updateId),
     env.DB.prepare(
@@ -118,7 +135,10 @@ async function updateConfig(request, env) {
     return versionConflict(Number(latest?.config_version || currentVersion), request, env);
   }
   return jsonResponse({
-    url1: url1.value, url2: url2.value, configVersion: nextVersion, updatedAt, schemaVersion: SCHEMA_VERSION,
+    name1: name1.value, url1: url1.value,
+    name2: name2.value, url2: url2.value,
+    shareName: shareName.value, shareUrl: shareUrl.value,
+    configVersion: nextVersion, updatedAt, schemaVersion: SCHEMA_VERSION,
   }, 200, request, env, { "Cache-Control": "no-store, max-age=0" });
 }
 
@@ -127,7 +147,8 @@ async function getHistory(request, env) {
   if (authFailure) return authFailure;
   requireDb(env);
   const result = await env.DB.prepare(
-    "SELECT config_version, url1, url2, updated_at FROM config_history ORDER BY config_version DESC LIMIT 20",
+    `SELECT config_version, name1, url1, name2, url2, share_name, share_url, updated_at
+     FROM config_history ORDER BY config_version DESC LIMIT 20`,
   ).all();
   return jsonResponse({
     history: (result.results || []).map(toPublicConfig), schemaVersion: SCHEMA_VERSION,
@@ -177,8 +198,19 @@ async function registerAdminKey(request, env) {
 }
 
 function toPublicConfig(row) {
-  return { url1: row.url1, url2: row.url2, configVersion: Number(row.config_version),
-    updatedAt: row.updated_at, schemaVersion: SCHEMA_VERSION };
+  return {
+    name1: row.name1 || "", url1: row.url1,
+    name2: row.name2 || "", url2: row.url2,
+    shareName: row.share_name || "", shareUrl: row.share_url || row.url1,
+    configVersion: Number(row.config_version), updatedAt: row.updated_at, schemaVersion: SCHEMA_VERSION,
+  };
+}
+
+function validateName(value, fieldName) {
+  if (typeof value !== "string") return { ok: false, message: `${fieldName} must be a string` };
+  const normalized = value.trim();
+  if (normalized.length > MAX_NAME_LENGTH) return { ok: false, message: `${fieldName} is too long` };
+  return { ok: true, value: normalized };
 }
 
 function validateStartupUrl(value, fieldName) {
@@ -278,4 +310,4 @@ function methodNotAllowed(request, env, allow) {
 }
 function isPlainObject(value) { return Boolean(value && typeof value === "object" && !Array.isArray(value)); }
 
-export const testables = { ALLOWED_TIKTOK_HOSTS, validateStartupUrl };
+export const testables = { ALLOWED_TIKTOK_HOSTS, validateName, validateStartupUrl };

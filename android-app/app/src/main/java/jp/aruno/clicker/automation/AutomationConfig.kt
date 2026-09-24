@@ -1,8 +1,6 @@
 package jp.aruno.clicker.automation
 
 import android.content.Context
-import java.time.LocalDate
-import java.time.ZoneId
 
 data class AutomationConfig(
     val intervalMs: Long = DEFAULT_INTERVAL_MS,
@@ -26,6 +24,7 @@ data class AutomationConfig(
     val targetPackage: String = DEFAULT_TARGET_PACKAGE,
     val startupUrl1: String = DEFAULT_STARTUP_URL_1,
     val startupUrl2: String = DEFAULT_STARTUP_URL_2,
+    val shareUrl: String = DEFAULT_STARTUP_URL_1,
     val startupTestMode: Boolean = true,
     val scheduleEnabled: Boolean = false,
     val scheduleHour: Int = 2,
@@ -72,6 +71,7 @@ data class AutomationConfig(
         targetPackage = targetPackage.ifBlank { DEFAULT_TARGET_PACKAGE },
         startupUrl1 = startupUrl1.validWebUrlOr(DEFAULT_STARTUP_URL_1),
         startupUrl2 = startupUrl2.validWebUrlOr(DEFAULT_STARTUP_URL_2),
+        shareUrl = shareUrl.validWebUrlOr(DEFAULT_STARTUP_URL_1),
         scheduleHour = scheduleHour.coerceIn(0, 23),
         scheduleMinute = scheduleMinute.coerceIn(0, 59),
     )
@@ -135,6 +135,8 @@ class AutomationConfigStore(context: Context) {
             ?: AutomationConfig.DEFAULT_STARTUP_URL_1,
         startupUrl2 = prefs.getString(KEY_STARTUP_URL_2, AutomationConfig.DEFAULT_STARTUP_URL_2)
             ?: AutomationConfig.DEFAULT_STARTUP_URL_2,
+        shareUrl = prefs.getString(KEY_SHARE_URL, AutomationConfig.DEFAULT_STARTUP_URL_1)
+            ?: AutomationConfig.DEFAULT_STARTUP_URL_1,
         startupTestMode = prefs.getBoolean(KEY_STARTUP_TEST_MODE, true),
         scheduleEnabled = prefs.getBoolean(KEY_SCHEDULE_ENABLED, false),
         scheduleHour = prefs.getInt(KEY_SCHEDULE_HOUR, 2),
@@ -157,6 +159,7 @@ class AutomationConfigStore(context: Context) {
             .putString(KEY_TARGET, safe.targetPackage)
             .putString(KEY_STARTUP_URL_1, safe.startupUrl1)
             .putString(KEY_STARTUP_URL_2, safe.startupUrl2)
+            .putString(KEY_SHARE_URL, safe.shareUrl)
             .putBoolean(KEY_STARTUP_TEST_MODE, safe.startupTestMode)
             .putBoolean(KEY_SCHEDULE_ENABLED, safe.scheduleEnabled)
             .putInt(KEY_SCHEDULE_HOUR, safe.scheduleHour)
@@ -191,16 +194,6 @@ class AutomationConfigStore(context: Context) {
         prefs.edit().putBoolean(KEY_OVERLAY_COMPACT, compact).apply()
     }
 
-    /** Returns true only for the first user/scheduled start in the device's current calendar day. */
-    fun claimDailyStartup(): Boolean {
-        val today = LocalDate.now(ZoneId.of("Asia/Tokyo"))
-        val lastDate = prefs.getString(KEY_LAST_DAILY_STARTUP_DATE, null)
-            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-        if (lastDate != null && !today.isAfter(lastDate)) return false
-        prefs.edit().putString(KEY_LAST_DAILY_STARTUP_DATE, today.toString()).apply()
-        return true
-    }
-
     private fun defaultRunMinutes(): Long {
         val firstInstallMs = prefs.getLong(KEY_FIRST_INSTALL_MS, 0L).takeIf { it > 0L }
             ?: System.currentTimeMillis().also { prefs.edit().putLong(KEY_FIRST_INSTALL_MS, it).apply() }
@@ -220,6 +213,7 @@ class AutomationConfigStore(context: Context) {
         private const val KEY_TARGET = "target_package"
         private const val KEY_STARTUP_URL_1 = "startup_url_1"
         private const val KEY_STARTUP_URL_2 = "startup_url_2"
+        private const val KEY_SHARE_URL = "share_url"
         private const val KEY_STARTUP_TEST_MODE = "startup_test_mode"
         private const val KEY_SCHEDULE_ENABLED = "schedule_enabled"
         private const val KEY_SCHEDULE_HOUR = "schedule_hour"
@@ -245,6 +239,5 @@ class AutomationConfigStore(context: Context) {
         private const val KEY_FIRST_INSTALL_MS = "first_install_ms"
         private const val KEY_UI_RETRY_COUNT = "action_retry_count"
         private const val KEY_V020_DEFAULTS_APPLIED = "defaults_v020_applied"
-        private const val KEY_LAST_DAILY_STARTUP_DATE = "last_daily_startup_date"
     }
 }

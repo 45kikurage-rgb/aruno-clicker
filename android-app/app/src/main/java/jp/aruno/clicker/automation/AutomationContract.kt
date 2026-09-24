@@ -20,4 +20,5 @@ object AutomationContract {
     const val SOURCE_SCHEDULE = "schedule"
     const val START_MODE_FIRST = "first"
     const val START_MODE_REPEAT = "repeat"
+    const val START_MODE_AUTO = "auto"
 }

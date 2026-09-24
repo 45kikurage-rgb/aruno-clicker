@@ -15,11 +15,38 @@ android {
         applicationId = "jp.aruno.clicker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.4.1"
+        versionCode = 15
+        versionName = "0.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    flavorDimensions += "channel"
+    productFlavors {
+        create("atlas") {
+            dimension = "channel"
+            applicationId = "jp.aruno.clicker"
+            buildConfigField("boolean", "IS_VER_S", "false")
+            buildConfigField("String", "MANAGEMENT_GATE", "\"19801117\"")
+            buildConfigField(
+                "String",
+                "CONFIG_ENDPOINT",
+                "\"https://aruno-clicker-config.45kikurage.workers.dev/v1/config\"",
+            )
+        }
+        create("lumen") {
+            dimension = "channel"
+            applicationId = "jp.aruno.x7c41"
+            buildConfigField("boolean", "IS_VER_S", "true")
+            buildConfigField("String", "MANAGEMENT_GATE", "\"\"")
+            // Hidden from ver.S UI; replace with the custom-domain route when Cloudflare is available.
+            buildConfigField(
+                "String",
+                "CONFIG_ENDPOINT",
+                "\"https://aruno-clicker-config.45kikurage.workers.dev/v1/config\"",
+            )
+        }
     }
 
     signingConfigs {
@@ -53,7 +80,10 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"

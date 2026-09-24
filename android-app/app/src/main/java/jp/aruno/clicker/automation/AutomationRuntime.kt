@@ -86,13 +86,13 @@ object AutomationRuntime {
 
     fun markRunning(context: Context, text: String = "自動スライド中") {
         running = true
-        message = text
+        message = PresentationText.sanitize(text)
         notifyChanged(context)
     }
 
     fun markWaiting(context: Context, text: String) {
         running = false
-        message = text
+        message = PresentationText.sanitize(text)
         notifyChanged(context)
     }
 
@@ -105,7 +105,7 @@ object AutomationRuntime {
         requested = false
         running = false
         endsAtElapsed = 0L
-        message = text
+        message = PresentationText.sanitize(text)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_REQUESTED, false)
             .putBoolean(KEY_PENDING_START, false)

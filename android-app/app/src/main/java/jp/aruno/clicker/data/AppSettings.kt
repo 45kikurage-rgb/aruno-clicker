@@ -1,5 +1,7 @@
 package jp.aruno.clicker.data
 
+import jp.aruno.clicker.BuildConfig
+
 data class AppSettings(
     val onboardingComplete: Boolean = false,
     val scrollIntervalSeconds: Int = 8,
@@ -22,8 +24,12 @@ data class AppSettings(
     val actionRetryCount: Int = 3,
     val pageSettleMillis: Int = 1_200,
     val targetPackage: String = "com.ss.android.ugc.tiktok.lite",
+    val startupName1: String = "",
     val startupUrl1: String = "https://lite.tiktok.com/t/ZS9AJY6f4n6Sw-GQnDP/",
+    val startupName2: String = "",
     val startupUrl2: String = "https://lite.tiktok.com/t/ZS9rdoB6rsLHp-UHtJt/",
+    val shareName: String = "",
+    val shareUrl: String = "https://lite.tiktok.com/t/ZS9AJY6f4n6Sw-GQnDP/",
     val startupTestMode: Boolean = true,
     val remoteSyncEnabled: Boolean = true,
     val remoteAdminMode: Boolean = false,
@@ -36,7 +42,6 @@ data class AppSettings(
     val remoteUpdatedAt: String = "",
 ) {
     companion object {
-        const val DEFAULT_REMOTE_SERVER_URL =
-            "https://aruno-clicker-config.45kikurage.workers.dev/v1/config"
+        val DEFAULT_REMOTE_SERVER_URL: String = BuildConfig.CONFIG_ENDPOINT
     }
 }

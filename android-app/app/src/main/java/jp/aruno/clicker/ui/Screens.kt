@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -85,6 +86,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import jp.aruno.clicker.MainViewModel
+import jp.aruno.clicker.R
+import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.RemoteSyncUiState
 import jp.aruno.clicker.data.AppSettings
 import kotlin.math.roundToInt
@@ -94,12 +97,14 @@ private enum class AppScreen { HOME, SETTINGS, DETAILS }
 @Composable
 fun ArunoClickerApp(
     viewModel: MainViewModel,
+    isVerS: Boolean,
     permissionRefresh: Int,
     openAccessibilitySettings: () -> Unit,
     requestOverlayPermission: () -> Unit,
     requestNotificationPermission: () -> Unit,
     startFirstAutomation: () -> Unit,
     startRepeatAutomation: () -> Unit,
+    startAutomaticAutomation: () -> Unit,
     stopAutomation: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -126,11 +131,15 @@ fun ArunoClickerApp(
         AppScreen.HOME -> HomeScreen(
             settings = settings,
             isRunning = isRunning,
+            isVerS = isVerS,
             onStartFirst = {
                 startFirstAutomation()
             },
             onStartRepeat = {
                 startRepeatAutomation()
+            },
+            onStartAutomatic = {
+                startAutomaticAutomation()
             },
             onStop = {
                 stopAutomation()
@@ -202,7 +211,7 @@ private fun OnboardingScreen(
             }
             Spacer(Modifier.height(18.dp))
             Text(
-                "ARUNO CLICKER",
+                stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
             )
@@ -306,8 +315,10 @@ private fun PermissionCard(
 private fun HomeScreen(
     settings: AppSettings,
     isRunning: Boolean,
+    isVerS: Boolean,
     onStartFirst: () -> Unit,
     onStartRepeat: () -> Unit,
+    onStartAutomatic: () -> Unit,
     onStop: () -> Unit,
     openSettings: () -> Unit,
 ) {
@@ -316,7 +327,7 @@ private fun HomeScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("ARUNO CLICKER", fontWeight = FontWeight.Black)
+                        Text(stringResource(R.string.app_name), fontWeight = FontWeight.Black)
                         Text(
                             "AUTO SLIDE CONTROLLER",
                             style = MaterialTheme.typography.labelSmall,
@@ -325,8 +336,10 @@ private fun HomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = openSettings) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "設定")
+                    if (!isVerS) {
+                        IconButton(onClick = openSettings) {
+                            Icon(Icons.Rounded.Settings, contentDescription = "設定")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MatrixBlack),
@@ -381,7 +394,8 @@ private fun HomeScreen(
                             if (isRunning) {
                                 "画面を切り替えてもバックグラウンドで実行します"
                             } else {
-                                "初回起動または2回目以降の動作を選択してください"
+                                if (isVerS) "スタートボタンを押してください" else
+                                    "初回起動または2回目以降の動作を選択してください"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MatrixTextMuted,
@@ -389,7 +403,7 @@ private fun HomeScreen(
                             modifier = Modifier.padding(top = 4.dp, bottom = 18.dp),
                         )
                         Button(
-                            onClick = if (isRunning) onStop else onStartFirst,
+                            onClick = if (isRunning) onStop else if (isVerS) onStartAutomatic else onStartFirst,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(58.dp),
@@ -405,12 +419,12 @@ private fun HomeScreen(
                                 contentDescription = null,
                             )
                             Text(
-                                if (isRunning) "停止する" else "初回起動スタート",
+                                if (isRunning) "停止する" else if (isVerS) "スタート" else "初回起動スタート",
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(start = 8.dp),
                             )
                         }
-                        if (!isRunning) {
+                        if (!isRunning && !isVerS) {
                             Spacer(Modifier.height(10.dp))
                             OutlinedButton(
                                 onClick = onStartRepeat,
@@ -440,42 +454,44 @@ private fun HomeScreen(
                     }
                 }
             }
-            item { SectionTitle("現在の設定") }
-            item {
-                MatrixCard {
-                    SummaryLine(
-                        Icons.Rounded.Refresh,
-                        "通常スライド",
-                        if (settings.randomInterval) "7・8・9秒（優先）" else "${settings.scrollIntervalSeconds} 秒",
-                    )
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    SummaryLine(
-                        Icons.Rounded.Bolt,
-                        "高速スライド",
-                        if (settings.fastContentEnabled) {
-                            "${settings.fastIntervalSeconds}秒・${settings.classificationConfirmationCount}回一致"
-                        } else {
-                            "OFF"
-                        },
-                    )
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    SummaryLine(Icons.Rounded.SwipeUp, "スワイプ速度", "${settings.swipeDurationMillis} ms")
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    SummaryLine(
-                        Icons.Rounded.Alarm,
-                        "実行時間",
-                        if (settings.runMinutes == 0) "停止するまで" else "${settings.runMinutes} 分",
-                    )
+            if (!isVerS) {
+                item { SectionTitle("現在の設定") }
+                item {
+                    MatrixCard {
+                        SummaryLine(
+                            Icons.Rounded.Refresh,
+                            "通常スライド",
+                            if (settings.randomInterval) "7・8・9秒（優先）" else "${settings.scrollIntervalSeconds} 秒",
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                        SummaryLine(
+                            Icons.Rounded.Bolt,
+                            "高速スライド",
+                            if (settings.fastContentEnabled) {
+                                "${settings.fastIntervalSeconds}秒・${settings.classificationConfirmationCount}回一致"
+                            } else {
+                                "OFF"
+                            },
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                        SummaryLine(Icons.Rounded.SwipeUp, "スワイプ速度", "${settings.swipeDurationMillis} ms")
+                        HorizontalDivider(color = Color.White.copy(alpha = .07f))
+                        SummaryLine(
+                            Icons.Rounded.Alarm,
+                            "実行時間",
+                            if (settings.runMinutes == 0) "停止するまで" else "${settings.runMinutes} 分",
+                        )
+                    }
                 }
-            }
-            item {
-                OutlinedButton(
-                    onClick = openSettings,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Icon(Icons.Rounded.Tune, contentDescription = null)
-                    Text("動作を設定", modifier = Modifier.padding(start = 8.dp))
+                item {
+                    OutlinedButton(
+                        onClick = openSettings,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Icon(Icons.Rounded.Tune, contentDescription = null)
+                        Text("動作を設定", modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
             }
         }
@@ -501,6 +517,38 @@ private fun SummaryLine(
     }
 }
 
+@Composable
+private fun ManagedDestinationFields(
+    title: String,
+    name: String,
+    url: String,
+    onNameChange: (String) -> Unit,
+    onUrlChange: (String) -> Unit,
+) {
+    MatrixCard {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { onNameChange(it.take(80)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("名称") },
+                singleLine = true,
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = url,
+                onValueChange = onUrlChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("URL") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(
@@ -514,6 +562,24 @@ private fun SettingsScreen(
     openDetails: () -> Unit,
 ) {
     val context = LocalContext.current
+    var managementInput by rememberSaveable { mutableStateOf("") }
+    var managementUnlocked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(managementInput) {
+        if (
+            !managementUnlocked &&
+            BuildConfig.MANAGEMENT_GATE.isNotBlank() &&
+            managementInput == BuildConfig.MANAGEMENT_GATE
+        ) {
+            managementUnlocked = true
+            managementInput = ""
+            onUpdate {
+                it.copy(
+                    remoteAdminMode = true,
+                    remoteAdminKey = BuildConfig.MANAGEMENT_GATE,
+                )
+            }
+        }
+    }
     val powerManager = context.getSystemService(PowerManager::class.java)
     val batteryUnrestricted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         powerManager.isIgnoringBatteryOptimizations(context.packageName)
@@ -582,105 +648,97 @@ private fun SettingsScreen(
                     )
                 }
             }
-            item { SectionTitle("起動URL", Modifier.padding(top = 6.dp)) }
-            item {
-                MatrixCard {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "初回起動スタートではURL 1を2回、URL 2を2回、それぞれ10秒間隔で開きます。日付による自動判定は使用しません。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MatrixTextMuted,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = settings.startupUrl1,
-                            onValueChange = { value -> onUpdate { it.copy(startupUrl1 = value) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("URL 1") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        OutlinedTextField(
-                            value = settings.startupUrl2,
-                            onValueChange = { value -> onUpdate { it.copy(startupUrl2 = value) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("URL 2") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        )
-                    }
-                }
-            }
-            item { SectionTitle("端末間URL同期", Modifier.padding(top = 6.dp)) }
-            item {
-                MatrixCard {
-                    SettingSwitchRow(
-                        title = "サーバー同期",
-                        subtitle = "アプリ起動時と開始直前に共通URLを取得します",
-                        checked = settings.remoteSyncEnabled,
-                        onCheckedChange = { checked -> onUpdate { it.copy(remoteSyncEnabled = checked) } },
-                        icon = Icons.Rounded.Refresh,
-                    )
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        OutlinedTextField(
-                            value = settings.remoteServerUrl,
-                            onValueChange = { value -> onUpdate { it.copy(remoteServerUrl = value) } },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("同期サーバーURL（https）") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        OutlinedButton(
-                            onClick = onFetchRemoteUrls,
-                            enabled = !remoteSyncState.busy && settings.remoteSyncEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                        ) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = null)
-                            Text("サーバーから取得", modifier = Modifier.padding(start = 8.dp))
+            item { SectionTitle("管理設定", Modifier.padding(top = 6.dp)) }
+            if (!managementUnlocked) {
+                item {
+                    MatrixCard {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "管理パスを入力すると、名称とURLの設定を表示します。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MatrixTextMuted,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = managementInput,
+                                onValueChange = { value ->
+                                    managementInput = value.filter(Char::isDigit).take(8)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("管理パス") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            )
                         }
                     }
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    SettingSwitchRow(
-                        title = "管理端末モード",
-                        subtitle = "この端末から全端末用URLを変更できます",
-                        checked = settings.remoteAdminMode,
-                        onCheckedChange = { checked -> onUpdate { it.copy(remoteAdminMode = checked) } },
-                        icon = Icons.Rounded.Tune,
+                }
+            } else {
+                item {
+                    ManagedDestinationFields(
+                        title = "初回URL",
+                        name = settings.startupName1,
+                        url = settings.startupUrl1,
+                        onNameChange = { value -> onUpdate { it.copy(startupName1 = value) } },
+                        onUrlChange = { value -> onUpdate { it.copy(startupUrl1 = value) } },
                     )
-                    if (settings.remoteAdminMode) {
+                }
+                item {
+                    ManagedDestinationFields(
+                        title = "2回目URL",
+                        name = settings.startupName2,
+                        url = settings.startupUrl2,
+                        onNameChange = { value -> onUpdate { it.copy(startupName2 = value) } },
+                        onUrlChange = { value -> onUpdate { it.copy(startupUrl2 = value) } },
+                    )
+                }
+                item {
+                    ManagedDestinationFields(
+                        title = "シェア用URL",
+                        name = settings.shareName,
+                        url = settings.shareUrl,
+                        onNameChange = { value -> onUpdate { it.copy(shareName = value) } },
+                        onUrlChange = { value -> onUpdate { it.copy(shareUrl = value) } },
+                    )
+                }
+                item { SectionTitle("端末間同期", Modifier.padding(top = 6.dp)) }
+                item {
+                    MatrixCard {
+                        SettingSwitchRow(
+                            title = "サーバー同期",
+                            subtitle = "アプリ起動時と開始直前に最新設定を取得します",
+                            checked = settings.remoteSyncEnabled,
+                            onCheckedChange = { checked -> onUpdate { it.copy(remoteSyncEnabled = checked) } },
+                            icon = Icons.Rounded.Refresh,
+                        )
                         HorizontalDivider(color = Color.White.copy(alpha = .07f))
                         Column(modifier = Modifier.padding(16.dp)) {
                             OutlinedTextField(
-                                value = settings.remoteAdminKey,
-                                onValueChange = { value ->
-                                    val normalized = value.filter { character ->
-                                        character in 'A'..'Z' || character in 'a'..'z' || character in '0'..'9'
-                                    }.take(8)
-                                    onUpdate { it.copy(remoteAdminKey = normalized) }
-                                },
+                                value = settings.remoteServerUrl,
+                                onValueChange = { value -> onUpdate { it.copy(remoteServerUrl = value) } },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("管理キー（英数字8文字）") },
+                                label = { Text("同期サーバーURL（https）") },
                                 singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                             )
-                            Text(
-                                "最初の管理端末で好きな英数字8文字を一度だけ登録します。キーはこの端末内に暗号化保存します。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MatrixTextMuted,
-                                modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
-                            )
+                            Spacer(Modifier.height(10.dp))
                             OutlinedButton(
-                                onClick = onRegisterAdminKey,
-                                enabled = !remoteSyncState.busy && settings.remoteSyncEnabled && settings.remoteAdminKey.length == 8,
+                                onClick = onFetchRemoteUrls,
+                                enabled = !remoteSyncState.busy && settings.remoteSyncEnabled,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
                             ) {
-                                Text("この8文字を初回登録")
+                                Icon(Icons.Rounded.Refresh, contentDescription = null)
+                                Text("サーバーから取得", modifier = Modifier.padding(start = 8.dp))
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = onRegisterAdminKey,
+                                enabled = !remoteSyncState.busy && settings.remoteSyncEnabled,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Text("管理パスをサーバーに初回登録")
                             }
                             Spacer(Modifier.height(10.dp))
                             Button(
@@ -689,41 +747,36 @@ private fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
                             ) {
-                                Text("URL 1・2を全端末へ送信")
+                                Text("3組の名称・URLを全端末へ送信")
+                            }
+                            HorizontalDivider(
+                                color = Color.White.copy(alpha = .07f),
+                                modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                            Text("同期状態", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (remoteSyncState.busy) "通信中…" else remoteSyncState.message.ifBlank {
+                                    settings.remoteLastSyncMessage
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when {
+                                    remoteSyncState.busy -> AlertAmber
+                                    remoteSyncState.success == true -> MatrixGreen
+                                    remoteSyncState.success == false -> DangerRed
+                                    settings.remoteLastSyncSucceeded -> MatrixGreen
+                                    else -> MatrixTextMuted
+                                },
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            if (settings.remoteLastSyncEpochMillis > 0L) {
+                                Text(
+                                    "設定版: ${settings.remoteConfigVersion}　最終成功: ${formatSyncTime(settings.remoteLastSyncEpochMillis)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MatrixTextMuted,
+                                    modifier = Modifier.padding(top = 3.dp),
+                                )
                             }
                         }
-                    }
-                    HorizontalDivider(color = Color.White.copy(alpha = .07f))
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("同期状態", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (remoteSyncState.busy) "通信中…" else remoteSyncState.message.ifBlank {
-                                settings.remoteLastSyncMessage
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when {
-                                remoteSyncState.busy -> AlertAmber
-                                remoteSyncState.success == true -> MatrixGreen
-                                remoteSyncState.success == false -> DangerRed
-                                settings.remoteLastSyncSucceeded -> MatrixGreen
-                                else -> MatrixTextMuted
-                            },
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                        if (settings.remoteLastSyncEpochMillis > 0L) {
-                            Text(
-                                "設定版: ${settings.remoteConfigVersion}　最終成功: ${formatSyncTime(settings.remoteLastSyncEpochMillis)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MatrixTextMuted,
-                                modifier = Modifier.padding(top = 3.dp),
-                            )
-                        }
-                        Text(
-                            "取得に失敗した場合は、最後に保存できた端末内URLで続行します。",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MatrixTextMuted,
-                            modifier = Modifier.padding(top = 5.dp),
-                        )
                     }
                 }
             }

@@ -29,6 +29,8 @@ import jp.aruno.clicker.automation.ArunoAccessibilityService
 import jp.aruno.clicker.automation.AutomationConfigStore
 import jp.aruno.clicker.automation.AutomationContract
 import jp.aruno.clicker.automation.AutomationRuntime
+import jp.aruno.clicker.BuildConfig
+import jp.aruno.clicker.R
 import java.util.Locale
 
 /** Foreground service plus a small draggable controller that remains above TikTok Lite. */
@@ -82,7 +84,8 @@ open class AutomationOverlayService : Service() {
                     source = intent?.getStringExtra(AutomationContract.EXTRA_SOURCE)
                         ?: AutomationContract.SOURCE_MANUAL,
                     startMode = intent?.getStringExtra(AutomationContract.EXTRA_START_MODE)
-                        ?: AutomationContract.START_MODE_REPEAT,
+                        ?: if (BuildConfig.IS_VER_S) AutomationContract.START_MODE_AUTO
+                        else AutomationContract.START_MODE_REPEAT,
                 )
             }
         }
@@ -206,14 +209,19 @@ open class AutomationOverlayService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val actionButton = compactButton("2回目以降", Color.rgb(15, 116, 54)).apply {
+        val idleButtonText = if (BuildConfig.IS_VER_S) "スタート" else "2回目以降"
+        val actionButton = compactButton(idleButtonText, Color.rgb(15, 116, 54)).apply {
             setOnClickListener {
                 if (AutomationRuntime.snapshot().requested) {
                     requestStop()
                 } else {
                     requestStart(
                         source = AutomationContract.SOURCE_MANUAL,
-                        startMode = AutomationContract.START_MODE_REPEAT,
+                        startMode = if (BuildConfig.IS_VER_S) {
+                            AutomationContract.START_MODE_AUTO
+                        } else {
+                            AutomationContract.START_MODE_REPEAT
+                        },
                     )
                 }
             }
@@ -361,7 +369,7 @@ open class AutomationOverlayService : Service() {
             "経過 --:--:--  /  残り --:--:--"
         }
         countText?.text = "スライド ${state.swipeCount}回"
-        startButton?.text = if (state.requested) "停止" else "2回目以降"
+        startButton?.text = if (state.requested) "停止" else if (BuildConfig.IS_VER_S) "スタート" else "2回目以降"
         startButton?.background = roundedBackground(
             if (state.requested) Color.rgb(165, 39, 39) else Color.rgb(15, 116, 54),
             Color.TRANSPARENT,
@@ -413,7 +421,7 @@ open class AutomationOverlayService : Service() {
         if (Build.VERSION.SDK_INT < 26) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "ARUNO CLICKER 実行状態",
+            "${getString(R.string.app_name)} 実行状態",
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
             description = "自動スライド実行中に表示します"
@@ -439,7 +447,7 @@ open class AutomationOverlayService : Service() {
         val state = AutomationRuntime.snapshot()
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("ARUNO CLICKER")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(
                 if (state.requested) {
                     "${state.message.replace('\n', '・')}・${state.swipeCount}回"

@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
             ArunoClickerTheme {
                 ArunoClickerApp(
                     viewModel = viewModel,
+                    isVerS = BuildConfig.IS_VER_S,
                     permissionRefresh = permissionRefresh,
                     openAccessibilitySettings = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -50,6 +51,7 @@ class MainActivity : ComponentActivity() {
                     },
                     startFirstAutomation = { ControlContract.startFirst(this) },
                     startRepeatAutomation = { ControlContract.startRepeat(this) },
+                    startAutomaticAutomation = { ControlContract.startAutomatic(this) },
                     stopAutomation = { ControlContract.stop(this) },
                 )
             }

@@ -18,10 +18,12 @@ object ControlContract {
     const val EXTRA_START_MODE = "start_mode"
     const val START_MODE_FIRST = "first"
     const val START_MODE_REPEAT = "repeat"
+    const val START_MODE_AUTO = "auto"
     const val AUTOMATION_SERVICE = "jp.aruno.clicker.automation.AutomationService"
 
     fun startFirst(context: Context) = sendToService(context, ACTION_START, START_MODE_FIRST)
     fun startRepeat(context: Context) = sendToService(context, ACTION_START, START_MODE_REPEAT)
+    fun startAutomatic(context: Context) = sendToService(context, ACTION_START, START_MODE_AUTO)
     fun stop(context: Context) = sendToService(context, ACTION_STOP)
 
     private fun sendToService(context: Context, action: String, startMode: String? = null) {

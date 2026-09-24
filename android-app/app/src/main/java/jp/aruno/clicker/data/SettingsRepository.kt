@@ -44,16 +44,24 @@ class SettingsRepository(context: Context) {
     }
 
     fun applyRemoteSuccess(
+        name1: String,
         url1: String,
+        name2: String,
         url2: String,
+        shareName: String,
+        shareUrl: String,
         completedAt: Long,
         message: String,
         configVersion: Long,
         updatedAt: String,
     ) {
         preferences.edit()
+            .putString("startup_name_1", name1)
             .putString("startup_url_1", url1)
+            .putString("startup_name_2", name2)
             .putString("startup_url_2", url2)
+            .putString("share_name", shareName)
+            .putString("share_url", shareUrl)
             .putLong("remote_last_sync_epoch_millis", completedAt)
             .putBoolean("remote_last_sync_succeeded", true)
             .putString("remote_last_sync_message", message)
@@ -88,6 +96,9 @@ class SettingsRepository(context: Context) {
         swipeEndPercent = swipeEndPercent.coerceIn(5, 45),
         actionRetryCount = actionRetryCount.coerceIn(0, 5),
         pageSettleMillis = pageSettleMillis.coerceIn(300, 5_000),
+        startupName1 = startupName1.trim().take(80),
+        startupName2 = startupName2.trim().take(80),
+        shareName = shareName.trim().take(80),
         remoteServerUrl = remoteServerUrl.trim(),
         remoteAdminKey = remoteAdminKey.trim(),
     )
@@ -120,10 +131,15 @@ class SettingsRepository(context: Context) {
         pageSettleMillis = getInt("page_settle_millis", 1_200),
         targetPackage = getString("target_package", "com.ss.android.ugc.tiktok.lite")
             ?: "com.ss.android.ugc.tiktok.lite",
+        startupName1 = getString("startup_name_1", "").orEmpty(),
         startupUrl1 = getString("startup_url_1", "https://lite.tiktok.com/t/ZS9AJY6f4n6Sw-GQnDP/")
             ?: "https://lite.tiktok.com/t/ZS9AJY6f4n6Sw-GQnDP/",
+        startupName2 = getString("startup_name_2", "").orEmpty(),
         startupUrl2 = getString("startup_url_2", "https://lite.tiktok.com/t/ZS9rdoB6rsLHp-UHtJt/")
             ?: "https://lite.tiktok.com/t/ZS9rdoB6rsLHp-UHtJt/",
+        shareName = getString("share_name", "").orEmpty(),
+        shareUrl = getString("share_url", "https://lite.tiktok.com/t/ZS9AJY6f4n6Sw-GQnDP/")
+            ?: "https://lite.tiktok.com/t/ZS9AJY6f4n6Sw-GQnDP/",
         startupTestMode = getBoolean("startup_test_mode", true),
         remoteSyncEnabled = getBoolean("remote_sync_enabled", true),
         remoteAdminMode = getBoolean("remote_admin_mode", false),
@@ -160,8 +176,12 @@ class SettingsRepository(context: Context) {
         putInt("action_retry_count", value.actionRetryCount)
         putInt("page_settle_millis", value.pageSettleMillis)
         putString("target_package", value.targetPackage)
+        putString("startup_name_1", value.startupName1)
         putString("startup_url_1", value.startupUrl1.trim())
+        putString("startup_name_2", value.startupName2)
         putString("startup_url_2", value.startupUrl2.trim())
+        putString("share_name", value.shareName)
+        putString("share_url", value.shareUrl.trim())
         putBoolean("startup_test_mode", value.startupTestMode)
         putBoolean("remote_sync_enabled", value.remoteSyncEnabled)
         putBoolean("remote_admin_mode", value.remoteAdminMode)

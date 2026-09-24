@@ -19,6 +19,7 @@ import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.data.RemoteConfigClient
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
@@ -59,6 +60,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var popupCheckScheduled = false
     private var lastPopupScanAtMs = 0L
     private var lastPopupDismissAtMs = 0L
+    private var pendingDailyStartCompletion = false
 
     private val commandReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -212,10 +214,17 @@ class ArunoAccessibilityService : AccessibilityService() {
         contentPageToken += 1L
         lastSwipeDelayMs = 0L
         handler.removeCallbacksAndMessages(null)
-        AutomationRuntime.requestStart(this, activeConfig.timeLimitMs, startMode)
+        val resolvedStartMode = if (startMode == AutomationContract.START_MODE_AUTO) {
+            DailyStartModeStore(this).modeForToday()
+        } else {
+            startMode
+        }
+        pendingDailyStartCompletion = startMode == AutomationContract.START_MODE_AUTO &&
+            resolvedStartMode == AutomationContract.START_MODE_FIRST
+        AutomationRuntime.requestStart(this, activeConfig.timeLimitMs, resolvedStartMode)
         AutomationRuntime.markSessionActive(this)
         if (activeConfig.keepScreenAwake) acquireWakeLock(activeConfig.timeLimitMs)
-        if (startMode == AutomationContract.START_MODE_FIRST) {
+        if (resolvedStartMode == AutomationContract.START_MODE_FIRST) {
             beginFirstStartSequence(activeConfig, generation)
         } else {
             beginRepeatStartSequence(activeConfig, generation)
@@ -230,7 +239,11 @@ class ArunoAccessibilityService : AccessibilityService() {
         val intervalOverride = intent.getLongExtra(AutomationContract.EXTRA_INTERVAL_MS, -1L)
             .takeIf { it > 0L }
         val startMode = intent.getStringExtra(AutomationContract.EXTRA_START_MODE)
-            .takeIf { it == AutomationContract.START_MODE_FIRST }
+            .takeIf {
+                it == AutomationContract.START_MODE_FIRST ||
+                    it == AutomationContract.START_MODE_REPEAT ||
+                    it == AutomationContract.START_MODE_AUTO
+            }
             ?: AutomationContract.START_MODE_REPEAT
         AutomationRuntime.markWaiting(this, "共通URLを確認しています")
         startSyncJob = serviceScope.launch {
@@ -297,12 +310,19 @@ class ArunoAccessibilityService : AccessibilityService() {
                 stopAutomation("TikTok Liteの表示を確認できませんでした")
                 return@appReady
             }
-            val steps = listOf(
-                InitialUrlStep(config.startupUrl1, "指定URL1を開く", "URL 1・1回目"),
-                InitialUrlStep(config.startupUrl1, "指定URL1を再度開く", "URL 1・2回目"),
-                InitialUrlStep(config.startupUrl2, "指定URL2を開く", "URL 2・1回目"),
-                InitialUrlStep(config.startupUrl2, "指定URL2を再度開く", "URL 2・2回目"),
-            )
+            val steps = if (BuildConfig.IS_VER_S) {
+                listOf(
+                    InitialUrlStep(config.shareUrl, "開始準備中", "準備 1/2"),
+                    InitialUrlStep(config.shareUrl, "開始準備中", "準備 2/2"),
+                )
+            } else {
+                listOf(
+                    InitialUrlStep(config.startupUrl1, "指定URL1を開く", "URL 1・1回目"),
+                    InitialUrlStep(config.startupUrl1, "指定URL1を再度開く", "URL 1・2回目"),
+                    InitialUrlStep(config.startupUrl2, "指定URL2を開く", "URL 2・1回目"),
+                    InitialUrlStep(config.startupUrl2, "指定URL2を再度開く", "URL 2・2回目"),
+                )
+            }
             runInitialUrlStep(steps, index = 0, generation = generation) {
                 closeTargetViaRecents(generation, "初回URL完了") initialClose@{ closed ->
                     if (!isSessionActive(generation)) return@initialClose
@@ -358,6 +378,10 @@ class ArunoAccessibilityService : AccessibilityService() {
             }
             restartInProgress = false
             slidePhaseActive = true
+            if (pendingDailyStartCompletion) {
+                DailyStartModeStore(this).markTodayCompleted()
+                pendingDailyStartCompletion = false
+            }
             beginContentTiming(generation, phase)
             val restartDelay = if (completedWarmupCycles < WARMUP_CYCLE_COUNT) {
                 WARMUP_RESTART_INTERVAL_MS

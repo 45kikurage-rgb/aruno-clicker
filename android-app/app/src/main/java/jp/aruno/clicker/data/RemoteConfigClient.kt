@@ -22,7 +22,8 @@ data class RemoteSyncResult(
 )
 
 /**
- * Reads/writes only the two shared startup URLs. The administrator key is sent only as an
+ * Reads/writes the three startup destinations and their private management labels.
+ * The administrator key is sent only as an
  * Authorization header and is never added to messages, exceptions or logs.
  */
 class RemoteConfigClient(context: Context) {
@@ -62,8 +63,12 @@ class RemoteConfigClient(context: Context) {
                 }
                 val completedAt = System.currentTimeMillis()
                 repository.applyRemoteSuccess(
+                    name1 = remote.name1,
                     url1 = remote.url1,
+                    name2 = remote.name2,
                     url2 = remote.url2,
+                    shareName = remote.shareName,
+                    shareUrl = remote.shareUrl,
                     completedAt = completedAt,
                     message = "共通URLを取得しました",
                     configVersion = remote.configVersion,
@@ -100,9 +105,15 @@ class RemoteConfigClient(context: Context) {
             ?: return@withContext failure(RemoteSyncAction.PUBLISH, "URL 1を確認してください")
         val url2 = settings.startupUrl2.validSharedUrl()
             ?: return@withContext failure(RemoteSyncAction.PUBLISH, "URL 2を確認してください")
+        val shareUrl = settings.shareUrl.validSharedUrl()
+            ?: return@withContext failure(RemoteSyncAction.PUBLISH, "シェア用URLを確認してください")
         val payload = JSONObject()
+            .put("name1", settings.startupName1.validName())
             .put("url1", url1)
+            .put("name2", settings.startupName2.validName())
             .put("url2", url2)
+            .put("shareName", settings.shareName.validName())
+            .put("shareUrl", shareUrl)
             .apply {
                 if (settings.remoteConfigVersion > 0L) {
                     put("expectedConfigVersion", settings.remoteConfigVersion)
@@ -136,8 +147,12 @@ class RemoteConfigClient(context: Context) {
                 }
                 val completedAt = System.currentTimeMillis()
                 repository.applyRemoteSuccess(
+                    name1 = remote.name1,
                     url1 = remote.url1,
+                    name2 = remote.name2,
                     url2 = remote.url2,
+                    shareName = remote.shareName,
+                    shareUrl = remote.shareUrl,
                     completedAt = completedAt,
                     message = "共通URLを送信しました",
                     configVersion = remote.configVersion,
@@ -252,11 +267,17 @@ class RemoteConfigClient(context: Context) {
             ?: throw RemoteRequestException("サーバーのURL 1が不正です")
         val url2 = (source.optString("url2").ifBlank { source.optString("startupUrl2") }).validSharedUrl()
             ?: throw RemoteRequestException("サーバーのURL 2が不正です")
+        val shareUrl = source.optString("shareUrl").ifBlank { url1 }.validSharedUrl()
+            ?: throw RemoteRequestException("サーバーのシェア用URLが不正です")
         val version = source.optLong("configVersion", 0L)
         if (version <= 0L) throw RemoteRequestException("サーバーの設定版が不正です")
         return SharedRemoteConfig(
+            name1 = source.optString("name1").validName(),
             url1 = url1,
+            name2 = source.optString("name2").validName(),
             url2 = url2,
+            shareName = source.optString("shareName").validName(),
+            shareUrl = shareUrl,
             configVersion = version,
             updatedAt = source.optString("updatedAt"),
         )
@@ -283,6 +304,8 @@ class RemoteConfigClient(context: Context) {
         }
     }
 
+    private fun String.validName(): String = trim().take(MAX_NAME_CHARS)
+
     private fun httpErrorMessage(code: Int): String = when (code) {
         401, 403 -> "認証できませんでした"
         404 -> "同期先が見つかりません"
@@ -298,8 +321,12 @@ class RemoteConfigClient(context: Context) {
     private class RemoteRequestException(message: String) : Exception(message)
 
     private data class SharedRemoteConfig(
+        val name1: String,
         val url1: String,
+        val name2: String,
         val url2: String,
+        val shareName: String,
+        val shareUrl: String,
         val configVersion: Long,
         val updatedAt: String,
     )
@@ -310,6 +337,7 @@ class RemoteConfigClient(context: Context) {
         private const val MAX_RESPONSE_CHARS = 64 * 1024
         private const val MAX_ENDPOINT_CHARS = 2_048
         private const val MAX_SHARED_URL_CHARS = 2_048
+        private const val MAX_NAME_CHARS = 80
         private val ADMIN_KEY_PATTERN = Regex("^[A-Za-z0-9]{8}$")
         private val ALLOWED_TIKTOK_HOSTS = setOf(
             "tiktok.com",
