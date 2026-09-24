@@ -1,0 +1,75 @@
+name: Build ARUNO CLICKER v0.5.0 dual install
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare stable signing key
+        env:
+          ARUNO_PRIVATE_KEY_PEM: ${{ secrets.ARUNO_PRIVATE_KEY_PEM }}
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          test -n "$ARUNO_PRIVATE_KEY_PEM"
+          test -n "$ARUNO_SIGNING_PASSWORD"
+          printf '%s' "$ARUNO_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/aruno-private-key.pem"
+          openssl pkcs12 -export \
+            -inkey "$RUNNER_TEMP/aruno-private-key.pem" \
+            -in signing/aruno-release.crt \
+            -out "$RUNNER_TEMP/aruno-release.p12" \
+            -name aruno-stable \
+            -passout "pass:$ARUNO_SIGNING_PASSWORD"
+
+      - name: Test and build both installable apps
+        working-directory: android-app
+        env:
+          ARUNO_KEYSTORE_PATH: ${{ runner.temp }}/aruno-release.p12
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon \
+            testAtlasDebugUnitTest \
+            testLumenDebugUnitTest \
+            assembleAtlasRelease \
+            assembleLumenRelease
+
+      - name: Collect and verify APK identities
+        run: |
+          mkdir -p dist
+          APKANALYZER_BIN="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$APKANALYZER_BIN"
+          cp android-app/app/build/outputs/apk/atlas/release/app-atlas-release.apk \
+            dist/ARUNO_CLICKER_v0.5.0.apk
+          cp android-app/app/build/outputs/apk/lumen/release/app-lumen-release.apk \
+            'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk'
+          test "$("$APKANALYZER_BIN" manifest application-id dist/ARUNO_CLICKER_v0.5.0.apk)" = "jp.aruno.clicker"
+          test "$("$APKANALYZER_BIN" manifest application-id 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk')" = "jp.aruno.x7c41"
+          sha256sum dist/*.apk > dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aruno-a-v050
+          path: |
+            dist/ARUNO_CLICKER_v0.5.0.apk
+            dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aruno-b-v050
+          path: |
+            dist/ARUNO_CLICKER_ver.S_v0.5.0.apk
+            dist/SHA256SUMS.txt
