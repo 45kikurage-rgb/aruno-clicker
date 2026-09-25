@@ -190,6 +190,7 @@ jobs:
             "$(sha256sum 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk' | cut -d ' ' -f 1)"
 
       - name: Verify R2 public access remains disabled
+        if: always()
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
