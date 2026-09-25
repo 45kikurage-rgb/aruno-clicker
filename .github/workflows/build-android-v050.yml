@@ -6,6 +6,212 @@ on:
 permissions:
   contents: read
 
+env:
+  APP_VERSION: "0.5.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare stable signing key
+        env:
+          ARUNO_PRIVATE_KEY_PEM: ${{ secrets.ARUNO_PRIVATE_KEY_PEM }}
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          test -n "$ARUNO_PRIVATE_KEY_PEM"
+          test -n "$ARUNO_SIGNING_PASSWORD"
+          printf '%s' "$ARUNO_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/aruno-private-key.pem"
+          openssl pkcs12 -export \
+            -inkey "$RUNNER_TEMP/aruno-private-key.pem" \
+            -in signing/aruno-release.crt \
+            -out "$RUNNER_TEMP/aruno-release.p12" \
+            -name aruno-stable \
+            -passout "pass:$ARUNO_SIGNING_PASSWORD"
+
+      - name: Test and build both installable apps
+        working-directory: android-app
+        env:
+          ARUNO_KEYSTORE_PATH: ${{ runner.temp }}/aruno-release.p12
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon \
+            testAtlasDebugUnitTest \
+            testLumenDebugUnitTest \
+            assembleAtlasRelease \
+            assembleLumenRelease
+
+      - name: Collect and verify APK identities
+        run: |
+          mkdir -p dist
+          APKANALYZER_BIN="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          test -x "$APKANALYZER_BIN"
+          cp android-app/app/build/outputs/apk/atlas/release/app-atlas-release.apk \
+            dist/ARUNO_CLICKER_v0.5.0.apk
+          cp android-app/app/build/outputs/apk/lumen/release/app-lumen-release.apk \
+            'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk'
+          test "$("$APKANALYZER_BIN" manifest application-id dist/ARUNO_CLICKER_v0.5.0.apk)" = "jp.aruno.clicker"
+          test "$("$APKANALYZER_BIN" manifest application-id 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk')" = "jp.aruno.x7c41"
+          sha256sum dist/*.apk > dist/SHA256SUMS.txt
+
+      - name: Test download Worker
+        working-directory: download-worker
+        run: npm test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aruno-a-v050
+          path: |
+            dist/ARUNO_CLICKER_v0.5.0.apk
+            dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aruno-b-v050
+          path: |
+            dist/ARUNO_CLICKER_ver.S_v0.5.0.apk
+            dist/SHA256SUMS.txt
+
+      - name: Upload versioned and latest APKs to private R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          test -s dist/ARUNO_CLICKER_v0.5.0.apk
+          test -s 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk'
+
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          ATLAS_SHA="$(sha256sum dist/ARUNO_CLICKER_v0.5.0.apk | cut -d ' ' -f 1)"
+          LUMEN_SHA="$(sha256sum 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk' | cut -d ' ' -f 1)"
+
+          upload_apk() {
+            local source="$1"
+            local key="$2"
+            local sha256="$3"
+            local cache_control="$4"
+            aws s3 cp "$source" "s3://${R2_BUCKET_NAME}/${key}" \
+              --endpoint-url "$ENDPOINT" \
+              --region auto \
+              --content-type application/vnd.android.package-archive \
+              --cache-control "$cache_control" \
+              --metadata "sha256=${sha256}" \
+              --no-progress \
+              --only-show-errors
+          }
+
+          upload_apk dist/ARUNO_CLICKER_v0.5.0.apk \
+            "releases/v${APP_VERSION}/ARUNO_CLICKER_v${APP_VERSION}.apk" \
+            "$ATLAS_SHA" "public,max-age=31536000,immutable"
+          upload_apk 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk' \
+            "releases/v${APP_VERSION}/ARUNO_CLICKER_ver.S_v${APP_VERSION}.apk" \
+            "$LUMEN_SHA" "public,max-age=31536000,immutable"
+          upload_apk dist/ARUNO_CLICKER_v0.5.0.apk \
+            "apk/aruno-clicker.apk" \
+            "$ATLAS_SHA" "public,max-age=60,must-revalidate"
+          upload_apk 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk' \
+            "apk/aruno-clicker-ver-s.apk" \
+            "$LUMEN_SHA" "public,max-age=60,must-revalidate"
+
+          aws s3 cp dist/SHA256SUMS.txt \
+            "s3://${R2_BUCKET_NAME}/releases/v${APP_VERSION}/SHA256SUMS.txt" \
+            --endpoint-url "$ENDPOINT" --region auto \
+            --content-type 'text/plain; charset=utf-8' \
+            --cache-control 'public,max-age=31536000,immutable' \
+            --no-progress --only-show-errors
+          aws s3 cp dist/SHA256SUMS.txt \
+            "s3://${R2_BUCKET_NAME}/SHA256SUMS.txt" \
+            --endpoint-url "$ENDPOINT" --region auto \
+            --content-type 'text/plain; charset=utf-8' \
+            --cache-control 'public,max-age=60,must-revalidate' \
+            --no-progress --only-show-errors
+
+      - name: Deploy existing download Worker
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.40.0 deploy
+
+      - name: Verify public downloads and SHA256
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location \
+              --output /tmp/aruno-clicker.apk \
+              --dump-header /tmp/aruno-clicker.headers \
+              https://download.aruno-id.com/apk/aruno-clicker.apk && \
+              curl --fail --silent --show-error --location \
+              --output /tmp/aruno-clicker-ver-s.apk \
+              --dump-header /tmp/aruno-clicker-ver-s.headers \
+              https://download.aruno-id.com/apk/aruno-clicker-ver-s.apk; then
+              break
+            fi
+            sleep 5
+          done
+
+          curl --fail --silent --show-error --location \
+            --output /tmp/download-page.html \
+            --dump-header /tmp/download-page.headers \
+            https://download.aruno-id.com/
+          grep -qi '^content-type: text/html' /tmp/download-page.headers
+          grep -q '/apk/aruno-clicker.apk' /tmp/download-page.html
+          grep -q '/apk/aruno-clicker-ver-s.apk' /tmp/download-page.html
+
+          test -s /tmp/aruno-clicker.apk
+          test -s /tmp/aruno-clicker-ver-s.apk
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/aruno-clicker.headers
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/aruno-clicker-ver-s.headers
+          test "$(sha256sum /tmp/aruno-clicker.apk | cut -d ' ' -f 1)" = \
+            "$(sha256sum dist/ARUNO_CLICKER_v0.5.0.apk | cut -d ' ' -f 1)"
+          test "$(sha256sum /tmp/aruno-clicker-ver-s.apk | cut -d ' ' -f 1)" = \
+            "$(sha256sum 'dist/ARUNO_CLICKER_ver.S_v0.5.0.apk' | cut -d ' ' -f 1)"
+
+      - name: Verify R2 public access remains disabled
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          API_BASE="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${R2_BUCKET_NAME}/domains"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "${API_BASE}/managed" \
+            | jq -e '.success == true and .result.enabled == false' >/dev/null
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "${API_BASE}/custom" \
+            | jq -e '.success == true and all(.result.domains[]; .enabled == false)' >/dev/null
+name: Build ARUNO CLICKER v0.5.0 dual install
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
