@@ -153,6 +153,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           npx --yes wrangler@4.40.0 deploy
+          npx --yes wrangler@4.40.0 versions deploy --yes
 
       - name: Verify public downloads and SHA256
         run: |
