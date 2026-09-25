@@ -1,0 +1,9 @@
+name = "aruno-clicker-download"
+main = "src/index.js"
+compatibility_date = "2026-09-25"
+workers_dev = false
+
+[[r2_buckets]]
+binding = "APK_BUCKET"
+bucket_name = "aruno-clicker-download"
+
