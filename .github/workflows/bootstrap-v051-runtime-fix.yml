@@ -28,6 +28,6 @@ jobs:
           git apply /tmp/aruno-v051.patch
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/build-android-v051.yml android-app/app/build.gradle.kts android-app/app/src/main/java/jp/aruno/clicker/automation/ArunoAccessibilityService.kt android-app/app/src/main/java/jp/aruno/clicker/automation/InterruptionClassifier.kt android-app/app/src/main/java/jp/aruno/clicker/automation/PopupCloseClassifier.kt android-app/app/src/test/java/jp/aruno/clicker/automation/InterruptionClassifierTest.kt
+          git add android-app/app/build.gradle.kts android-app/app/src/main/java/jp/aruno/clicker/automation/ArunoAccessibilityService.kt android-app/app/src/main/java/jp/aruno/clicker/automation/InterruptionClassifier.kt android-app/app/src/main/java/jp/aruno/clicker/automation/PopupCloseClassifier.kt android-app/app/src/test/java/jp/aruno/clicker/automation/InterruptionClassifierTest.kt
           git commit -m "Harden ver.S runtime interruption handling"
           git push origin HEAD:main
