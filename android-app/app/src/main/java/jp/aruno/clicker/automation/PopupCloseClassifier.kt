@@ -23,4 +23,9 @@ internal object PopupCloseClassifier {
         if (resourceHints.any(normalizedId::contains)) return 70
         return 0
     }
+
+    fun isExactCloseSymbol(text: CharSequence?, description: CharSequence?): Boolean =
+        sequenceOf(text, description)
+            .mapNotNull { it?.toString()?.trim()?.takeIf(String::isNotEmpty) }
+            .any { it in exactSymbols }
 }

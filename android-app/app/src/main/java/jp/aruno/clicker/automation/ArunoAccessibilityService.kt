@@ -44,6 +44,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var foregroundPackage: String? = null
     private var foregroundPackageUpdatedAt = 0L
     private var wrongAppChecks = 0
+    private var targetNotForegroundSinceMs = 0L
     private var gestureFailures = 0
     private var automationGeneration = 0L
     private var lastSwipeDelayMs = 0L
@@ -90,10 +91,6 @@ class ArunoAccessibilityService : AccessibilityService() {
                 wrongAppChecks += 1
                 AutomationRuntime.markWaiting(this@ArunoAccessibilityService, "TikTok Liteを開いています")
                 if (wrongAppChecks == 1 || wrongAppChecks % 3 == 0) launchTargetApp(activeConfig.targetPackage)
-                if (wrongAppChecks > activeConfig.actionRetryCount.coerceAtLeast(1) * 3) {
-                    stopAutomation("TikTok Liteを開けませんでした")
-                    return
-                }
                 handler.postDelayed(this, 1_500L)
                 return
             }
@@ -111,18 +108,55 @@ class ArunoAccessibilityService : AccessibilityService() {
         }
     }
 
+    private val targetForegroundWatchdogRunnable = object : Runnable {
+        override fun run() {
+            val generation = automationGeneration
+            if (!isSessionActive(generation)) return
+            if (!slidePhaseActive || restartInProgress) {
+                targetNotForegroundSinceMs = 0L
+                handler.postDelayed(this, TARGET_FOREGROUND_WATCHDOG_INTERVAL_MS)
+                return
+            }
+
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (isTargetForeground()) {
+                targetNotForegroundSinceMs = 0L
+            } else {
+                if (targetNotForegroundSinceMs == 0L) targetNotForegroundSinceMs = now
+                val missingDurationMs = now - targetNotForegroundSinceMs
+                if (
+                    TargetForegroundPolicy.shouldForceLaunch(
+                        missingDurationMs,
+                        TARGET_FOREGROUND_FORCE_AFTER_MS,
+                    )
+                ) {
+                    AutomationRuntime.markWaiting(
+                        this@ArunoAccessibilityService,
+                        "TikTok Liteが30秒間未表示\nアプリIDから強制起動",
+                    )
+                    targetNotForegroundSinceMs = now
+                    if (!launchTargetApp(activeConfig.targetPackage, resetTask = true)) {
+                        stopAutomation("TikTok Liteを強制起動できませんでした")
+                        return
+                    }
+                }
+            }
+            handler.postDelayed(this, TARGET_FOREGROUND_WATCHDOG_INTERVAL_MS)
+        }
+    }
+
     private val popupCheckRunnable = Runnable {
         popupCheckScheduled = false
         lastPopupScanAtMs = android.os.SystemClock.elapsedRealtime()
         val generation = automationGeneration
         if (
             isSessionActive(generation) &&
-            slidePhaseActive &&
             !restartInProgress &&
-            activeConfig.autoDismissPopups &&
             isTargetForeground()
         ) {
-            dismissBlockingPopupIfPresent(generation)
+            if (!denyContactsPermissionIfPresent(generation) && slidePhaseActive && activeConfig.autoDismissPopups) {
+                dismissBlockingPopupIfPresent(generation)
+            }
         }
     }
 
@@ -168,8 +202,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         if (
             event != null &&
             event.packageName?.toString() in AutomationConfig.TARGET_PACKAGES &&
-            slidePhaseActive &&
-            activeConfig.autoDismissPopups
+            AutomationRuntime.snapshot().requested
         ) {
             schedulePopupCheck()
         }
@@ -199,6 +232,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         val generation = automationGeneration
         activeConfig = config.sanitized()
         wrongAppChecks = 0
+        targetNotForegroundSinceMs = 0L
         gestureFailures = 0
         completedWarmupCycles = 0
         restartInProgress = false
@@ -378,6 +412,9 @@ class ArunoAccessibilityService : AccessibilityService() {
             }
             restartInProgress = false
             slidePhaseActive = true
+            targetNotForegroundSinceMs = 0L
+            handler.removeCallbacks(targetForegroundWatchdogRunnable)
+            handler.post(targetForegroundWatchdogRunnable)
             if (pendingDailyStartCompletion) {
                 DailyStartModeStore(this).markTodayCompleted()
                 pendingDailyStartCompletion = false
@@ -398,6 +435,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         slidePhaseActive = false
         popupDismissInProgress = false
         popupCheckScheduled = false
+        targetNotForegroundSinceMs = 0L
         contentPageToken += 1L
         pendingSwipeReason = null
         pendingSwipePageToken = -1L
@@ -405,6 +443,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         classificationMatchCount = 0
         handler.removeCallbacks(swipeRunnable)
         handler.removeCallbacks(popupCheckRunnable)
+        handler.removeCallbacks(targetForegroundWatchdogRunnable)
         val phaseLabel = if (completedWarmupCycles < WARMUP_CYCLE_COUNT) {
             "1分動作 ${completedWarmupCycles + 1}/$WARMUP_CYCLE_COUNT 完了"
         } else {
@@ -598,11 +637,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         // is removed. The launcher can still expose a TikTok Lite home-screen
         // icon, so stop card discovery when the recents surface disappears.
         val targetCardBounds = findTargetRecentsCardBounds(bounds)
-        if (
-            targetCardBounds == null &&
-            prefersHorizontalRecentsDismissal() &&
-            !hasBottomRecentsClearIndicator(bounds)
-        ) {
+        if (targetCardBounds == null && RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount)) {
             AutomationRuntime.markWaiting(
                 this,
                 "カードタスクキル\nTikTokカード残り0件",
@@ -621,7 +656,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     AutomationRuntime.markWaiting(this, "カードを反対方向へ探索\n1/${MAX_RECENTS_CARDS_TO_SEARCH * 2}")
                     swipeRecentsForSearch(generation, bounds, RECENTS_SEARCH_REVERSE) { moved ->
                         if (!moved) {
-                            onFinished(false)
+                            onFinished(RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount))
                         } else {
                             handler.postDelayed({
                                 findAndDismissTargetRecentsCards(
@@ -639,9 +674,9 @@ class ArunoAccessibilityService : AccessibilityService() {
                 }
                 AutomationRuntime.markWaiting(
                     this,
-                    "カードタスクキル\nTikTokカード残り0件",
+                    "カードタスクキル\nTikTokカード未検出",
                 )
-                onFinished(true)
+                onFinished(RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount))
             } else {
                 AutomationRuntime.markWaiting(
                     this,
@@ -649,7 +684,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                 )
                 swipeRecentsForSearch(generation, bounds, searchDirection) { moved ->
                     if (!moved) {
-                        onFinished(false)
+                        onFinished(RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount))
                     } else {
                         handler.postDelayed({
                             findAndDismissTargetRecentsCards(
@@ -731,6 +766,12 @@ class ArunoAccessibilityService : AccessibilityService() {
             .build()
         val retryOrFinish: (Boolean) -> Unit = retry@{ gestureCompleted ->
             if (!isSessionActive(generation)) return@retry
+            val latestBounds = findTargetRecentsCardBounds(bounds)
+            val targetStillVisible = latestBounds != null && sameRecentsCard(targetCardBounds, latestBounds)
+            if (RecentsDismissPolicy.targetRemovalSucceeded(targetStillVisible)) {
+                onFinished(true)
+                return@retry
+            }
             if (!gestureCompleted) {
                 if (attempt >= RECENTS_DISMISS_RETRY_COUNT) {
                     onFinished(false)
@@ -739,11 +780,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                 }
                 return@retry
             }
-            val latestBounds = findTargetRecentsCardBounds(bounds)
-            val originalCardGone = latestBounds == null || !sameRecentsCard(targetCardBounds, latestBounds)
-            if (originalCardGone) {
-                onFinished(true)
-            } else if (attempt >= RECENTS_DISMISS_RETRY_COUNT) {
+            if (attempt >= RECENTS_DISMISS_RETRY_COUNT) {
                 onFinished(false)
             } else {
                 retryRecentsDismiss(generation, bounds, requireNotNull(latestBounds), attempt, onFinished)
@@ -1076,17 +1113,100 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     private fun schedulePopupCheck() {
-        if (popupCheckScheduled || popupDismissInProgress || !slidePhaseActive) return
+        if (popupCheckScheduled || popupDismissInProgress || !AutomationRuntime.snapshot().requested) return
         val now = android.os.SystemClock.elapsedRealtime()
         val throttleRemaining = (POPUP_SCAN_THROTTLE_MS - (now - lastPopupScanAtMs)).coerceAtLeast(0L)
         popupCheckScheduled = true
         handler.postDelayed(popupCheckRunnable, maxOf(POPUP_EVENT_DEBOUNCE_MS, throttleRemaining))
     }
 
-    private data class PopupCloseCandidate(
+    private data class ContactsPermissionCandidate(
         val node: AccessibilityNodeInfo,
         val bounds: Rect,
+    )
+
+    private fun denyContactsPermissionIfPresent(generation: Long): Boolean {
+        if (
+            !isSessionActive(generation) ||
+            restartInProgress ||
+            popupDismissInProgress ||
+            !isTargetForeground()
+        ) return false
+        val candidate = findContactsPermissionCandidate() ?: return false
+        popupDismissInProgress = true
+        handler.removeCallbacks(swipeRunnable)
+
+        var clickable: AccessibilityNodeInfo? = candidate.node
+        repeat(MAX_CLICKABLE_PARENT_DEPTH + 1) {
+            val node = clickable ?: return@repeat
+            if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                verifyContactsPermissionDismissed(generation, attempt = 0)
+                return true
+            }
+            clickable = node.parent
+        }
+
+        dispatchTap(candidate.bounds.centerX().toFloat(), candidate.bounds.centerY().toFloat()) { succeeded ->
+            if (!isSessionActive(generation)) return@dispatchTap
+            if (succeeded) {
+                verifyContactsPermissionDismissed(generation, attempt = 0)
+            } else {
+                popupDismissInProgress = false
+                schedulePopupCheck()
+            }
+        }
+        return true
+    }
+
+    private fun findContactsPermissionCandidate(): ContactsPermissionCandidate? {
+        val root = rootInActiveWindow ?: return null
+        if (root.packageName?.toString() !in AutomationConfig.TARGET_PACKAGES) return null
+        val screen = currentScreenBounds()
+        val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+        val labels = ArrayList<String>()
+        var denyCandidate: ContactsPermissionCandidate? = null
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
+            val node = queue.removeFirst()
+            visited += 1
+            if (node.isVisibleToUser) {
+                val bounds = Rect().also(node::getBoundsInScreen)
+                val onScreen = !bounds.isEmpty && screen.contains(bounds.centerX(), bounds.centerY())
+                if (onScreen) {
+                    node.text?.toString()?.takeIf(String::isNotBlank)?.let(labels::add)
+                    node.contentDescription?.toString()?.takeIf(String::isNotBlank)?.let(labels::add)
+                    if (
+                        denyCandidate == null &&
+                        InterruptionClassifier.isContactsDenyAction(node.text, node.contentDescription)
+                    ) {
+                        denyCandidate = ContactsPermissionCandidate(node, Rect(bounds))
+                    }
+                }
+            }
+            for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
+        }
+        return denyCandidate?.takeIf { InterruptionClassifier.isContactsPermissionDialog(labels) }
+    }
+
+    private fun verifyContactsPermissionDismissed(generation: Long, attempt: Int) {
+        handler.postDelayed({
+            if (!isSessionActive(generation)) return@postDelayed
+            if (findContactsPermissionCandidate() == null) {
+                finishInterruptionDismissal(generation, "連絡先アクセスを拒否")
+            } else if (attempt >= CONTACTS_DISMISS_VERIFY_RETRIES) {
+                popupDismissInProgress = false
+                schedulePopupCheck()
+            } else {
+                verifyContactsPermissionDismissed(generation, attempt + 1)
+            }
+        }, CONTACTS_DISMISS_VERIFY_MS)
+    }
+
+    private data class PopupCloseCandidate(
+        val node: AccessibilityNodeInfo?,
+        val bounds: Rect,
         val priority: Int,
+        val knownCoinPopup: Boolean = false,
     )
 
     private fun dismissBlockingPopupIfPresent(generation: Long): Boolean {
@@ -1104,20 +1224,22 @@ class ArunoAccessibilityService : AccessibilityService() {
         val candidate = findPopupCloseCandidate() ?: return false
         popupDismissInProgress = true
 
-        var clickable: AccessibilityNodeInfo? = candidate.node
-        repeat(MAX_CLICKABLE_PARENT_DEPTH + 1) {
-            val node = clickable ?: return@repeat
-            if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                onPopupDismissed(generation)
-                return true
+        if (candidate.node != null) {
+            var clickable: AccessibilityNodeInfo? = candidate.node
+            repeat(MAX_CLICKABLE_PARENT_DEPTH + 1) {
+                val node = clickable ?: return@repeat
+                if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    onPopupDismissed(generation, candidate.knownCoinPopup)
+                    return true
+                }
+                clickable = node.parent
             }
-            clickable = node.parent
         }
 
         dispatchTap(candidate.bounds.centerX().toFloat(), candidate.bounds.centerY().toFloat()) { succeeded ->
             if (!isSessionActive(generation)) return@dispatchTap
             if (succeeded) {
-                onPopupDismissed(generation)
+                onPopupDismissed(generation, candidate.knownCoinPopup)
             } else {
                 popupDismissInProgress = false
             }
@@ -1135,8 +1257,10 @@ class ArunoAccessibilityService : AccessibilityService() {
         val maxWidth = screen.width() * POPUP_MAX_SIZE_RATIO
         val maxHeight = screen.height() * POPUP_MAX_SIZE_RATIO
         val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+        val visibleLabels = ArrayList<String>()
         var visited = 0
         var best: PopupCloseCandidate? = null
+        var coinStartBounds: Rect? = null
         while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
             val node = queue.removeFirst()
             visited += 1
@@ -1145,9 +1269,22 @@ class ArunoAccessibilityService : AccessibilityService() {
                 val centerX = bounds.centerX()
                 val centerY = bounds.centerY()
                 val onScreen = !bounds.isEmpty && screen.contains(centerX, centerY)
+                if (onScreen) {
+                    node.text?.toString()?.takeIf(String::isNotBlank)?.let(visibleLabels::add)
+                    node.contentDescription?.toString()?.takeIf(String::isNotBlank)?.let(visibleLabels::add)
+                    if (InterruptionClassifier.isCoinStockStartAction(node.text, node.contentDescription)) {
+                        coinStartBounds = Rect(bounds)
+                    }
+                }
                 val safeSize = bounds.width() in POPUP_MIN_SIZE_PX..maxWidth.toInt() &&
                     bounds.height() in POPUP_MIN_SIZE_PX..maxHeight.toInt()
-                if (onScreen && safeSize && centerY in minY..maxY) {
+                val exactCloseSymbol = PopupCloseClassifier.isExactCloseSymbol(
+                    node.text,
+                    node.contentDescription,
+                )
+                val eligibleCloseTarget = onScreen &&
+                    (exactCloseSymbol || (safeSize && centerY in minY..maxY))
+                if (eligibleCloseTarget) {
                     val score = PopupCloseClassifier.score(
                         node.text,
                         node.contentDescription,
@@ -1163,7 +1300,26 @@ class ArunoAccessibilityService : AccessibilityService() {
             }
             for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
         }
-        return best
+        val knownCoinPopup = InterruptionClassifier.isCoinStockPopup(visibleLabels)
+        if (best != null) return requireNotNull(best).copy(knownCoinPopup = knownCoinPopup)
+        val startBounds = coinStartBounds ?: return null
+        if (!knownCoinPopup) return null
+        val x = startBounds.centerX().coerceIn(
+            screen.left + (screen.width() * 0.30f).toInt(),
+            screen.left + (screen.width() * 0.70f).toInt(),
+        )
+        val y = (startBounds.bottom + screen.height() * COIN_POPUP_CLOSE_OFFSET_RATIO).toInt().coerceIn(
+            screen.top + (screen.height() * COIN_POPUP_CLOSE_MIN_Y_RATIO).toInt(),
+            screen.top + (screen.height() * COIN_POPUP_CLOSE_MAX_Y_RATIO).toInt(),
+        )
+        val targetRadius = (screen.width() * COIN_POPUP_CLOSE_TARGET_RADIUS_RATIO).toInt()
+            .coerceAtLeast(POPUP_MIN_SIZE_PX)
+        return PopupCloseCandidate(
+            node = null,
+            bounds = Rect(x - targetRadius, y - targetRadius, x + targetRadius, y + targetRadius),
+            priority = COIN_POPUP_FALLBACK_PRIORITY,
+            knownCoinPopup = true,
+        )
     }
 
     private fun dispatchTap(x: Float, y: Float, result: (Boolean) -> Unit) {
@@ -1182,20 +1338,68 @@ class ArunoAccessibilityService : AccessibilityService() {
         if (!accepted) result(false)
     }
 
-    private fun onPopupDismissed(generation: Long) {
+    private fun onPopupDismissed(generation: Long, verifyKnownCoinPopup: Boolean) {
+        if (!isSessionActive(generation)) return
+        if (verifyKnownCoinPopup) {
+            verifyKnownCoinPopupDismissed(generation, attempt = 0)
+            return
+        }
+        finishInterruptionDismissal(generation, "ポップアップ解除\n×を閉じました")
+    }
+
+    private fun verifyKnownCoinPopupDismissed(generation: Long, attempt: Int) {
+        handler.postDelayed({
+            if (!isSessionActive(generation)) return@postDelayed
+            if (!isKnownCoinPopupVisible()) {
+                finishInterruptionDismissal(generation, "ポップアップ解除\n×を閉じました")
+            } else if (attempt >= POPUP_DISMISS_VERIFY_RETRIES) {
+                lastPopupDismissAtMs = android.os.SystemClock.elapsedRealtime()
+                popupDismissInProgress = false
+                schedulePopupCheck()
+            } else {
+                verifyKnownCoinPopupDismissed(generation, attempt + 1)
+            }
+        }, POPUP_DISMISS_VERIFY_MS)
+    }
+
+    private fun isKnownCoinPopupVisible(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName?.toString() !in AutomationConfig.TARGET_PACKAGES) return false
+        val screen = currentScreenBounds()
+        val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+        val labels = ArrayList<String>()
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
+            val node = queue.removeFirst()
+            visited += 1
+            if (node.isVisibleToUser) {
+                val bounds = Rect().also(node::getBoundsInScreen)
+                if (!bounds.isEmpty && screen.contains(bounds.centerX(), bounds.centerY())) {
+                    node.text?.toString()?.takeIf(String::isNotBlank)?.let(labels::add)
+                    node.contentDescription?.toString()?.takeIf(String::isNotBlank)?.let(labels::add)
+                }
+            }
+            for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
+        }
+        return InterruptionClassifier.isCoinStockPopup(labels)
+    }
+
+    private fun finishInterruptionDismissal(generation: Long, status: String) {
         if (!isSessionActive(generation)) return
         lastPopupDismissAtMs = android.os.SystemClock.elapsedRealtime()
         popupCheckScheduled = false
-        pendingSwipeReason = null
-        pendingSwipePageToken = -1L
-        contentPageToken += 1L
-        handler.removeCallbacks(swipeRunnable)
         handler.removeCallbacks(popupCheckRunnable)
-        AutomationRuntime.markWaiting(this, "ポップアップ解除\n×を閉じました")
+        AutomationRuntime.markWaiting(this, status)
+        if (slidePhaseActive) {
+            pendingSwipeReason = null
+            pendingSwipePageToken = -1L
+            contentPageToken += 1L
+            handler.removeCallbacks(swipeRunnable)
+        }
         handler.postDelayed({
-            if (isSessionActive(generation) && slidePhaseActive && !restartInProgress) {
+            if (isSessionActive(generation)) {
                 popupDismissInProgress = false
-                beginContentTiming(generation)
+                if (slidePhaseActive && !restartInProgress) beginContentTiming(generation)
             }
         }, POPUP_AFTER_DISMISS_MS)
     }
@@ -1218,6 +1422,9 @@ class ArunoAccessibilityService : AccessibilityService() {
                 ?: "通常画面\n${regularDelay / 1_000L}秒待機",
         )
         handler.postDelayed(swipeRunnable, regularDelay)
+        handler.postDelayed({
+            if (isCurrentContentPage(generation, pageToken)) schedulePopupCheck()
+        }, POPUP_INITIAL_SCAN_DELAY_MS)
         if (!activeConfig.fastContentEnabled) return
         handler.postDelayed(
             { evaluateContentAndScheduleSwipe(generation, pageToken) },
@@ -1227,7 +1434,7 @@ class ArunoAccessibilityService : AccessibilityService() {
 
     private fun evaluateContentAndScheduleSwipe(generation: Long, pageToken: Long) {
         if (!isCurrentContentPage(generation, pageToken)) return
-        if (dismissBlockingPopupIfPresent(generation)) return
+        if (denyContactsPermissionIfPresent(generation) || dismissBlockingPopupIfPresent(generation)) return
         val accessibilitySignal = detectFastContent()
         if (accessibilitySignal != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             handleClassificationResult(accessibilitySignal, generation, pageToken)
@@ -1393,7 +1600,7 @@ class ArunoAccessibilityService : AccessibilityService() {
 
     private fun performConfiguredSwipe(fastReason: String?, generation: Long) {
         if (!isSessionActive(generation) || restartInProgress || !isTargetForeground()) return
-        if (dismissBlockingPopupIfPresent(generation)) return
+        if (denyContactsPermissionIfPresent(generation) || dismissBlockingPopupIfPresent(generation)) return
         val fastContent = isForcedSwipeReason(fastReason)
         val gestureDuration = if (fastContent) {
             activeConfig.fastGestureDurationMs
@@ -1693,6 +1900,8 @@ class ArunoAccessibilityService : AccessibilityService() {
         private const val TARGET_LAUNCH_TIMEOUT_MS = 10_000L
         private const val TARGET_FOREGROUND_STABLE_MS = 600L
         private const val FOREGROUND_CHECK_INTERVAL_MS = 200L
+        private const val TARGET_FOREGROUND_WATCHDOG_INTERVAL_MS = 1_000L
+        private const val TARGET_FOREGROUND_FORCE_AFTER_MS = 30_000L
         private const val CHOOSER_CLICK_INTERVAL_MS = 1_000L
         private const val MAX_CHOOSER_CLICKS = 3
         private const val MAX_CLICKABLE_PARENT_DEPTH = 5
@@ -1706,11 +1915,21 @@ class ArunoAccessibilityService : AccessibilityService() {
         private const val POPUP_SCAN_THROTTLE_MS = 500L
         private const val POPUP_DISMISS_COOLDOWN_MS = 900L
         private const val POPUP_AFTER_DISMISS_MS = 650L
+        private const val POPUP_INITIAL_SCAN_DELAY_MS = 350L
+        private const val POPUP_DISMISS_VERIFY_MS = 250L
+        private const val POPUP_DISMISS_VERIFY_RETRIES = 3
+        private const val CONTACTS_DISMISS_VERIFY_MS = 250L
+        private const val CONTACTS_DISMISS_VERIFY_RETRIES = 4
         private const val POPUP_TAP_DURATION_MS = 80L
         private const val POPUP_MIN_Y_RATIO = 0.03f
         private const val POPUP_MAX_Y_RATIO = 0.90f
         private const val POPUP_MAX_SIZE_RATIO = 0.25f
         private const val POPUP_MIN_SIZE_PX = 6
+        private const val COIN_POPUP_CLOSE_OFFSET_RATIO = 0.065f
+        private const val COIN_POPUP_CLOSE_MIN_Y_RATIO = 0.40f
+        private const val COIN_POPUP_CLOSE_MAX_Y_RATIO = 0.80f
+        private const val COIN_POPUP_CLOSE_TARGET_RADIUS_RATIO = 0.025f
+        private const val COIN_POPUP_FALLBACK_PRIORITY = 60
         private const val CIRCLE_SAMPLES = 24
         private const val MIN_CIRCLE_RING_POINTS = 12
         private const val GAUGE_ANALYSIS_WIDTH = 360
