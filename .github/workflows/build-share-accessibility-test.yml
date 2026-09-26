@@ -1,0 +1,182 @@
+name: Build Redmi A3 share accessibility test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TEST_VERSION: "0.5.1-share-a11y-1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare stable signing key
+        env:
+          ARUNO_PRIVATE_KEY_PEM: ${{ secrets.ARUNO_PRIVATE_KEY_PEM }}
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ARUNO_PRIVATE_KEY_PEM"
+          test -n "$ARUNO_SIGNING_PASSWORD"
+          printf '%s' "$ARUNO_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/aruno-private-key.pem"
+          openssl pkcs12 -export \
+            -inkey "$RUNNER_TEMP/aruno-private-key.pem" \
+            -in signing/aruno-release.crt \
+            -out "$RUNNER_TEMP/aruno-release.p12" \
+            -name aruno-stable \
+            -passout "pass:$ARUNO_SIGNING_PASSWORD"
+
+      - name: Test all flavors and build isolated share test
+        working-directory: android-app
+        env:
+          ARUNO_KEYSTORE_PATH: ${{ runner.temp }}/aruno-release.p12
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon \
+            testAtlasDebugUnitTest \
+            testLumenDebugUnitTest \
+            testSharetestDebugUnitTest \
+            assembleAtlasRelease \
+            assembleLumenRelease \
+            assembleSharetestRelease
+
+      - name: Collect and verify isolated APK
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APKANALYZER_BIN="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          APKSIGNER_BIN="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner"
+          test -x "$APKANALYZER_BIN"
+          test -x "$APKSIGNER_BIN"
+          cp android-app/app/build/outputs/apk/sharetest/release/app-sharetest-release.apk \
+            dist/ARUNO_CLICKER_share_accessibility_test.apk
+          test -s dist/ARUNO_CLICKER_share_accessibility_test.apk
+          test "$("$APKANALYZER_BIN" manifest application-id dist/ARUNO_CLICKER_share_accessibility_test.apk)" = \
+            "jp.aruno.clicker.sharetest"
+          "$APKANALYZER_BIN" manifest print dist/ARUNO_CLICKER_share_accessibility_test.apk \
+            > dist/sharetest-manifest.xml
+          grep -q 'jp.aruno.clicker.automation.ArunoAccessibilityService' dist/sharetest-manifest.xml
+          grep -q 'android.permission.BIND_ACCESSIBILITY_SERVICE' dist/sharetest-manifest.xml
+          if grep -q 'android.permission.SYSTEM_ALERT_WINDOW' dist/sharetest-manifest.xml; then
+            echo 'sharetest must not request SYSTEM_ALERT_WINDOW' >&2
+            exit 1
+          fi
+          "$APKSIGNER_BIN" verify --verbose --print-certs \
+            dist/ARUNO_CLICKER_share_accessibility_test.apk
+          sha256sum dist/ARUNO_CLICKER_share_accessibility_test.apk > dist/SHA256SUMS-share-test.txt
+
+      - name: Test download Worker
+        working-directory: download-worker
+        run: npm test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aruno-share-accessibility-test
+          path: |
+            dist/ARUNO_CLICKER_share_accessibility_test.apk
+            dist/SHA256SUMS-share-test.txt
+            dist/sharetest-manifest.xml
+
+      - name: Upload isolated test APK to private R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          APK=dist/ARUNO_CLICKER_share_accessibility_test.apk
+          test -s "$APK"
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          SHA256="$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          for KEY in \
+            "tests/share-accessibility/${TEST_VERSION}/ARUNO_CLICKER_share_accessibility_test.apk" \
+            "apk/aruno-clicker-share-accessibility-test.apk"; do
+            aws s3 cp "$APK" "s3://${R2_BUCKET_NAME}/${KEY}" \
+              --endpoint-url "$ENDPOINT" \
+              --region auto \
+              --content-type application/vnd.android.package-archive \
+              --cache-control 'public,max-age=60,must-revalidate' \
+              --metadata "sha256=${SHA256}" \
+              --no-progress \
+              --only-show-errors
+          done
+
+      - name: Deploy existing download Worker
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.40.0 deploy
+
+      - name: Verify test and existing public downloads
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location \
+              --output /tmp/share-test.apk \
+              --dump-header /tmp/share-test.headers \
+              https://download.aruno-id.com/apk/aruno-clicker-share-accessibility-test.apk; then
+              break
+            fi
+            sleep 5
+          done
+          test -s /tmp/share-test.apk
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/share-test.headers
+          test "$(sha256sum /tmp/share-test.apk | cut -d ' ' -f 1)" = \
+            "$(sha256sum dist/ARUNO_CLICKER_share_accessibility_test.apk | cut -d ' ' -f 1)"
+
+          curl --fail --silent --show-error --head \
+            https://download.aruno-id.com/apk/aruno-clicker.apk > /tmp/atlas.headers
+          curl --fail --silent --show-error --head \
+            https://download.aruno-id.com/apk/aruno-clicker-ver-s.apk > /tmp/lumen.headers
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/atlas.headers
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/lumen.headers
+
+          curl --fail --silent --show-error --location \
+            https://download.aruno-id.com/ > /tmp/download-page.html
+          grep -q '/apk/aruno-clicker.apk' /tmp/download-page.html
+          grep -q '/apk/aruno-clicker-ver-s.apk' /tmp/download-page.html
+          grep -q '/apk/aruno-clicker-share-accessibility-test.apk' /tmp/download-page.html
+
+      - name: Verify R2 public access remains disabled
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          API_BASE="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${R2_BUCKET_NAME}/domains"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "${API_BASE}/managed" \
+            | jq -e '.success == true and .result.enabled == false' >/dev/null
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "${API_BASE}/custom" \
+            | jq -e '.success == true and all(.result.domains[]; .enabled == false)' >/dev/null
