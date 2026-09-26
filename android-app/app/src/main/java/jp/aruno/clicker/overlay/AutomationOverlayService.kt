@@ -70,7 +70,11 @@ open class AutomationOverlayService : Service() {
             AutomationContract.ACTION_STOP_AUTOMATION -> requestStop()
             AutomationContract.ACTION_CLOSE_OVERLAY -> {
                 requestStop()
-                removeOverlay()
+                if (BuildConfig.USE_ACCESSIBILITY_OVERLAY) {
+                    ArunoAccessibilityService.instance?.hideAccessibilityOverlay()
+                } else {
+                    removeOverlay()
+                }
                 stopSelf()
             }
             AutomationContract.ACTION_SHOW_OVERLAY -> showOverlay()
@@ -140,6 +144,17 @@ open class AutomationOverlayService : Service() {
     }
 
     private fun showOverlay() {
+        if (BuildConfig.USE_ACCESSIBILITY_OVERLAY) {
+            if (ArunoAccessibilityService.instance?.showAccessibilityOverlay() != true) {
+                AutomationRuntime.markWaiting(this, "アクセシビリティをONにしてください")
+                Toast.makeText(
+                    this,
+                    "ARUNO CLICKERのアクセシビリティをONにしてください",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            return
+        }
         if (overlayView != null) return
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "フローティング表示の権限を許可してください", Toast.LENGTH_LONG).show()

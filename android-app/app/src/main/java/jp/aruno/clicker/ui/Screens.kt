@@ -98,6 +98,7 @@ private enum class AppScreen { HOME, SETTINGS, DETAILS }
 fun ArunoClickerApp(
     viewModel: MainViewModel,
     isVerS: Boolean,
+    useAccessibilityOverlay: Boolean,
     permissionRefresh: Int,
     openAccessibilitySettings: () -> Unit,
     requestOverlayPermission: () -> Unit,
@@ -115,6 +116,7 @@ fun ArunoClickerApp(
     if (!settings.onboardingComplete) {
         OnboardingScreen(
             context = context,
+            useAccessibilityOverlay = useAccessibilityOverlay,
             permissionRefresh = permissionRefresh,
             openAccessibilitySettings = openAccessibilitySettings,
             requestOverlayPermission = requestOverlayPermission,
@@ -169,13 +171,16 @@ fun ArunoClickerApp(
 @Composable
 private fun OnboardingScreen(
     context: Context,
+    useAccessibilityOverlay: Boolean,
     permissionRefresh: Int,
     openAccessibilitySettings: () -> Unit,
     requestOverlayPermission: () -> Unit,
     requestNotificationPermission: () -> Unit,
     onComplete: () -> Unit,
 ) {
-    val overlayGranted = remember(permissionRefresh) { Settings.canDrawOverlays(context) }
+    val overlayGranted = remember(permissionRefresh, useAccessibilityOverlay) {
+        useAccessibilityOverlay || Settings.canDrawOverlays(context)
+    }
     val accessibilityGranted = remember(permissionRefresh) {
         val enabled = Settings.Secure.getString(
             context.contentResolver,
@@ -224,22 +229,28 @@ private fun OnboardingScreen(
         item {
             PermissionCard(
                 title = "ユーザー補助",
-                body = "画面操作に必要です。ONにできない場合は、アプリ情報の右上メニューから「制限付き設定を許可」してから有効にしてください。",
+                body = if (useAccessibilityOverlay) {
+                    "画面操作とARUNO操作枠の表示に必要です。ONにできない場合は、アプリ情報の右上メニューから「制限付き設定を許可」してから有効にしてください。"
+                } else {
+                    "画面操作に必要です。ONにできない場合は、アプリ情報の右上メニューから「制限付き設定を許可」してから有効にしてください。"
+                },
                 granted = accessibilityGranted,
                 buttonLabel = if (accessibilityGranted) "有効" else "設定を開く",
                 icon = Icons.Rounded.AccessibilityNew,
                 onClick = openAccessibilitySettings,
             )
         }
-        item {
-            PermissionCard(
-                title = "他のアプリの上に表示",
-                body = "TikTok Lite 上に停止ボタンを表示します。",
-                granted = overlayGranted,
-                buttonLabel = if (overlayGranted) "許可済み" else "許可する",
-                icon = Icons.Rounded.Layers,
-                onClick = requestOverlayPermission,
-            )
+        if (!useAccessibilityOverlay) {
+            item {
+                PermissionCard(
+                    title = "他のアプリの上に表示",
+                    body = "TikTok Lite 上に停止ボタンを表示します。",
+                    granted = overlayGranted,
+                    buttonLabel = if (overlayGranted) "許可済み" else "許可する",
+                    icon = Icons.Rounded.Layers,
+                    onClick = requestOverlayPermission,
+                )
+            }
         }
         item {
             PermissionCard(

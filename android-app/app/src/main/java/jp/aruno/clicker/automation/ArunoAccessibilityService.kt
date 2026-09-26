@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Path
@@ -21,6 +22,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.data.RemoteConfigClient
+import jp.aruno.clicker.overlay.AccessibilityOverlayController
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
@@ -62,11 +64,15 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var lastPopupScanAtMs = 0L
     private var lastPopupDismissAtMs = 0L
     private var pendingDailyStartCompletion = false
+    private var accessibilityOverlayController: AccessibilityOverlayController? = null
 
     private val commandReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 AutomationContract.ACTION_START_AUTOMATION -> {
+                    if (BuildConfig.USE_ACCESSIBILITY_OVERLAY && configStore.load().floatingController) {
+                        showAccessibilityOverlay()
+                    }
                     startWithLatestRemoteConfig(intent)
                 }
                 AutomationContract.ACTION_STOP_AUTOMATION -> stopAutomation("停止しました")
@@ -164,6 +170,22 @@ class ArunoAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         configStore = AutomationConfigStore(this)
+        if (BuildConfig.USE_ACCESSIBILITY_OVERLAY) {
+            accessibilityOverlayController = AccessibilityOverlayController(
+                service = this,
+                onStart = {
+                    startWithLatestRemoteConfig(
+                        Intent()
+                            .putExtra(AutomationContract.EXTRA_SOURCE, AutomationContract.SOURCE_MANUAL)
+                            .putExtra(AutomationContract.EXTRA_START_MODE, AutomationContract.START_MODE_AUTO),
+                    )
+                },
+                onStop = { stopAutomation("停止しました") },
+                onClose = {
+                    stopService(Intent(this, AutomationService::class.java))
+                },
+            )
+        }
         val filter = IntentFilter().apply {
             addAction(AutomationContract.ACTION_START_AUTOMATION)
             addAction(AutomationContract.ACTION_STOP_AUTOMATION)
@@ -176,7 +198,15 @@ class ArunoAccessibilityService : AccessibilityService() {
         }
 
         val config = configStore.load()
-        AutomationRuntime.restoreRequested(this)?.let { restored ->
+        val restoredRequest = AutomationRuntime.restoreRequested(this)
+        if (
+            BuildConfig.USE_ACCESSIBILITY_OVERLAY &&
+            config.floatingController &&
+            (AutomationRuntime.snapshot().requested || restoredRequest != null)
+        ) {
+            showAccessibilityOverlay()
+        }
+        restoredRequest?.let { restored ->
             if (restored.pendingStart) {
                 startWithLatestRemoteConfig(
                     Intent()
@@ -212,6 +242,11 @@ class ArunoAccessibilityService : AccessibilityService() {
         AutomationRuntime.markWaiting(this, "アクセシビリティが中断されました")
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        accessibilityOverlayController?.onConfigurationChanged()
+    }
+
     override fun onDestroy() {
         automationGeneration += 1L
         handler.removeCallbacksAndMessages(null)
@@ -219,9 +254,20 @@ class ArunoAccessibilityService : AccessibilityService() {
         startSyncJob?.cancel()
         serviceScope.cancel()
         runCatching { unregisterReceiver(commandReceiver) }
+        accessibilityOverlayController?.destroy()
+        accessibilityOverlayController = null
         releaseWakeLock()
         if (instance === this) instance = null
         super.onDestroy()
+    }
+
+    fun showAccessibilityOverlay(): Boolean {
+        if (!BuildConfig.USE_ACCESSIBILITY_OVERLAY) return false
+        return accessibilityOverlayController?.show() == true
+    }
+
+    fun hideAccessibilityOverlay() {
+        accessibilityOverlayController?.hide()
     }
 
     fun startAutomation(

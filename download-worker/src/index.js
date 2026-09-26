@@ -15,6 +15,13 @@ const DOWNLOADS = new Map([
       filename: "ARUNO_CLICKER_ver.S.apk",
     },
   ],
+  [
+    "/apk/aruno-clicker-share-accessibility-test.apk",
+    {
+      key: "apk/aruno-clicker-share-accessibility-test.apk",
+      filename: "ARUNO_CLICKER_share_accessibility_test.apk",
+    },
+  ],
 ]);
 
 const PAGE = `<!doctype html>
@@ -52,6 +59,10 @@ const PAGE = `<!doctype html>
       <article class="card">
         <p class="name">ARUNO CLICKER ver.S</p>
         <a class="download" href="/apk/aruno-clicker-ver-s.apk">ダウンロード</a>
+      </article>
+      <article class="card">
+        <p class="name">Redmi A3 シェア試験版</p>
+        <a class="download" href="/apk/aruno-clicker-share-accessibility-test.apk">テストAPKをダウンロード</a>
       </article>
     </section>
     <p class="note">Android用APK</p>
@@ -116,4 +127,3 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 };
-

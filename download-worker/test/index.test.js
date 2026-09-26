@@ -25,8 +25,10 @@ test("serves the download page", async () => {
   assert.match(response.headers.get("content-type"), /^text\/html/);
   const html = await response.text();
   assert.match(html, /ARUNO CLICKER ver\.S/);
+  assert.match(html, /Redmi A3 シェア試験版/);
   assert.match(html, /\/apk\/aruno-clicker\.apk/);
   assert.match(html, /\/apk\/aruno-clicker-ver-s\.apk/);
+  assert.match(html, /\/apk\/aruno-clicker-share-accessibility-test\.apk/);
 });
 
 test("serves APKs with safe download headers", async () => {
@@ -51,3 +53,15 @@ test("returns 404 when an APK is missing", async () => {
   assert.equal(response.status, 404);
 });
 
+test("serves the isolated share accessibility test APK", async () => {
+  const response = await worker.fetch(
+    new Request("https://download.aruno-id.com/apk/aruno-clicker-share-accessibility-test.apk"),
+    environment(),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "application/vnd.android.package-archive");
+  assert.match(
+    response.headers.get("content-disposition"),
+    /ARUNO_CLICKER_share_accessibility_test\.apk/,
+  );
+});

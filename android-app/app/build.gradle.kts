@@ -28,6 +28,8 @@ android {
             dimension = "channel"
             applicationId = "jp.aruno.clicker"
             buildConfigField("boolean", "IS_VER_S", "false")
+            buildConfigField("boolean", "USE_ACCESSIBILITY_OVERLAY", "false")
+            buildConfigField("boolean", "IS_SHARE_TEST", "false")
             buildConfigField("String", "MANAGEMENT_GATE", "\"19801117\"")
             buildConfigField(
                 "String",
@@ -39,8 +41,23 @@ android {
             dimension = "channel"
             applicationId = "jp.aruno.x7c41"
             buildConfigField("boolean", "IS_VER_S", "true")
+            buildConfigField("boolean", "USE_ACCESSIBILITY_OVERLAY", "false")
+            buildConfigField("boolean", "IS_SHARE_TEST", "false")
             buildConfigField("String", "MANAGEMENT_GATE", "\"\"")
             // Hidden from ver.S UI; replace with the custom-domain route when Cloudflare is available.
+            buildConfigField(
+                "String",
+                "CONFIG_ENDPOINT",
+                "\"https://aruno-clicker-config.45kikurage.workers.dev/v1/config\"",
+            )
+        }
+        create("sharetest") {
+            dimension = "channel"
+            applicationId = "jp.aruno.clicker.sharetest"
+            buildConfigField("boolean", "IS_VER_S", "true")
+            buildConfigField("boolean", "USE_ACCESSIBILITY_OVERLAY", "true")
+            buildConfigField("boolean", "IS_SHARE_TEST", "true")
+            buildConfigField("String", "MANAGEMENT_GATE", "\"\"")
             buildConfigField(
                 "String",
                 "CONFIG_ENDPOINT",

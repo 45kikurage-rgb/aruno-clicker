@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
                 ArunoClickerApp(
                     viewModel = viewModel,
                     isVerS = BuildConfig.IS_VER_S,
+                    useAccessibilityOverlay = BuildConfig.USE_ACCESSIBILITY_OVERLAY,
                     permissionRefresh = permissionRefresh,
                     openAccessibilitySettings = {
                         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
