@@ -39,9 +39,6 @@ jobs:
       - name: Test Worker
         run: npm test
 
-      - name: Apply D1 migrations
-        run: npx wrangler d1 migrations apply aruno-clicker-config --remote --config wrangler.toml
-
       - name: Deploy existing config Worker
         run: npx wrangler deploy --config wrangler.toml
 

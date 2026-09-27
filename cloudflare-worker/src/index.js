@@ -6,6 +6,7 @@ const ADMIN_KEY_PATTERN = /^[A-Za-z0-9]{8}$/;
 const ALLOWED_TIKTOK_HOSTS = new Set([
   "tiktok.com", "www.tiktok.com", "lite.tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com",
 ]);
+const schemaReadyByDatabase = new WeakMap();
 
 export default {
   async fetch(request, env) {
@@ -20,6 +21,10 @@ export default {
 async function route(request, env) {
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return handleOptions(request, env);
+  if (url.pathname === "/healthz" || url.pathname === "/" || url.pathname.startsWith("/v1/")) {
+    requireDb(env);
+    await ensureLatestSchema(env.DB);
+  }
   if (url.pathname === "/healthz" && request.method === "GET") {
     return jsonResponse({ ok: true, schemaVersion: SCHEMA_VERSION }, 200, request, env);
   }
@@ -39,6 +44,66 @@ async function route(request, env) {
     return methodNotAllowed(request, env, "GET, PUT, OPTIONS");
   }
   return jsonResponse({ error: { code: "not_found", message: "Not found" } }, 404, request, env);
+}
+
+async function ensureLatestSchema(db) {
+  let ready = schemaReadyByDatabase.get(db);
+  if (!ready) {
+    ready = migrateLegacySchema(db).catch((error) => {
+      schemaReadyByDatabase.delete(db);
+      throw error;
+    });
+    schemaReadyByDatabase.set(db, ready);
+  }
+  await ready;
+}
+
+async function migrateLegacySchema(db) {
+  await ensureColumns(db, "remote_config", [
+    ["name1", "TEXT NOT NULL DEFAULT ''"],
+    ["name2", "TEXT NOT NULL DEFAULT ''"],
+    ["share_name", "TEXT NOT NULL DEFAULT ''"],
+    ["share_url", "TEXT NOT NULL DEFAULT ''"],
+  ]);
+  await db.exec("UPDATE remote_config SET share_url = url1 WHERE share_url = ''");
+
+  await ensureColumns(db, "config_history", [
+    ["name1", "TEXT NOT NULL DEFAULT ''"],
+    ["name2", "TEXT NOT NULL DEFAULT ''"],
+    ["share_name", "TEXT NOT NULL DEFAULT ''"],
+    ["share_url", "TEXT NOT NULL DEFAULT ''"],
+  ]);
+  await db.exec("UPDATE config_history SET share_url = url1 WHERE share_url = ''");
+
+  await db.exec(
+    `CREATE TABLE IF NOT EXISTS d1_migrations (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       name TEXT UNIQUE,
+       applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+     )`,
+  );
+  await db.prepare("INSERT OR IGNORE INTO d1_migrations (name) VALUES (?)")
+    .bind("0003_three_destinations.sql").run();
+}
+
+async function ensureColumns(db, table, definitions) {
+  let existing = await readColumnNames(db, table);
+  for (const [name, definition] of definitions) {
+    if (existing.has(name)) continue;
+    try {
+      await db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+    } catch (error) {
+      existing = await readColumnNames(db, table);
+      if (!existing.has(name)) throw error;
+      continue;
+    }
+    existing.add(name);
+  }
+}
+
+async function readColumnNames(db, table) {
+  const result = await db.prepare(`PRAGMA table_info(${table})`).all();
+  return new Set((result.results || []).map((column) => column.name));
 }
 
 async function getConfig(request, env) {
@@ -310,4 +375,4 @@ function methodNotAllowed(request, env, allow) {
 }
 function isPlainObject(value) { return Boolean(value && typeof value === "object" && !Array.isArray(value)); }
 
-export const testables = { ALLOWED_TIKTOK_HOSTS, validateName, validateStartupUrl };
+export const testables = { ALLOWED_TIKTOK_HOSTS, validateName, validateStartupUrl, ensureLatestSchema };
