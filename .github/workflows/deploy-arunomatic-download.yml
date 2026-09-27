@@ -1,11 +1,10 @@
-name: Deploy ARUNOMATIC sub-device download
+name: Deploy ARUNOMATIC download page
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-      - feature/arunomatic-download-page
     paths:
       - "download-worker/src/index.js"
       - "download-worker/test/**"
@@ -23,56 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_SHA256: aa0e38aed667d53199a734864053d5a08f9b29238503d23ac9636c79cde910ce
-      ARTIFACT_URL: "https://sdmntprjapaneast.oaiusercontent.com/files/00000000-fafc-8209-9005-0344ad0dff8a/raw?se=2026-09-27T23%3A39%3A46Z&sp=r&sv=2026-02-06&sr=b&scid=dbfa3447-9a48-543f-aea8-b7dce0fb6a57&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-27T22%3A23%3A23Z&ske=2026-09-28T22%3A23%3A23Z&sks=b&skv=2026-02-06&sig=Mh%2Bbdj3xznXCcV7h5QmlbgPEnMgvrUTPUnmE6Wrjryk%3D"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Fetch verified ARUNOMATIC build
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location "$ARTIFACT_URL" -o /tmp/arunomatic-artifact.zip
-          mkdir -p /tmp/arunomatic-artifact
-          unzip -q /tmp/arunomatic-artifact.zip -d /tmp/arunomatic-artifact
-          APK="$(find /tmp/arunomatic-artifact -type f -name 'app-debug.apk' -print -quit)"
-          test -n "$APK"
-          cp "$APK" /tmp/ARUNOMATIC_SUB.apk
-          test "$(sha256sum /tmp/ARUNOMATIC_SUB.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
-
       - name: Test download Worker
         working-directory: download-worker
         run: npm test
-
-      - name: Upload ARUNOMATIC APK to private R2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_EC2_METADATA_DISABLED: "true"
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-        run: |
-          set -euo pipefail
-          test -n "$AWS_ACCESS_KEY_ID"
-          test -n "$AWS_SECRET_ACCESS_KEY"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          test -n "$R2_BUCKET_NAME"
-          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          upload_apk() {
-            local key="$1"
-            local cache="$2"
-            aws s3 cp /tmp/ARUNOMATIC_SUB.apk "s3://${R2_BUCKET_NAME}/${key}" \
-              --endpoint-url "$ENDPOINT" \
-              --region auto \
-              --content-type application/vnd.android.package-archive \
-              --cache-control "$cache" \
-              --metadata "sha256=${EXPECTED_SHA256}" \
-              --no-progress --only-show-errors
-          }
-          upload_apk "releases/arunomatic/v0.1.3/ARUNOMATIC_SUB.apk" "public,max-age=31536000,immutable"
-          upload_apk "apk/arunomatic.apk" "public,max-age=60,must-revalidate"
 
       - name: Deploy existing download Worker
         working-directory: download-worker
