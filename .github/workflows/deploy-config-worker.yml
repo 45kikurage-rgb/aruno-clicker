@@ -90,9 +90,11 @@ jobs:
           npx wrangler tail aruno-clicker-config --format=json > /tmp/aruno-worker-tail.log 2>&1 &
           tail_pid=$!
           trap 'kill "$tail_pid" 2>/dev/null || true' EXIT
-          sleep 3
-          curl -sS -o /dev/null https://aruno-clicker-config.45kikurage.workers.dev/healthz || true
-          sleep 3
+          sleep 10
+          for attempt in 1 2 3; do
+            curl -sS -o /dev/null https://aruno-clicker-config.45kikurage.workers.dev/healthz || true
+            sleep 2
+          done
           kill "$tail_pid" 2>/dev/null || true
           wait "$tail_pid" 2>/dev/null || true
           cat /tmp/aruno-worker-tail.log
