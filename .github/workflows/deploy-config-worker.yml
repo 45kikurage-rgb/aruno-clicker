@@ -1,0 +1,77 @@
+name: Deploy ARUNO config Worker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aruno-clicker-config-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare-worker
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate Cloudflare credentials
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Install dependencies
+        run: npm install --no-package-lock
+
+      - name: Test Worker
+        run: npm test
+
+      - name: Apply D1 migrations
+        run: npx wrangler d1 migrations apply aruno-clicker-config --remote --config wrangler.toml
+
+      - name: Deploy existing config Worker
+        run: npx wrangler deploy --config wrangler.toml
+
+      - name: Verify production schema
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base = "https://aruno-clicker-config.45kikurage.workers.dev";
+
+          const healthResponse = await fetch(`${base}/healthz`);
+          if (!healthResponse.ok) {
+            throw new Error(`healthz returned HTTP ${healthResponse.status}`);
+          }
+          const health = await healthResponse.json();
+          if (health.ok !== true || health.schemaVersion !== 2) {
+            throw new Error(`unexpected health response: ${JSON.stringify(health)}`);
+          }
+
+          const configResponse = await fetch(`${base}/v1/config`);
+          if (!configResponse.ok) {
+            throw new Error(`config returned HTTP ${configResponse.status}`);
+          }
+          const config = await configResponse.json();
+          for (const key of ["name1", "url1", "name2", "url2", "shareName", "shareUrl"]) {
+            if (typeof config[key] !== "string") {
+              throw new Error(`missing config field: ${key}`);
+            }
+          }
+          if (config.schemaVersion !== 2 || !Number.isInteger(config.configVersion)) {
+            throw new Error(`unexpected config schema: ${JSON.stringify(config)}`);
+          }
+          console.log(`Production schema ${config.schemaVersion}, config version ${config.configVersion}`);
+          NODE
