@@ -1,0 +1,64 @@
+name: Deploy ARUNOMATIC download page
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "download-worker/src/index.js"
+      - "download-worker/test/**"
+      - ".github/workflows/deploy-arunomatic-download.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arunomatic-download-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SHA256: aa0e38aed667d53199a734864053d5a08f9b29238503d23ac9636c79cde910ce
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test download Worker
+        working-directory: download-worker
+        run: npm test
+
+      - name: Deploy existing download Worker
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.40.0 deploy
+
+      - name: Verify fixed page and APK
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location \
+              https://download.aruno-id.com/arunomatic > /tmp/arunomatic-page.html && \
+              curl --fail --silent --show-error --location \
+              --output /tmp/arunomatic.apk \
+              --dump-header /tmp/arunomatic.headers \
+              https://download.aruno-id.com/apk/arunomatic.apk; then
+              break
+            fi
+            sleep 5
+          done
+          grep -q 'ARUNOMATIC' /tmp/arunomatic-page.html
+          grep -q 'サブ端末用' /tmp/arunomatic-page.html
+          grep -q '/apk/arunomatic.apk' /tmp/arunomatic-page.html
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic.headers
+          test "$(sha256sum /tmp/arunomatic.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
