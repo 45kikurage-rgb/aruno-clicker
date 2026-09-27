@@ -64,6 +64,31 @@ class InterruptionClassifierTest {
     }
 
     @Test
+    fun launcherHomeAfterOpeningRecentsMeansTargetTaskIsGone() {
+        assertTrue(
+            RecentsDismissPolicy.missingTargetIsSuccess(
+                dismissedCount = 0,
+                targetWasForegroundBeforeRecents = true,
+                launcherHomeVisible = true,
+            ),
+        )
+        assertFalse(
+            RecentsDismissPolicy.missingTargetIsSuccess(
+                dismissedCount = 0,
+                targetWasForegroundBeforeRecents = false,
+                launcherHomeVisible = true,
+            ),
+        )
+        assertFalse(
+            RecentsDismissPolicy.missingTargetIsSuccess(
+                dismissedCount = 0,
+                targetWasForegroundBeforeRecents = true,
+                launcherHomeVisible = false,
+            ),
+        )
+    }
+
+    @Test
     fun targetGoneAfterDismissGestureIsSuccess() {
         assertTrue(RecentsDismissPolicy.targetRemovalSucceeded(targetStillVisibleAfterGesture = false))
         assertFalse(RecentsDismissPolicy.targetRemovalSucceeded(targetStillVisibleAfterGesture = true))

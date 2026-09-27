@@ -15,6 +15,10 @@
         <package android:name="com.ss.android.ugc.tiktok.lite" />
         <package android:name="com.zhiliaoapp.musically.go" />
         <package android:name="com.tiktok.lite.go" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
     </queries>
 
     <application

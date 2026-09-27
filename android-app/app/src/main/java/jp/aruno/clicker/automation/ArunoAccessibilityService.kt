@@ -660,6 +660,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                 searchIndex = 0,
                 searchDirection = RECENTS_SEARCH_FORWARD,
                 dismissedCount = 0,
+                targetWasForegroundBeforeRecents = true,
             ) finish@{ succeeded ->
                 if (!isSessionActive(generation)) return@finish
                 performGlobalAction(GLOBAL_ACTION_HOME)
@@ -676,6 +677,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         searchIndex: Int,
         searchDirection: Int,
         dismissedCount: Int,
+        targetWasForegroundBeforeRecents: Boolean,
         onFinished: (Boolean) -> Unit,
     ) {
         if (!isSessionActive(generation)) return
@@ -683,7 +685,15 @@ class ArunoAccessibilityService : AccessibilityService() {
         // is removed. The launcher can still expose a TikTok Lite home-screen
         // icon, so stop card discovery when the recents surface disappears.
         val targetCardBounds = findTargetRecentsCardBounds(bounds)
-        if (targetCardBounds == null && RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount)) {
+        val launcherHomeVisible = targetCardBounds == null && isLauncherHomeSurfaceVisible(bounds)
+        if (
+            targetCardBounds == null &&
+            RecentsDismissPolicy.missingTargetIsSuccess(
+                dismissedCount = dismissedCount,
+                targetWasForegroundBeforeRecents = targetWasForegroundBeforeRecents,
+                launcherHomeVisible = launcherHomeVisible,
+            )
+        ) {
             AutomationRuntime.markWaiting(
                 this,
                 "カードタスクキル\nTikTokカード残り0件",
@@ -702,7 +712,13 @@ class ArunoAccessibilityService : AccessibilityService() {
                     AutomationRuntime.markWaiting(this, "カードを反対方向へ探索\n1/${MAX_RECENTS_CARDS_TO_SEARCH * 2}")
                     swipeRecentsForSearch(generation, bounds, RECENTS_SEARCH_REVERSE) { moved ->
                         if (!moved) {
-                            onFinished(RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount))
+                            onFinished(
+                                RecentsDismissPolicy.missingTargetIsSuccess(
+                                    dismissedCount = dismissedCount,
+                                    targetWasForegroundBeforeRecents = targetWasForegroundBeforeRecents,
+                                    launcherHomeVisible = isLauncherHomeSurfaceVisible(bounds),
+                                ),
+                            )
                         } else {
                             handler.postDelayed({
                                 findAndDismissTargetRecentsCards(
@@ -711,6 +727,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                                     searchIndex = 1,
                                     searchDirection = RECENTS_SEARCH_REVERSE,
                                     dismissedCount = dismissedCount,
+                                    targetWasForegroundBeforeRecents = targetWasForegroundBeforeRecents,
                                     onFinished = onFinished,
                                 )
                             }, RECENTS_SEARCH_SETTLE_MS)
@@ -722,7 +739,13 @@ class ArunoAccessibilityService : AccessibilityService() {
                     this,
                     "カードタスクキル\nTikTokカード未検出",
                 )
-                onFinished(RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount))
+                onFinished(
+                    RecentsDismissPolicy.missingTargetIsSuccess(
+                        dismissedCount = dismissedCount,
+                        targetWasForegroundBeforeRecents = targetWasForegroundBeforeRecents,
+                        launcherHomeVisible = isLauncherHomeSurfaceVisible(bounds),
+                    ),
+                )
             } else {
                 AutomationRuntime.markWaiting(
                     this,
@@ -730,7 +753,13 @@ class ArunoAccessibilityService : AccessibilityService() {
                 )
                 swipeRecentsForSearch(generation, bounds, searchDirection) { moved ->
                     if (!moved) {
-                        onFinished(RecentsDismissPolicy.missingTargetIsSuccess(dismissedCount))
+                        onFinished(
+                            RecentsDismissPolicy.missingTargetIsSuccess(
+                                dismissedCount = dismissedCount,
+                                targetWasForegroundBeforeRecents = targetWasForegroundBeforeRecents,
+                                launcherHomeVisible = isLauncherHomeSurfaceVisible(bounds),
+                            ),
+                        )
                     } else {
                         handler.postDelayed({
                             findAndDismissTargetRecentsCards(
@@ -739,6 +768,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                                 searchIndex + 1,
                                 searchDirection,
                                 dismissedCount,
+                                targetWasForegroundBeforeRecents,
                                 onFinished,
                             )
                         }, RECENTS_SEARCH_SETTLE_MS)
@@ -772,6 +802,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                         searchIndex = 0,
                         searchDirection = RECENTS_SEARCH_FORWARD,
                         dismissedCount = dismissedCount + 1,
+                        targetWasForegroundBeforeRecents = targetWasForegroundBeforeRecents,
                         onFinished = onFinished,
                     )
                 }, RECENTS_RETRY_DELAY_MS)
@@ -1075,6 +1106,39 @@ class ArunoAccessibilityService : AccessibilityService() {
             }
         }
         handler.postDelayed(check, RECENTS_SETTLE_MS)
+    }
+
+    private fun isLauncherHomeSurfaceVisible(screen: Rect): Boolean {
+        val activePackage = rootInActiveWindow?.packageName?.toString() ?: return false
+        if (activePackage !in launcherPackages) return false
+
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        windows.mapNotNullTo(queue) { window ->
+            window.root?.takeIf { it.packageName?.toString() == activePackage }
+        }
+        var visited = 0
+        var homeSurfaceHintFound = false
+        while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
+            val node = queue.removeFirst()
+            visited += 1
+            if (node.isVisibleToUser) {
+                val nodeBounds = Rect().also(node::getBoundsInScreen)
+                if (!nodeBounds.isEmpty && screen.contains(nodeBounds.centerX(), nodeBounds.centerY())) {
+                    val resourceId = node.viewIdResourceName.orEmpty().lowercase()
+                    if (RECENTS_SURFACE_RESOURCE_HINTS.any(resourceId::contains)) return false
+                    if (HOME_SURFACE_RESOURCE_HINTS.any(resourceId::contains)) homeSurfaceHintFound = true
+                }
+            }
+            for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
+        }
+        return homeSurfaceHintFound && findRecentsClearAllNode(screen) == null
+    }
+
+    private val launcherPackages: Set<String> by lazy {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        packageManager.queryIntentActivities(homeIntent, 0)
+            .mapNotNull { it.activityInfo?.packageName }
+            .toSet()
     }
 
     private fun findTargetRecentsCardBounds(screen: Rect): Rect? {
@@ -2003,6 +2067,19 @@ class ArunoAccessibilityService : AccessibilityService() {
             "dismiss_all",
             "clear_anim",
             "clearanimview",
+        )
+        private val HOME_SURFACE_RESOURCE_HINTS = listOf(
+            "id/workspace",
+            "id/hotseat",
+            "id/search_container_hotseat",
+        )
+        private val RECENTS_SURFACE_RESOURCE_HINTS = listOf(
+            "id/overview",
+            "id/recents",
+            "id/task_view",
+            "id/taskview",
+            "id/clear_all",
+            "id/clearall",
         )
 
         @Volatile var instance: ArunoAccessibilityService? = null

@@ -40,7 +40,12 @@ internal object InterruptionClassifier {
 }
 
 internal object RecentsDismissPolicy {
-    fun missingTargetIsSuccess(dismissedCount: Int): Boolean = dismissedCount > 0
+    fun missingTargetIsSuccess(
+        dismissedCount: Int,
+        targetWasForegroundBeforeRecents: Boolean = false,
+        launcherHomeVisible: Boolean = false,
+    ): Boolean = dismissedCount > 0 ||
+        (targetWasForegroundBeforeRecents && launcherHomeVisible)
 
     fun targetRemovalSucceeded(targetStillVisibleAfterGesture: Boolean): Boolean =
         !targetStillVisibleAfterGesture
