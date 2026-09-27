@@ -75,13 +75,7 @@ async function migrateLegacySchema(db) {
   ]);
   await db.exec("UPDATE config_history SET share_url = url1 WHERE share_url = ''");
 
-  await db.exec(
-    `CREATE TABLE IF NOT EXISTS d1_migrations (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       name TEXT UNIQUE,
-       applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-     )`,
-  );
+  await db.exec("CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)");
   await db.prepare("INSERT OR IGNORE INTO d1_migrations (name) VALUES (?)")
     .bind("0003_three_destinations.sql").run();
 }
