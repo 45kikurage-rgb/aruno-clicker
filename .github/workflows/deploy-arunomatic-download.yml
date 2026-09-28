@@ -34,31 +34,6 @@ jobs:
         working-directory: download-worker
         run: npm test
 
-      - name: Publish ARUNOMATIC AIR balance trial code 21 APK to R2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_EC2_METADATA_DISABLED: "true"
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-        run: |
-          set -euo pipefail
-          test -n "$AWS_ACCESS_KEY_ID"
-          test -n "$AWS_SECRET_ACCESS_KEY"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          test -n "$R2_BUCKET_NAME"
-          curl --fail --silent --show-error --location             "https://sdmntprjapaneast.oaiusercontent.com/files/00000000-6ee0-8209-bfea-d63f5891397d/raw?se=2026-09-28T20%3A36%3A45Z&sp=r&sv=2026-02-06&sr=b&scid=5df3aad3-7c36-58cb-b984-34bb1f5f94f9&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T00%3A37%3A51Z&ske=2026-09-29T00%3A37%3A51Z&sks=b&skv=2026-02-06&sig=kRrXinSmaqb0CL2cLcCkjvwtBHoH2XEGkJN7ULpPjBI%3D"             -o /tmp/arunomatic-air-balance-trial1-code21.zip
-          rm -rf /tmp/arunomatic-air-balance-trial1-code21
-          mkdir -p /tmp/arunomatic-air-balance-trial1-code21
-          unzip -q /tmp/arunomatic-air-balance-trial1-code21.zip -d /tmp/arunomatic-air-balance-trial1-code21
-          APK=/tmp/arunomatic-air-balance-trial1-code21/app/build/outputs/apk/debug/app-debug.apk
-          test -s "$APK"
-          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$EXPECTED_AIR_TEST_SHA256"
-          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          aws s3 cp "$APK"             "s3://${R2_BUCKET_NAME}/releases/arunomatic/air-balance-trial1-code21/ARUNOMATIC_AIR_BALANCE_TRIAL1_CODE21.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control "public,max-age=31536000,immutable"             --metadata "sha256=${EXPECTED_AIR_TEST_SHA256}" --no-progress --only-show-errors
-          aws s3 cp "$APK"             "s3://${R2_BUCKET_NAME}/apk/arunomatic-air-balance-test1.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control "no-store"             --metadata "sha256=${EXPECTED_AIR_TEST_SHA256}" --no-progress --only-show-errors
-
       - name: Deploy existing download Worker
         working-directory: download-worker
         env:
