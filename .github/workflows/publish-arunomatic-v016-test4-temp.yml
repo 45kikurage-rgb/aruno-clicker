@@ -61,12 +61,13 @@ jobs:
       - name: Verify page-plan sync test
         run: |
           set -euo pipefail
-          for attempt in {1..12}; do
-            if curl --fail --silent --show-error --location https://download.aruno-id.com/arunomatic > /tmp/page.html &&                curl --fail --silent --show-error --location --output /tmp/test.apk https://download.aruno-id.com/apk/arunomatic-v016-test.apk; then
+          ok=0
+          for attempt in {1..15}; do
+            stamp="$(date +%s)-$attempt"
+            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?v=$stamp" > /tmp/page.html && curl --fail --silent --show-error --location --output /tmp/test.apk "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?v=$stamp" && grep -q 'v0.1.5 安定版' /tmp/page.html && grep -q 'v0.1.6 引き継ぎテスト版（ページ構成同期）' /tmp/page.html && test "$(sha256sum /tmp/test.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"; then
+              ok=1
               break
             fi
             sleep 5
           done
-          grep -q 'v0.1.5 安定版' /tmp/page.html
-          grep -q 'v0.1.6 引き継ぎテスト版（ページ構成同期）' /tmp/page.html
-          test "$(sha256sum /tmp/test.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          test "$ok" = 1
