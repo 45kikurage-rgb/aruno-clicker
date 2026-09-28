@@ -147,7 +147,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
         </div>
         <div class="version-card">
           <strong>統合テスト版 v0.1.6-handoff-test12-airbalance / code 22</strong>
-          <small>最新の自動クリッカー制御とAIRウォレット残高確認を1つに統合した実機テスト版です。ページフラグ専用探索上限2000、現在の待機時間・安全停止・ページ移動ロジックを維持したまま、AIR 01〜25登録、Accessibility残高取得、既知案内の安全なClose処理、失敗AIRの個別再確認、自動進行との排他制御を追加しています。まずこの版で統合後の実機受入テストを行ってください。</small>
+          <small>最新の自動クリッカー制御とAIRウォレット残高確認を1つに統合した実機テスト版です。ページフラグ専用探索上限2000、ARUNOMATIC押下後2秒、HOME後1秒＋必要時250ms間隔で最大2.5秒、その他1秒、横スワイプ225ms、安全停止・ページ移動ロジックを維持したまま、AIR 01〜25登録、Accessibility残高取得、既知案内の安全なClose処理、失敗AIRの個別再確認、自動進行との排他制御を追加しています。まずこの版で統合後の実機受入テストを行ってください。</small>
           <a class="download test" href="/apk/arunomatic-v016-test.apk">統合テスト版 code 22 をダウンロード</a>
         </div>
       </div>
