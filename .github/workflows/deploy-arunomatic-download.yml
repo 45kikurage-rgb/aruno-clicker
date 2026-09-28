@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: arunomatic-download-production-test7-range
+  group: arunomatic-download-production-test8-range
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_STABLE_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
-      EXPECTED_TEST_SHA256: 7b7d61335b919019c12713c727688ab2944f24963adde407e79de575e97e32e5
+      EXPECTED_TEST_SHA256: c2a01656c1536eb4e16b2b588f9c953adff7e07a784346c6c92cd1b3e8b2a3af
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,7 +33,7 @@ jobs:
         working-directory: download-worker
         run: npm test
 
-      - name: Publish ARUNOMATIC test7 APK to R2
+      - name: Publish ARUNOMATIC test8 APK to R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -41,22 +41,22 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-          TEST_ARTIFACT_ZIP_URL: "https://sdmntprwestus2.oaiusercontent.com/files/00000000-5c88-81f8-b209-e2928e275ce9/raw?se=2026-09-28T09%3A52%3A00Z&sp=r&sv=2026-02-06&sr=b&scid=8acc4f49-fe77-5fbe-a372-6813331e623c&skoid=18c14e53-ea0c-429b-8d09-d22d66ca7169&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T08%3A42%3A06Z&ske=2026-09-29T08%3A42%3A06Z&sks=b&skv=2026-02-06&sig=hrO03iZcDUbxBIlQ3xJNZhzGL%2BOjgWGQjdGjRV3m4Yo%3D"
+          TEST_ARTIFACT_ZIP_URL: "https://sdmntprcentralus.oaiusercontent.com/files/00000000-1e18-81f5-b0d9-640e80f3acad/raw?se=2026-09-28T10%3A17%3A01Z&sp=r&sv=2026-02-06&sr=b&scid=660be1fb-86a7-5116-b996-2e52a908aaee&skoid=18c14e53-ea0c-429b-8d09-d22d66ca7169&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T07%3A24%3A30Z&ske=2026-09-29T07%3A24%3A30Z&sks=b&skv=2026-02-06&sig=fvGyp0QnzrikOn2snYMpRWHrMK2PzI9fTUVtcTMnL/U%3D"
         run: |
           set -euo pipefail
           test -n "$AWS_ACCESS_KEY_ID"
           test -n "$AWS_SECRET_ACCESS_KEY"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
-          curl --fail --silent --show-error --location "$TEST_ARTIFACT_ZIP_URL" -o /tmp/arunomatic-test7.zip
-          rm -rf /tmp/arunomatic-test7
-          mkdir -p /tmp/arunomatic-test7
-          unzip -q /tmp/arunomatic-test7.zip -d /tmp/arunomatic-test7
-          APK="$(find /tmp/arunomatic-test7 -type f -name 'app-debug.apk' -print -quit)"
+          curl --fail --silent --show-error --location "$TEST_ARTIFACT_ZIP_URL" -o /tmp/arunomatic-test8.zip
+          rm -rf /tmp/arunomatic-test8
+          mkdir -p /tmp/arunomatic-test8
+          unzip -q /tmp/arunomatic-test8.zip -d /tmp/arunomatic-test8
+          APK="$(find /tmp/arunomatic-test8 -type f -name 'app-debug.apk' -print -quit)"
           test -n "$APK"
           test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$EXPECTED_TEST_SHA256"
           ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          aws s3 cp "$APK"             "s3://${R2_BUCKET_NAME}/releases/arunomatic/v0.1.6-handoff-test7-range/ARUNOMATIC_SUB_v0.1.6-handoff-test7-range.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control "public,max-age=31536000,immutable"             --metadata "sha256=${EXPECTED_TEST_SHA256}" --no-progress --only-show-errors
+          aws s3 cp "$APK"             "s3://${R2_BUCKET_NAME}/releases/arunomatic/v0.1.6-handoff-test8-range/ARUNOMATIC_SUB_v0.1.6-handoff-test8-range.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control "public,max-age=31536000,immutable"             --metadata "sha256=${EXPECTED_TEST_SHA256}" --no-progress --only-show-errors
           aws s3 cp "$APK"             "s3://${R2_BUCKET_NAME}/apk/arunomatic-v016-test.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control "public,max-age=60,must-revalidate"             --metadata "sha256=${EXPECTED_TEST_SHA256}" --no-progress --only-show-errors
 
       - name: Deploy existing download Worker
@@ -80,7 +80,7 @@ jobs:
             sleep 5
           done
           grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html
-          grep -q 'v0.1.6-handoff-test7-range' /tmp/arunomatic-page.html
+          grep -q 'v0.1.6-handoff-test8-range' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic.apk' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers

@@ -33,7 +33,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_SUB_v0.1.6-handoff-test7-range.apk",
+      filename: "ARUNOMATIC_SUB_v0.1.6-handoff-test8-range.apk",
     },
   ],
 ]);
@@ -122,7 +122,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-handoff-test7-range</p>
+      <p class="version">v0.1.5 / v0.1.6-handoff-test8-range</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
@@ -131,9 +131,9 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>v0.1.6-handoff-test7-range</strong>
-          <small>開始ページ01-01／最終ページ01-02の範囲テスト版です。02-01など別ページから開始ページへ移動し、01-01→01-02の順でTaskを進め、最終ページ完了後は正常終了します。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test7-range をダウンロード</a>
+          <strong>v0.1.6-handoff-test8-range</strong>
+          <small>開始ページ00-04／最終ページ00-05の範囲テスト版です。02-01など別ページから開始ページへ移動し、01-01→01-02の順でTaskを進め、最終ページ完了後は正常終了します。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test8-range をダウンロード</a>
         </div>
       </div>
       <p class="guide">どちらも既存ARUNOMATICへ上書きできます。<br>v0.1.6の自動進行はAccessibilityServiceの初回設定が必要です。</p>
