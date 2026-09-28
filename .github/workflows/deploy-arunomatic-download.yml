@@ -48,31 +48,35 @@ jobs:
       - name: Verify fixed page and both APKs
         run: |
           set -euo pipefail
+          verified=0
           for attempt in {1..12}; do
-            if curl --fail --silent --show-error --location               https://download.aruno-id.com/arunomatic?verify=test9b > /tmp/arunomatic-page.html &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic-stable.apk               --dump-header /tmp/arunomatic-stable.headers               https://download.aruno-id.com/apk/arunomatic.apk &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic-test.apk               --dump-header /tmp/arunomatic-test.headers               https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=test9b; then
-              break
+            rm -f /tmp/arunomatic-page.html /tmp/arunomatic-stable.apk /tmp/arunomatic-test.apk /tmp/arunomatic-air-test.apk
+            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?verify=test9b&attempt=$attempt" > /tmp/arunomatic-page.html && \
+               curl --fail --silent --show-error --location --output /tmp/arunomatic-stable.apk --dump-header /tmp/arunomatic-stable.headers "https://download.aruno-id.com/apk/arunomatic.apk?attempt=$attempt" && \
+               curl --fail --silent --show-error --location --output /tmp/arunomatic-test.apk --dump-header /tmp/arunomatic-test.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=test9b&attempt=$attempt" && \
+               curl --fail --silent --show-error --location --output /tmp/arunomatic-air-test.apk --dump-header /tmp/arunomatic-air-test.headers "https://download.aruno-id.com/apk/arunomatic-air-balance-test1.apk?verify=airtest1&attempt=$attempt"; then
+              STABLE_ACTUAL="$(sha256sum /tmp/arunomatic-stable.apk | cut -d ' ' -f 1)"
+              TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
+              AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
+              if grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html && \
+                 grep -q 'v0.1.6-handoff-test9b-final' /tmp/arunomatic-page.html && \
+                 grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html && \
+                 test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256" && \
+                 test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256" && \
+                 test "$AIR_ACTUAL" = "$EXPECTED_AIR_TEST_SHA256"; then
+                verified=1
+                break
+              fi
             fi
             sleep 5
           done
-          grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html
-          grep -q 'v0.1.6-handoff-test9b-final' /tmp/arunomatic-page.html
+          test "$verified" = "1"
           grep -q '/apk/arunomatic.apk' /tmp/arunomatic-page.html
-          grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html
           grep -q 'Airウォレット残高取得 試験版' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic-air-balance-test1.apk' /tmp/arunomatic-page.html
-          curl --fail --silent --show-error --location \
-            --output /tmp/arunomatic-air-test.apk \
-            --dump-header /tmp/arunomatic-air-test.headers \
-            https://download.aruno-id.com/apk/arunomatic-air-balance-test1.apk?verify=airtest1
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-test.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-air-test.headers
-          STABLE_ACTUAL="$(sha256sum /tmp/arunomatic-stable.apk | cut -d ' ' -f 1)"
-          TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
-          AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
           echo "stable sha256=$STABLE_ACTUAL"
           echo "test sha256=$TEST_ACTUAL"
           echo "air sha256=$AIR_ACTUAL"
-          test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256"
-          test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256"
-          test "$AIR_ACTUAL" = "$EXPECTED_AIR_TEST_SHA256"
