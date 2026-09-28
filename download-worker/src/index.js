@@ -26,7 +26,14 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic.apk",
     {
       key: "apk/arunomatic.apk",
-      filename: "ARUNOMATIC_SUB.apk",
+      filename: "ARUNOMATIC_SUB_v0.1.5.apk",
+    },
+  ],
+  [
+    "/apk/arunomatic-v016-test.apk",
+    {
+      key: "apk/arunomatic-v016-test.apk",
+      filename: "ARUNOMATIC_SUB_v0.1.6_handoff_test.apk",
     },
   ],
 ]);
@@ -98,7 +105,12 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     .sub { margin:8px 0 4px; font-size:20px; font-weight:800; }
     .version { margin:0 0 18px; color:#94a3b8; font-size:14px; }
     .qr { width:min(72vw,280px); aspect-ratio:1; background:white; padding:10px; border-radius:14px; margin:0 auto 18px; display:block; }
-    .download { display:block; width:100%; padding:16px 18px; border-radius:12px; color:#082f49; background:#7dd3fc; font-size:19px; font-weight:850; text-align:center; text-decoration:none; }
+    .versions { display:grid; gap:12px; margin-top:8px; }
+    .version-card { padding:14px; border:1px solid #334155; border-radius:14px; background:rgb(2 6 23 / 45%); text-align:left; }
+    .version-card strong { display:block; font-size:17px; margin-bottom:4px; }
+    .version-card small { display:block; color:#94a3b8; margin-bottom:10px; line-height:1.5; }
+    .download { display:block; width:100%; padding:14px 16px; border-radius:12px; color:#082f49; background:#7dd3fc; font-size:17px; font-weight:850; text-align:center; text-decoration:none; }
+    .download.test { background:#fde68a; color:#422006; }
     .download:focus-visible { outline:3px solid #f8fafc; outline-offset:3px; }
     .guide { margin:18px 0 0; color:#cbd5e1; font-size:14px; line-height:1.7; }
     .fixed { margin:12px 0 0; color:#94a3b8; font-size:12px; line-height:1.6; }
@@ -110,10 +122,21 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5</p>
+      <p class="version">v0.1.5 / v0.1.6-handoff-test</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
-      <a class="download" href="/apk/arunomatic.apk">APKをダウンロード</a>
-      <p class="guide">抽選用端末にインストールしてください。<br>初回だけ端末番号と8桁の登録コードで端末登録します。</p>
+      <div class="versions">
+        <div class="version-card">
+          <strong>v0.1.5 安定版</strong>
+          <small>Nova共有・配置換え用。現在の通常運用版です。</small>
+          <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
+        </div>
+        <div class="version-card">
+          <strong>v0.1.6 引き継ぎテスト版</strong>
+          <small>「ARUNOMATIC 完了」→ Novaページ移動 → 自動クリッカーTask B の1台実機テスト用です。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6テスト版をダウンロード</a>
+        </div>
+      </div>
+      <p class="guide">どちらも既存ARUNOMATICへ上書きできます。<br>v0.1.6の自動進行はAccessibilityServiceの初回設定が必要です。</p>
       <p class="fixed">このQRは固定です。今後APKを更新しても入口URLは<br><code>download.aruno-id.com/arunomatic</code> のままです。</p>
     </section>
   </main>
