@@ -1,0 +1,70 @@
+name: Publish ARUNOMATIC pageflag1000 download
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-arunomatic-pageflag1000.yml'
+      - 'ci/ARUNOMATIC-v0.1.6-handoff-test10-pageflag1000-code20.apk'
+permissions:
+  contents: read
+concurrency:
+  group: publish-arunomatic-pageflag1000
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact APK and preserve unrelated downloads
+        run: |
+          set -euo pipefail
+          echo '2810554c82cac53332c402477ee38a9ad516425a14b56507bbf279611eff8821  ci/ARUNOMATIC-v0.1.6-handoff-test10-pageflag1000-code20.apk' | sha256sum -c -
+          node --check download-worker/src/index.js
+          for name in arunomatic.apk arunomatic-pageflag-diag1.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/before-$name"
+          done
+      - name: Upload pageflag1000 APK
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          aws s3 cp ci/ARUNOMATIC-v0.1.6-handoff-test10-pageflag1000-code20.apk \
+            "s3://${R2_BUCKET_NAME}/apk/arunomatic-v016-test.apk" \
+            --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto --content-type application/vnd.android.package-archive \
+            --cache-control no-store \
+            --metadata 'sha256=2810554c82cac53332c402477ee38a9ad516425a14b56507bbf279611eff8821' \
+            --no-progress --only-show-errors
+      - name: Deploy updated download page
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.40.0 deploy
+      - name: Verify public APK and unrelated downloads
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl -fLsS -D /tmp/pageflag1000.headers https://download.aruno-id.com/apk/arunomatic-v016-test.apk -o /tmp/pageflag1000.apk; then break; fi
+            sleep 5
+          done
+          cmp ci/ARUNOMATIC-v0.1.6-handoff-test10-pageflag1000-code20.apk /tmp/pageflag1000.apk
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/pageflag1000.headers
+          curl -fLsS https://download.aruno-id.com/arunomatic -o /tmp/page.html
+          grep -q 'v0.1.6-handoff-test10-pageflag1000 / code 20' /tmp/page.html
+          grep -q 'ページフラグ探索上限を350件から1000件' /tmp/page.html
+          for name in arunomatic.apk arunomatic-pageflag-diag1.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/after-$name"
+            cmp "/tmp/before-$name" "/tmp/after-$name"
+          done
+          echo 'Public pageflag1000 APK SHA256 matches; stable, diagnostic, and AIR APKs unchanged.'

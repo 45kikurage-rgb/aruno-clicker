@@ -34,7 +34,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_SUB_v0.1.6-handoff-test9b-final.apk",
+      filename: "ARUNOMATIC_v0.1.6-handoff-test10-pageflag1000.apk",
       cacheControl: "no-store",
     },
   ],
@@ -132,7 +132,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-handoff-test9b-final</p>
+      <p class="version">v0.1.5 / v0.1.6-handoff-test10-pageflag1000</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
@@ -146,9 +146,9 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>v0.1.6-handoff-test9b-final</strong>
-          <small>最終実機テスト修正版です。開始00-04／最終00-05、02-02など別ページから開始します。HOME表示後1秒でフラグが見えない場合だけ250ms間隔で最大2.5秒再確認します。通常はARUNOMATIC押下後2秒、その他1秒、横スワイプ約2倍速のままです。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test9b-final をダウンロード</a>
+          <strong>v0.1.6-handoff-test10-pageflag1000 / code 20</strong>
+          <small>ページフラグ探索上限を350件から1000件へ変更しました。02-05の513番目まで認識できます。表示条件・文字条件・座標条件・安全停止、ARUNOMATIC押下後2秒、HOME後1秒＋必要時250ms間隔で最大2.5秒、その他1秒、横スワイプ225msは維持しています。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">ページフラグ1000件対応版をダウンロード</a>
         </div>
         <div class="version-card">
           <strong>Airウォレット残高取得 試験版</strong>
