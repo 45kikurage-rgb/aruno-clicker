@@ -110,7 +110,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.4</p>
+      <p class="version">v0.1.5</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <a class="download" href="/apk/arunomatic.apk">APKをダウンロード</a>
       <p class="guide">抽選用端末にインストールしてください。<br>初回だけ端末番号と8桁の登録コードで端末登録します。</p>
