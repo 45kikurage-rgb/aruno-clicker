@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_STABLE_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
-      EXPECTED_TEST_SHA256: a4485cb13c0f7774ff6e9ca484b73ce9e06ff8c3319765a80addfeafc7efb9ae
+      EXPECTED_TEST_SHA256: 7b7d61335b919019c12713c727688ab2944f24963adde407e79de575e97e32e5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,7 +54,7 @@ jobs:
             sleep 5
           done
           grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html
-          grep -q 'v0.1.6 引き継ぎテスト版（ページ構成同期）' /tmp/arunomatic-page.html
+          grep -q 'v0.1.6-handoff-test7-range' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic.apk' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers

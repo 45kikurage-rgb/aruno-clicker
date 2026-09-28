@@ -42,7 +42,7 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /ARUNOMATIC/);
   assert.match(html, /サブ端末用/);
   assert.match(html, /v0\.1\.5 安定版/);
-  assert.match(html, /v0\.1\.6 引き継ぎテスト版（ページ構成同期）/);
+  assert.match(html, /v0\.1\.6-handoff-test7-range/);
   assert.match(html, /\/apk\/arunomatic\.apk/);
   assert.match(html, /\/apk\/arunomatic-v016-test\.apk/);
   assert.match(html, /data:image\/svg\+xml;base64,/);
@@ -76,7 +76,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_SUB_v0\.1\.6_handoff_test\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_SUB_v0\.1\.6-handoff-test7-range\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
 });
 
