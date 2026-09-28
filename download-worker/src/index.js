@@ -33,7 +33,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_SUB_v0.1.6-handoff-test9-final.apk",
+      filename: "ARUNOMATIC_SUB_v0.1.6-handoff-test9a-final.apk",
       cacheControl: "no-store",
     },
   ],
@@ -131,7 +131,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-handoff-test9-final</p>
+      <p class="version">v0.1.5 / v0.1.6-handoff-test9a-final</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
@@ -140,9 +140,9 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>v0.1.6-handoff-test9-final</strong>
-          <small>最終実機テスト版です。開始00-04／最終00-05、02-02など別ページから00-04へ移動して進行します。ARUNOMATIC押下後は2秒待機、その他の進行待機は1秒、横スワイプは約2倍速です。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test9-final をダウンロード</a>
+          <strong>v0.1.6-handoff-test9a-final</strong>
+          <small>最終実機テスト修正版です。Novaが前面になった直後ではなく、HOME表示後1秒待ってページフラグを取得します。ARUNOMATIC押下後2秒、その他1秒、横スワイプ約2倍速は維持します。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test9a-final をダウンロード</a>
         </div>
         <div class="version-card">
           <strong>Airウォレット残高取得 試験版</strong>
