@@ -141,7 +141,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
         </div>
         <div class="version-card">
           <strong>v0.1.6-handoff-test9a-final</strong>
-          <small>最終実機テスト修正版です。Novaが前面になった直後ではなく、HOME表示後1秒待ってページフラグを取得します。ARUNOMATIC押下後2秒、その他1秒、横スワイプ約2倍速は維持します。</small>
+          <small>最終実機テスト修正版です。開始00-04／最終00-05、02-02など別ページから開始します。Novaが前面になった直後ではなく、HOME表示後1秒待ってページフラグを取得します。ARUNOMATIC押下後2秒、その他1秒、横スワイプ約2倍速は維持します。</small>
           <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test9a-final をダウンロード</a>
         </div>
         <div class="version-card">
