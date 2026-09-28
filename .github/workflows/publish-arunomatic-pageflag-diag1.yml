@@ -1,0 +1,70 @@
+name: Publish ARUNOMATIC pageflag DIAG1 download
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-arunomatic-pageflag-diag1.yml'
+      - 'ci/ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk'
+permissions:
+  contents: read
+concurrency:
+  group: publish-arunomatic-pageflag-diag1
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact diagnostic artifact and existing downloads
+        run: |
+          set -euo pipefail
+          echo 'f11ed77248b5eba0ddd8d2957fd2dc2a8492bf5fca0fc10f3c449ceaab0599cd  ci/ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk' | sha256sum -c -
+          node --check download-worker/src/index.js
+          for name in arunomatic.apk arunomatic-v016-test.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/before-$name"
+          done
+      - name: Upload only diagnostic APK
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          aws s3 cp ci/ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk \
+            "s3://${R2_BUCKET_NAME}/apk/arunomatic-pageflag-diag1.apk" \
+            --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --region auto --content-type application/vnd.android.package-archive \
+            --cache-control no-store \
+            --metadata 'sha256=f11ed77248b5eba0ddd8d2957fd2dc2a8492bf5fca0fc10f3c449ceaab0599cd' \
+            --no-progress --only-show-errors
+      - name: Deploy download page and diagnostic route
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.40.0 deploy
+      - name: Verify public APK and preserve previous downloads
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl -fLsS -D /tmp/diag.headers https://download.aruno-id.com/apk/arunomatic-pageflag-diag1.apk -o /tmp/diag.apk; then break; fi
+            sleep 5
+          done
+          cmp ci/ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk /tmp/diag.apk
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/diag.headers
+          curl -fLsS https://download.aruno-id.com/arunomatic -o /tmp/page.html
+          grep -q '/apk/arunomatic-pageflag-diag1.apk' /tmp/page.html
+          grep -q 'DIAG1 / code 19' /tmp/page.html
+          for name in arunomatic.apk arunomatic-v016-test.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/after-$name"
+            cmp "/tmp/before-$name" "/tmp/after-$name"
+          done
+          echo 'Public diagnostic APK SHA256 matches; all three existing ARUNOMATIC APKs unchanged.'

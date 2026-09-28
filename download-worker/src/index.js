@@ -1,6 +1,7 @@
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-pageflag-diag1.apk", { key: "apk/arunomatic-pageflag-diag1.apk", filename: "ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk", cacheControl: "no-store" }],
   [
     "/apk/aruno-clicker.apk",
     {
@@ -134,6 +135,11 @@ const ARUNOMATIC_PAGE = `<!doctype html>
       <p class="version">v0.1.5 / v0.1.6-handoff-test9b-final</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
+        <div class="version-card">
+          <strong>ページフラグ診断 DIAG1 / code 19</strong>
+          <small>A：手動表示ページ／B：HOME復帰の認識診断。診断後の横スワイプ・Task起動は行いません。結果をTXT・JSONで共有できます。既存ARUNOMATICへの更新です。code 18以前へはそのまま戻せません。</small>
+          <a class="download test" href="/apk/arunomatic-pageflag-diag1.apk">ページフラグ診断 DIAG1 をダウンロード</a>
+        </div>
         <div class="version-card">
           <strong>v0.1.5 安定版</strong>
           <small>Nova共有・配置換え用。現在の通常運用版です。</small>
