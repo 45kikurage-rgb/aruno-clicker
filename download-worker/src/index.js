@@ -131,8 +131,8 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>v0.1.6 引き継ぎテスト版（2秒待機版）</strong>
-          <small>「ARUNOMATIC 完了」→ 2秒待機 → HOME → 2秒待機 → ページ移動 → 2秒待機 → ドック右下Task B の1台実機テスト用です。</small>
+          <strong>v0.1.6 引き継ぎテスト版（ページフラグ判定）</strong>
+          <small>7段目左端のBASE / NN-NNフラグを読み取り、各スワイプ後にフラグ変化を確認してからドック右下Task Bへ進む実機テスト版です。</small>
           <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6テスト版をダウンロード</a>
         </div>
       </div>
