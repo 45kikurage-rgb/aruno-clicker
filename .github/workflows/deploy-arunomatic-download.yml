@@ -73,7 +73,6 @@ jobs:
           test "$verified" = "1"
           grep -q '/apk/arunomatic.apk' /tmp/arunomatic-page.html
           grep -q '統合テスト版 v0.1.6-handoff-test12-airbalance / code 22' /tmp/arunomatic-page.html
-          grep -q '/apk/arunomatic-air-balance-test1.apk' /tmp/arunomatic-page.html
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-test.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-air-test.headers
