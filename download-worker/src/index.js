@@ -37,6 +37,14 @@ const DOWNLOADS = new Map([
       cacheControl: "no-store",
     },
   ],
+  [
+    "/apk/arunomatic-air-balance-test1.apk",
+    {
+      key: "apk/arunomatic-air-balance-test1.apk",
+      filename: "ARUNOMATIC_AIR_BALANCE_TEST1.apk",
+      cacheControl: "no-store",
+    },
+  ],
 ]);
 
 const PAGE = `<!doctype html>
@@ -136,8 +144,13 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <small>開始00-04／最終00-05の統合テスト版です。test7で01-01／01-02を保存してしまった端末は、test8a初回起動時だけ00-04／00-05へ自動移行します。02-02など別ページから00-04へ移動し、00-04→00-05の順で進みます。</small>
           <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test8a-range をダウンロード</a>
         </div>
+        <div class="version-card">
+          <strong>Airウォレット残高取得 試験版</strong>
+          <small>通常版とは別アプリとして同時インストールできます。Airウォレット画面のスクリーンショットは使わず、Accessibilityで「4,063」のような残高文字を取得できるかだけを確認するTEST1です。サーバー送信・25アプリ巡回はまだ行いません。</small>
+          <a class="download test" href="/apk/arunomatic-air-balance-test1.apk">AIR残高 TEST1 をダウンロード</a>
+        </div>
       </div>
-      <p class="guide">どちらも既存ARUNOMATICへ上書きできます。<br>v0.1.6の自動進行はAccessibilityServiceの初回設定が必要です。</p>
+      <p class="guide">v0.1.5／v0.1.6は既存ARUNOMATICへ上書きできます。<br>AIR残高 TEST1は <strong>ARUNOMATIC AIR TEST</strong> として別アプリで入ります。</p>
       <p class="fixed">このQRは固定です。今後APKを更新しても入口URLは<br><code>download.aruno-id.com/arunomatic</code> のままです。</p>
     </section>
   </main>
