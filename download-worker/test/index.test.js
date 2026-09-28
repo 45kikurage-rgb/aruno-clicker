@@ -46,7 +46,7 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /00-04/);
   assert.match(html, /00-05/);
   assert.match(html, /02-02/);
-  assert.match(html, /2秒待機/);
+  assert.match(html, /押下後2秒/);
   assert.match(html, /1秒/);
   assert.match(html, /2倍速/);
   assert.match(html, /HOME表示後1秒/);
