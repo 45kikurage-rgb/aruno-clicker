@@ -1,0 +1,94 @@
+name: Publish ARUNOMATIC v0.1.5 temporary
+
+on:
+  push:
+    branches:
+      - update/arunomatic-v015
+    paths:
+      - ".github/workflows/publish-arunomatic-v015-temp.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arunomatic-v015-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
+      ARTIFACT_URL: "https://sdmntprjapaneast.oaiusercontent.com/files/00000000-6824-8209-9f29-4eca2d298925/raw?se=2026-09-28T02%3A00%3A04Z&sp=r&sv=2026-02-06&sr=b&scid=4b79a6ed-d0d5-5887-8d64-65cc3a735ea7&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T00%3A35%3A15Z&ske=2026-09-29T00%3A35%3A15Z&sks=b&skv=2026-02-06&sig=chyUOiHq4xjRlgjJ5fTZQC5zNxJh9rsNS7UOR6rJLy8%3D"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Fetch verified ARUNOMATIC v0.1.5 build
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "$ARTIFACT_URL" -o /tmp/arunomatic-v015.zip
+          mkdir -p /tmp/arunomatic-v015
+          unzip -q /tmp/arunomatic-v015.zip -d /tmp/arunomatic-v015
+          APK="$(find /tmp/arunomatic-v015 -type f -name 'app-debug.apk' -print -quit)"
+          test -n "$APK"
+          cp "$APK" /tmp/ARUNOMATIC_SUB.apk
+          test "$(sha256sum /tmp/ARUNOMATIC_SUB.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+
+      - name: Test download Worker
+        working-directory: download-worker
+        run: npm test
+
+      - name: Upload ARUNOMATIC v0.1.5 to private R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          upload_apk() {
+            local key="$1"
+            local cache="$2"
+            aws s3 cp /tmp/ARUNOMATIC_SUB.apk "s3://${R2_BUCKET_NAME}/${key}"               --endpoint-url "$ENDPOINT"               --region auto               --content-type application/vnd.android.package-archive               --cache-control "$cache"               --metadata "sha256=${EXPECTED_SHA256}"               --no-progress --only-show-errors
+          }
+          upload_apk "releases/arunomatic/v0.1.5/ARUNOMATIC_SUB.apk" "public,max-age=31536000,immutable"
+          upload_apk "apk/arunomatic.apk" "public,max-age=60,must-revalidate"
+
+      - name: Deploy updated download Worker
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4.40.0 deploy
+
+      - name: Verify ARUNOMATIC and existing CLICKER downloads
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --location               https://download.aruno-id.com/arunomatic > /tmp/page.html &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic.apk               --dump-header /tmp/arunomatic.headers               https://download.aruno-id.com/apk/arunomatic.apk; then
+              break
+            fi
+            sleep 5
+          done
+          grep -q 'v0.1.5' /tmp/page.html
+          grep -q '/apk/arunomatic.apk' /tmp/page.html
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic.headers
+          test "$(sha256sum /tmp/arunomatic.apk | cut -d ' ' -f 1)" = "$EXPECTED_SHA256"
+          curl --fail --silent --show-error --head https://download.aruno-id.com/apk/aruno-clicker.apk >/tmp/clicker.headers
+          curl --fail --silent --show-error --head https://download.aruno-id.com/apk/aruno-clicker-ver-s.apk >/tmp/clicker-s.headers
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/clicker.headers
+          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/clicker-s.headers
