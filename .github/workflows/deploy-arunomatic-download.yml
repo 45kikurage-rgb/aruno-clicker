@@ -41,7 +41,7 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-          TEST_ARTIFACT_ZIP_URL: "https://sdmntprcentralus.oaiusercontent.com/files/00000000-2ee8-81f5-bf5e-5f92580d62c9/raw?se=2026-09-28T09%3A44%3A53Z&sp=r&sv=2026-02-06&sr=b&scid=2894bee8-5079-5fdf-8971-676bc9ba8fbe&skoid=18c14e53-ea0c-429b-8d09-d22d66ca7169&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T05%3A25%3A31Z&ske=2026-09-29T05%3A25%3A31Z&sks=b&skv=2026-02-06&sig=bVd5v2hnR3r%2BujCoBMbA9gksd%2B1aKVlzDF%2BO6DtQBmw%3D"
+          TEST_ARTIFACT_ZIP_URL: "https://sdmntprwestus2.oaiusercontent.com/files/00000000-5c88-81f8-b209-e2928e275ce9/raw?se=2026-09-28T09%3A52%3A00Z&sp=r&sv=2026-02-06&sr=b&scid=8acc4f49-fe77-5fbe-a372-6813331e623c&skoid=18c14e53-ea0c-429b-8d09-d22d66ca7169&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T08%3A42%3A06Z&ske=2026-09-29T08%3A42%3A06Z&sks=b&skv=2026-02-06&sig=hrO03iZcDUbxBIlQ3xJNZhzGL%2BOjgWGQjdGjRV3m4Yo%3D"
         run: |
           set -euo pipefail
           test -n "$AWS_ACCESS_KEY_ID"
