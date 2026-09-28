@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: arunomatic-download-production
+  group: arunomatic-download-production-test7-range
   cancel-in-progress: false
 
 jobs:
