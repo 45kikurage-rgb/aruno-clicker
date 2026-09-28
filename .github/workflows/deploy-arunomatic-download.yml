@@ -21,7 +21,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      EXPECTED_SHA256: 3924808973c85986bdfb27ccf688c68518bcceffeba4a8f87bc8fe93832a3f42
+      EXPECTED_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
