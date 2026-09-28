@@ -1,0 +1,54 @@
+name: Publish ARUNOMATIC test9 final APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-arunomatic-test9-final.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_TEST_SHA256: 05494fa8a82382927277db147004156c7dbdb494528a9c6f897afbbc8a0c672f
+      TEST_ARTIFACT_ZIP_URL: "https://sdmntprjapaneast.oaiusercontent.com/files/00000000-0cc8-8209-b377-89bc50d010f4/raw?se=2026-09-28T11%3A22%3A08Z&sp=r&sv=2026-02-06&sr=b&scid=edf3c73c-e687-54cf-bf68-5305f91d0bb0&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T00%3A29%3A54Z&ske=2026-09-29T00%3A29%3A54Z&sks=b&skv=2026-02-06&sig=GeNu8CATBul1q03FD0/Y2H3d%2Bus/Jn82uvtqrenB%2BGk%3D"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish verified test9 APK to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          curl --fail --silent --show-error --location "$TEST_ARTIFACT_ZIP_URL" -o /tmp/arunomatic-test9.zip
+          rm -rf /tmp/arunomatic-test9
+          mkdir -p /tmp/arunomatic-test9
+          unzip -q /tmp/arunomatic-test9.zip -d /tmp/arunomatic-test9
+          APK="$(find /tmp/arunomatic-test9 -type f -name 'app-debug.apk' -print -quit)"
+          test -n "$APK"
+          test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$EXPECTED_TEST_SHA256"
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "$APK" \
+            "s3://${R2_BUCKET_NAME}/releases/arunomatic/v0.1.6-handoff-test9-final/ARUNOMATIC_SUB_v0.1.6-handoff-test9-final.apk" \
+            --endpoint-url "$ENDPOINT" --region auto \
+            --content-type application/vnd.android.package-archive \
+            --cache-control "public,max-age=31536000,immutable" \
+            --metadata "sha256=${EXPECTED_TEST_SHA256}" --no-progress --only-show-errors
+          aws s3 cp "$APK" \
+            "s3://${R2_BUCKET_NAME}/apk/arunomatic-v016-test.apk" \
+            --endpoint-url "$ENDPOINT" --region auto \
+            --content-type application/vnd.android.package-archive \
+            --cache-control "no-store" \
+            --metadata "sha256=${EXPECTED_TEST_SHA256}" --no-progress --only-show-errors
