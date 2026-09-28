@@ -132,7 +132,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
         </div>
         <div class="version-card">
           <strong>v0.1.6-handoff-test8-range</strong>
-          <small>開始ページ00-04／最終ページ00-05の範囲テスト版です。02-01など別ページから開始ページへ移動し、01-01→01-02の順でTaskを進め、最終ページ完了後は正常終了します。</small>
+          <small>開始ページ00-04／最終ページ00-05の範囲テスト版です。02-02など別ページから00-04へ移動してTaskを開始し、00-04→00-05の順で進め、00-05完了後は追加操作せず正常終了します。</small>
           <a class="download test" href="/apk/arunomatic-v016-test.apk">v0.1.6-handoff-test8-range をダウンロード</a>
         </div>
       </div>

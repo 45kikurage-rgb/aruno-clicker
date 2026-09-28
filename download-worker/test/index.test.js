@@ -43,6 +43,9 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /サブ端末用/);
   assert.match(html, /v0\.1\.5 安定版/);
   assert.match(html, /v0\.1\.6-handoff-test8-range/);
+  assert.match(html, /00-04/);
+  assert.match(html, /00-05/);
+  assert.match(html, /02-02/);
   assert.match(html, /\/apk\/arunomatic\.apk/);
   assert.match(html, /\/apk\/arunomatic-v016-test\.apk/);
   assert.match(html, /data:image\/svg\+xml;base64,/);
