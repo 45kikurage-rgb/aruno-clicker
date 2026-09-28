@@ -42,16 +42,15 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /ARUNOMATIC/);
   assert.match(html, /サブ端末用/);
   assert.match(html, /v0\.1\.5 安定版/);
-  assert.match(html, /v0\.1\.6-handoff-test9b-final/);
-  assert.match(html, /00-04/);
-  assert.match(html, /00-05/);
-  assert.match(html, /02-02/);
+  assert.match(html, /v0\.1\.6-handoff-test10-pageflag1000/);
+  assert.match(html, /code 20/);
+  assert.match(html, /350件から1000件/);
+  assert.match(html, /02-05/);
   assert.match(html, /押下後2秒/);
-  assert.match(html, /1秒/);
-  assert.match(html, /2倍速/);
-  assert.match(html, /HOME表示後1秒/);
+  assert.match(html, /HOME後1秒/);
   assert.match(html, /250ms/);
   assert.match(html, /2\.5秒/);
+  assert.match(html, /225ms/);
   assert.match(html, /\/apk\/arunomatic\.apk/);
   assert.match(html, /\/apk\/arunomatic-v016-test\.apk/);
   assert.match(html, /Airウォレット残高取得 試験版/);
@@ -89,7 +88,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_SUB_v0\.1\.6-handoff-test9b-final\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-handoff-test10-pageflag1000\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
   assert.equal(testBuild.headers.get("cache-control"), "no-store");
 });
@@ -128,3 +127,4 @@ test("serves separate ARUNOMATIC AIR balance test APK", async () => {
   assert.match(response.headers.get("content-disposition"), /ARUNOMATIC_AIR_BALANCE_TEST1\.apk/);
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
+

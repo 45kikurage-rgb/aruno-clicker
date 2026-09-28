@@ -54,15 +54,21 @@ jobs:
       - name: Verify public APK and unrelated downloads
         run: |
           set -euo pipefail
+          verified=0
           for attempt in {1..12}; do
-            if curl -fLsS -D /tmp/pageflag1000.headers https://download.aruno-id.com/apk/arunomatic-v016-test.apk -o /tmp/pageflag1000.apk; then break; fi
+            if curl -fLsS -D /tmp/pageflag1000.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?attempt=$attempt" -o /tmp/pageflag1000.apk && \
+               curl -fLsS "https://download.aruno-id.com/arunomatic?verify=pageflag1000&attempt=$attempt" -o /tmp/page.html && \
+               cmp ci/ARUNOMATIC-v0.1.6-handoff-test10-pageflag1000-code20.apk /tmp/pageflag1000.apk && \
+               grep -q 'v0.1.6-handoff-test10-pageflag1000 / code 20' /tmp/page.html && \
+               grep -q 'ページフラグ探索上限を350件から1000件' /tmp/page.html; then
+              verified=1
+              break
+            fi
             sleep 5
           done
+          test "$verified" = "1"
           cmp ci/ARUNOMATIC-v0.1.6-handoff-test10-pageflag1000-code20.apk /tmp/pageflag1000.apk
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/pageflag1000.headers
-          curl -fLsS https://download.aruno-id.com/arunomatic -o /tmp/page.html
-          grep -q 'v0.1.6-handoff-test10-pageflag1000 / code 20' /tmp/page.html
-          grep -q 'ページフラグ探索上限を350件から1000件' /tmp/page.html
           for name in arunomatic.apk arunomatic-pageflag-diag1.apk arunomatic-air-balance-test1.apk; do
             curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/after-$name"
             cmp "/tmp/before-$name" "/tmp/after-$name"

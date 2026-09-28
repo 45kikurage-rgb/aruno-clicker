@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: arunomatic-download-production-test9b-final
+  group: arunomatic-download-production-pageflag1000
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_STABLE_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
-      EXPECTED_TEST_SHA256: 882ab20260cefd62b1e20d3fd70d59443309cb2519ef7a8fb5041ed52707c488
+      EXPECTED_TEST_SHA256: 2810554c82cac53332c402477ee38a9ad516425a14b56507bbf279611eff8821
       EXPECTED_AIR_TEST_SHA256: 34e6a3ecfa711f264a68d4112d42f138d05e0ed7652270e067b8fdb65329a2f4
     steps:
       - uses: actions/checkout@v4
@@ -51,15 +51,15 @@ jobs:
           verified=0
           for attempt in {1..12}; do
             rm -f /tmp/arunomatic-page.html /tmp/arunomatic-stable.apk /tmp/arunomatic-test.apk /tmp/arunomatic-air-test.apk
-            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?verify=test9b&attempt=$attempt" > /tmp/arunomatic-page.html && \
+            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?verify=pageflag1000&attempt=$attempt" > /tmp/arunomatic-page.html && \
                curl --fail --silent --show-error --location --output /tmp/arunomatic-stable.apk --dump-header /tmp/arunomatic-stable.headers "https://download.aruno-id.com/apk/arunomatic.apk?attempt=$attempt" && \
-               curl --fail --silent --show-error --location --output /tmp/arunomatic-test.apk --dump-header /tmp/arunomatic-test.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=test9b&attempt=$attempt" && \
+               curl --fail --silent --show-error --location --output /tmp/arunomatic-test.apk --dump-header /tmp/arunomatic-test.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=pageflag1000&attempt=$attempt" && \
                curl --fail --silent --show-error --location --output /tmp/arunomatic-air-test.apk --dump-header /tmp/arunomatic-air-test.headers "https://download.aruno-id.com/apk/arunomatic-air-balance-test1.apk?verify=airtest1&attempt=$attempt"; then
               STABLE_ACTUAL="$(sha256sum /tmp/arunomatic-stable.apk | cut -d ' ' -f 1)"
               TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
               AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
               if grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html && \
-                 grep -q 'v0.1.6-handoff-test9b-final' /tmp/arunomatic-page.html && \
+                 grep -q 'v0.1.6-handoff-test10-pageflag1000 / code 20' /tmp/arunomatic-page.html && \
                  grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html && \
                  test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256" && \
                  test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256" && \
@@ -80,3 +80,4 @@ jobs:
           echo "stable sha256=$STABLE_ACTUAL"
           echo "test sha256=$TEST_ACTUAL"
           echo "air sha256=$AIR_ACTUAL"
+
