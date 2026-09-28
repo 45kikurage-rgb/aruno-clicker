@@ -34,7 +34,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_v0.1.6-handoff-test10-pageflag1000.apk",
+      filename: "ARUNOMATIC_v0.1.6-handoff-test11-pageflag2000.apk",
       cacheControl: "no-store",
     },
   ],
@@ -132,7 +132,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-handoff-test10-pageflag1000</p>
+      <p class="version">v0.1.5 / v0.1.6-handoff-test11-pageflag2000</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
@@ -146,13 +146,13 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>v0.1.6-handoff-test10-pageflag1000 / code 20</strong>
-          <small>ページフラグ探索上限を350件から1000件へ変更しました。02-05の513番目まで認識できます。表示条件・文字条件・座標条件・安全停止、ARUNOMATIC押下後2秒、HOME後1秒＋必要時250ms間隔で最大2.5秒、その他1秒、横スワイプ225msは維持しています。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">ページフラグ1000件対応版をダウンロード</a>
+          <strong>v0.1.6-handoff-test11-pageflag2000 / code 21</strong>
+          <small>ページフラグ探索上限を350件から2000件へ変更しました。予定最大構成の04-06（約977番目）まで余裕を持って認識できます。表示条件・文字条件・座標条件・安全停止、ARUNOMATIC押下後2秒、HOME後1秒＋必要時250ms間隔で最大2.5秒、その他1秒、横スワイプ225msは維持しています。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">ページフラグ2000件対応版をダウンロード</a>
         </div>
         <div class="version-card">
           <strong>AIRウォレット残高確認 試用版 / code 21</strong>
-          <small>既存ARUNOMATICへ上書きする試用版です。ページフラグ1000件対応版を維持したまま、AIR 01〜25とApp ClonerのPackage IDを登録し、各AIRアプリを順番に起動してAccessibilityから残高を取得します。確認済みの起動案内は安全な閉じる操作だけ自動処理し、取得不能は0円にせず要確認にします。スクリーンショットは使いません。</small>
+          <small>既存ARUNOMATICへ上書きする試用版です。ページフラグ2000件対応版を維持したまま、AIR 01〜25とApp ClonerのPackage IDを登録し、各AIRアプリを順番に起動してAccessibilityから残高を取得します。確認済みの起動案内は安全な閉じる操作だけ自動処理し、取得不能は0円にせず要確認にします。スクリーンショットは使いません。</small>
           <a class="download test" href="/apk/arunomatic-air-balance-test1.apk">AIR残高確認 試用版をダウンロード</a>
         </div>
       </div>
