@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: arunomatic-download-production-test8a-range
+  group: arunomatic-download-production-test9-final
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_STABLE_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
-      EXPECTED_TEST_SHA256: 89583eb35df475417ab36ab128688466bef9fd3887e7117469eb1168f366146c
+      EXPECTED_TEST_SHA256: 05494fa8a82382927277db147004156c7dbdb494528a9c6f897afbbc8a0c672f
       EXPECTED_AIR_TEST_SHA256: 34e6a3ecfa711f264a68d4112d42f138d05e0ed7652270e067b8fdb65329a2f4
     steps:
       - uses: actions/checkout@v4
@@ -49,13 +49,13 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in {1..12}; do
-            if curl --fail --silent --show-error --location               https://download.aruno-id.com/arunomatic?verify=test8a > /tmp/arunomatic-page.html &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic-stable.apk               --dump-header /tmp/arunomatic-stable.headers               https://download.aruno-id.com/apk/arunomatic.apk &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic-test.apk               --dump-header /tmp/arunomatic-test.headers               https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=test8a; then
+            if curl --fail --silent --show-error --location               https://download.aruno-id.com/arunomatic?verify=test9 > /tmp/arunomatic-page.html &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic-stable.apk               --dump-header /tmp/arunomatic-stable.headers               https://download.aruno-id.com/apk/arunomatic.apk &&               curl --fail --silent --show-error --location               --output /tmp/arunomatic-test.apk               --dump-header /tmp/arunomatic-test.headers               https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=test9; then
               break
             fi
             sleep 5
           done
           grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html
-          grep -q 'v0.1.6-handoff-test8a-range' /tmp/arunomatic-page.html
+          grep -q 'v0.1.6-handoff-test9-final' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic.apk' /tmp/arunomatic-page.html
           grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html
           grep -q 'Airウォレット残高取得 試験版' /tmp/arunomatic-page.html
