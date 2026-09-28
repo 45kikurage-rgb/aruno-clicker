@@ -42,20 +42,19 @@ jobs:
           AWS_EC2_METADATA_DISABLED: "true"
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-          AIR_TEST_ARTIFACT_ZIP_URL: "https://sdmntprjapaneast.oaiusercontent.com/files/00000000-3f10-8209-af9b-4f7735b922a9/raw?se=2026-09-28T11%3A01%3A35Z&sp=r&sv=2026-02-06&sr=b&scid=4b5f564c-aa7e-56d6-8dc6-cce06bb97128&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T01%3A18%3A45Z&ske=2026-09-29T01%3A18%3A45Z&sks=b&skv=2026-02-06&sig=Fh8PemFevjHGhGEyQZnq0R%2Bao3idMm0St0rLWAiTSos%3D"
         run: |
           set -euo pipefail
           test -n "$AWS_ACCESS_KEY_ID"
           test -n "$AWS_SECRET_ACCESS_KEY"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
-          curl --fail --silent --show-error --location "$AIR_TEST_ARTIFACT_ZIP_URL" -o /tmp/arunomatic-air-test1.zip
-          rm -rf /tmp/arunomatic-air-test1
-          mkdir -p /tmp/arunomatic-air-test1
-          unzip -q /tmp/arunomatic-air-test1.zip -d /tmp/arunomatic-air-test1
-          APK="$(find /tmp/arunomatic-air-test1 -type f -name 'app-airTest.apk' -print -quit)"
-          test -n "$APK"
+          cat transfer/arunomatic-air-balance-test1/chunk-* > /tmp/arunomatic-air-test1.b64
+          base64 -d /tmp/arunomatic-air-test1.b64 > /tmp/ARUNOMATIC_AIR_BALANCE_TEST1.apk
+          APK=/tmp/ARUNOMATIC_AIR_BALANCE_TEST1.apk
+          EXPECTED_AIR_TEST_SHA256="$(tr -d '[:space:]' < transfer/arunomatic-air-balance-test1/SHA256.txt)"
+          test -s "$APK"
           test "$(sha256sum "$APK" | cut -d ' ' -f 1)" = "$EXPECTED_AIR_TEST_SHA256"
+          echo "EXPECTED_AIR_TEST_SHA256=$EXPECTED_AIR_TEST_SHA256" >> "$GITHUB_ENV"
           ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
           aws s3 cp "$APK" \
             "s3://${R2_BUCKET_NAME}/releases/arunomatic/air-balance-test1/ARUNOMATIC_AIR_BALANCE_TEST1.apk" \
