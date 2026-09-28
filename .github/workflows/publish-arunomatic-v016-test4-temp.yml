@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_SHA256: a4485cb13c0f7774ff6e9ca484b73ce9e06ff8c3319765a80addfeafc7efb9ae
-      ARTIFACT_URL: "https://sdmntprwestus.oaiusercontent.com/files/00000000-d308-8230-a3f4-353936addd51/raw?se=2026-09-28T07%3A13%3A52Z&sp=r&sv=2026-02-06&sr=b&scid=1fe26b83-77b1-5355-80cb-eb935574aad5&skoid=18c14e53-ea0c-429b-8d09-d22d66ca7169&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T01%3A50%3A08Z&ske=2026-09-29T01%3A50%3A08Z&sks=b&skv=2026-02-06&sig=6elfJZQ2XQkehk5Il0cjUf%2BHlqhwSZX%2BTg/GpKQyWsc%3D"
+      ARTIFACT_URL: "https://sdmntprwestus.oaiusercontent.com/files/00000000-231c-8230-bbfc-e5246af0fdf7/raw?se=2026-09-28T07%3A20%3A32Z&sp=r&sv=2026-02-06&sr=b&scid=c6033402-6b3b-5f81-814c-67664c7343aa&skoid=18c14e53-ea0c-429b-8d09-d22d66ca7169&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T00%3A22%3A56Z&ske=2026-09-29T00%3A22%3A56Z&sks=b&skv=2026-02-06&sig=jkyz8dD6suixtFsvf9b8G62PhPxBGXNpvMDv2BRgoN8%3D"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
