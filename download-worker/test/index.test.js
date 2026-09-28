@@ -53,8 +53,8 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /225ms/);
   assert.match(html, /\/apk\/arunomatic\.apk/);
   assert.match(html, /\/apk\/arunomatic-v016-test\.apk/);
-  assert.match(html, /Airウォレット残高取得 試験版/);
-  assert.match(html, /通常版とは別アプリ/);
+  assert.match(html, /AIRウォレット残高確認 試用版/);
+  assert.match(html, /既存ARUNOMATICへ上書きする試用版/);
   assert.match(html, /\/apk\/arunomatic-air-balance-test1\.apk/);
   assert.match(html, /data:image\/svg\+xml;base64,/);
   assert.match(html, /download\.aruno-id\.com\/arunomatic/);
@@ -117,14 +117,14 @@ test("serves the isolated share accessibility test APK", async () => {
 });
 
 
-test("serves separate ARUNOMATIC AIR balance test APK", async () => {
+test("serves integrated ARUNOMATIC AIR balance trial APK", async () => {
   const response = await worker.fetch(
     new Request("https://download.aruno-id.com/apk/arunomatic-air-balance-test1.apk"),
     environment(),
   );
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(response.headers.get("content-disposition"), /ARUNOMATIC_AIR_BALANCE_TEST1\.apk/);
+  assert.match(response.headers.get("content-disposition"), /ARUNOMATIC_AIR_BALANCE_TRIAL1_CODE21\.apk/);
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
