@@ -45,7 +45,7 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /v0\.1\.6-handoff-test11-pageflag2000/);
   assert.match(html, /code 21/);
   assert.match(html, /350件から2000件/);
-  assert.match(html, /02-05/);
+  assert.match(html, /04-06/);
   assert.match(html, /押下後2秒/);
   assert.match(html, /HOME後1秒/);
   assert.match(html, /250ms/);
