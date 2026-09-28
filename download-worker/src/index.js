@@ -34,6 +34,7 @@ const DOWNLOADS = new Map([
     {
       key: "apk/arunomatic-v016-test.apk",
       filename: "ARUNOMATIC_SUB_v0.1.6-handoff-test8a-range.apk",
+      cacheControl: "no-store",
     },
   ],
 ]);
@@ -147,7 +148,7 @@ function arunomaticPageResponse() {
   return new Response(ARUNOMATIC_PAGE, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=60",
+      "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       "Referrer-Policy": "no-referrer",
@@ -178,7 +179,7 @@ async function apkResponse(request, env, download) {
   headers.set("Content-Type", APK_CONTENT_TYPE);
   headers.set("Content-Disposition", `attachment; filename="${download.filename}"`);
   headers.set("Content-Length", String(object.size));
-  headers.set("Cache-Control", "public, max-age=60, must-revalidate");
+  headers.set("Cache-Control", download.cacheControl || "public, max-age=60, must-revalidate");
   headers.set("ETag", object.httpEtag);
   headers.set("X-Content-Type-Options", "nosniff");
   const sha256 = object.customMetadata?.sha256;
