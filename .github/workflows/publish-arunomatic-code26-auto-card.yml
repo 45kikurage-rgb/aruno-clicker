@@ -1,0 +1,83 @@
+name: Publish ARUNOMATIC code26 automatic card capture
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-arunomatic-code26-auto-card.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arunomatic-download-production-code26-aircard
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SHA256: 266839f6a2c32c687297dc2ee92f160be7630b9464cd8922e5fc36c034d7e874
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download signed code26 artifact
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 'https://sdmntprjapaneast.oaiusercontent.com/files/00000000-d4f0-8209-82ab-3261a91e7d8e/raw?se=2026-09-29T12%3A32%3A55Z&sp=r&sv=2026-02-06&sr=b&scid=65339c92-434b-5daa-bfcd-38295c6a4767&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-29T04%3A00%3A27Z&ske=2026-09-30T04%3A00%3A27Z&sks=b&skv=2026-02-06&sig=ahIXcqFlCfewUC5PwvaRi1czDYpdoG6zIG54lPgrpnw%3D' -o /tmp/code26.zip
+          rm -rf /tmp/code26
+          mkdir -p /tmp/code26
+          unzip -q /tmp/code26.zip -d /tmp/code26
+          APK="$(find /tmp/code26 -type f -name '*.apk' | head -1)"
+          test -n "$APK"
+          cp "$APK" /tmp/arunomatic-code26.apk
+          echo "$EXPECTED_SHA256  /tmp/arunomatic-code26.apk" | sha256sum -c -
+
+      - name: Preserve current stable and unrelated APKs
+        run: |
+          set -euo pipefail
+          for name in arunomatic.apk arunomatic-pageflag-diag1.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/before-$name"
+          done
+
+      - name: Upload code26 to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp /tmp/arunomatic-code26.apk             "s3://${R2_BUCKET_NAME}/releases/arunomatic/v0.1.6-aircard-local4/ARUNOMATIC_v0.1.6-aircard-local4-code26.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control no-store             --metadata "sha256=${EXPECTED_SHA256}"             --no-progress --only-show-errors
+          aws s3 cp /tmp/arunomatic-code26.apk             "s3://${R2_BUCKET_NAME}/apk/arunomatic-v016-test.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control no-store             --metadata "sha256=${EXPECTED_SHA256}"             --no-progress --only-show-errors
+
+      - name: Test and deploy download Worker
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npm test
+          npx --yes wrangler@4.40.0 deploy
+
+      - name: Verify public code26
+        run: |
+          set -euo pipefail
+          verified=0
+          for attempt in {1..12}; do
+            if curl -fLsS "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=code26&attempt=$attempt" -o /tmp/public.apk &&                curl -fLsS "https://download.aruno-id.com/arunomatic?verify=code26&attempt=$attempt" -o /tmp/page.html; then
+              ACTUAL="$(sha256sum /tmp/public.apk | cut -d ' ' -f 1)"
+              if test "$ACTUAL" = "$EXPECTED_SHA256" &&                  grep -q 'AIRカード取得テスト版 v0.1.6-aircard-local4 / code 26' /tmp/page.html &&                  grep -q '自動検出' /tmp/page.html; then
+                verified=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$verified" = "1"
+          echo "ARUNOMATIC code26 is public."
