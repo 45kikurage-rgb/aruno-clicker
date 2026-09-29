@@ -42,14 +42,15 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /ARUNOMATIC/);
   assert.match(html, /サブ端末用/);
   assert.match(html, /v0\.1\.5 安定版/);
-  assert.match(html, /v0\.1\.6-aircard-local3/);
-  assert.match(html, /code 25/);
+  assert.match(html, /v0\.1\.6-aircard-local4/);
+  assert.match(html, /code 26/);
   assert.match(html, /AIRカード取得テスト版/);
   assert.match(html, /ページフラグ探索上限2000/);
   assert.match(html, /カード番号/);
   assert.match(html, /セキュリティコード/);
   assert.match(html, /指紋認証/);
   assert.match(html, /カード登録・再取得は指紋認証なし/);
+  assert.match(html, /自動検出/);
   assert.match(html, /失敗AIRだけ/);
   assert.match(html, /同一カード重複判定/);
   assert.match(html, /\/apk\/arunomatic\.apk/);
@@ -86,7 +87,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local3-code25\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local4-code25\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
   assert.equal(testBuild.headers.get("cache-control"), "no-store");
 });
