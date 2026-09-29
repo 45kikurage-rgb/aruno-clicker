@@ -42,17 +42,17 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /ARUNOMATIC/);
   assert.match(html, /サブ端末用/);
   assert.match(html, /v0\.1\.5 安定版/);
-  assert.match(html, /v0\.1\.6-aircard-local9/);
-  assert.match(html, /code 31/);
-  assert.match(html, /AIRカード共有登録・端末99集約版/);
-  assert.match(html, /ページフラグ探索上限2000/);
-  assert.match(html, /カード番号/);
-  assert.match(html, /セキュリティコード/);
+  assert.match(html, /v0\.1\.6-aircard-local10/);
+  assert.match(html, /code 32/);
+  assert.match(html, /AIRユーザー番号取得・端末99確認版/);
+  assert.match(html, /ユーザー番号を自動取得/);
+  assert.match(html, /重複はユーザー番号で判定/);
+  assert.match(html, /カード情報は自端末だけに暗号化保存/);
   assert.match(html, /指紋認証/);
-  assert.match(html, /カード登録・再取得は指紋認証なし/);
-  assert.match(html, /順に共有/);
-  assert.match(html, /失敗AIRだけ/);
-  assert.match(html, /同一カード重複判定/);
+  assert.match(html, /ARUNOMATIC内の指紋認証は不要/);
+  assert.match(html, /後から登録・変更/);
+  assert.match(html, /端末03・05・06への展開は保留/);
+  assert.doesNotMatch(html, /同一カード重複判定|指紋認証必須/);
   assert.match(html, /\/apk\/arunomatic\.apk/);
   assert.match(html, /\/apk\/arunomatic-v016-test\.apk/);
         assert.match(html, /data:image\/svg\+xml;base64,/);
@@ -87,7 +87,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local9-code31\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local10-code32\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
   assert.equal(testBuild.headers.get("cache-control"), "no-store");
 });
@@ -126,4 +126,5 @@ test("serves integrated ARUNOMATIC AIR balance trial APK", async () => {
   assert.match(response.headers.get("content-disposition"), /ARUNOMATIC_AIR_BALANCE_TRIAL1_CODE21\.apk/);
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
+
 
