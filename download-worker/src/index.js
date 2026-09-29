@@ -34,7 +34,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_v0.1.6-aircard-local4-code26.apk",
+      filename: "ARUNOMATIC_v0.1.6-aircard-local8-code30.apk",
       cacheControl: "no-store",
     },
   ],
@@ -132,7 +132,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-aircard-local4</p>
+      <p class="version">v0.1.5 / v0.1.6-aircard-local8</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
@@ -146,12 +146,12 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>AIRカード取得テスト版 v0.1.6-aircard-local4 / code 26</strong>
-          <small>AIRウォレット期限対応の優先テスト版です。既存の自動クリッカー制御、Nova連携、ページフラグ探索上限2000、既存のAIR残高確認を維持したまま、カード番号・名義・有効期限・セキュリティコードの端末内暗号化保存、取得成功/失敗・取得日時、失敗AIRだけの再取得、同一カード重複判定を追加しています。カード登録・再取得は指紋認証なしで実行できます。カード情報照会画面を開くと4項目を自動検出・保存します。残高・フルカード・セキュリティコードの閲覧時だけ指紋認証を要求します。まずメイン端末1台で実機確認し、成功後に残り2台へ展開してください。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">AIRカード取得テスト版 code 26 をダウンロード</a>
+          <strong>AIRカード共有登録テスト版 v0.1.6-aircard-local8 / code 30</strong>
+          <small>AIRウォレット期限対応の優先テスト版です。既存の自動クリッカー制御、Nova連携、ページフラグ探索上限2000、既存のAIR残高確認を維持したまま、カード番号・名義・有効期限・セキュリティコードの端末内暗号化保存、取得成功/失敗・取得日時、失敗AIRだけの再取得、同一カード重複判定を追加しています。カード登録・再取得は指紋認証なしで実行できます。カード情報照会画面から4項目を順に共有すると自動判定・暗号化保存し、次の未取得AIRへ進みます。残高・フルカード・セキュリティコードの閲覧時だけ指紋認証を要求します。まずメイン端末1台で実機確認し、成功後に残り2台へ展開してください。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">AIRカード共有登録テスト版 code 30 をダウンロード</a>
         </div>
       </div>
-      <p class="guide">v0.1.5は現在の安定版です。AIRカード取得テスト版 code 26 は既存ARUNOMATICへ上書きできます。カード情報画面を表示すると自動取得・保存し、カード登録中は指紋認証不要です。残高・カード詳細の閲覧だけ指紋認証必須です。まず1台で確認してください。</p>
+      <p class="guide">v0.1.5は現在の安定版です。AIRカード共有登録テスト版 code 30 は既存ARUNOMATICへ上書きできます。カード情報画面の4項目を順にARUNOMATICへ共有して保存します。カード登録中は指紋認証不要です。残高・カード詳細の閲覧だけ指紋認証必須です。まず1台で確認してください。</p>
       <p class="fixed">このQRは固定です。今後APKを更新しても入口URLは<br><code>download.aruno-id.com/arunomatic</code> のままです。</p>
     </section>
   </main>
