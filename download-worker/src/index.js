@@ -34,7 +34,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_v0.1.6-aircard-local2-code24.apk",
+      filename: "ARUNOMATIC_v0.1.6-aircard-local3-code25.apk",
       cacheControl: "no-store",
     },
   ],
@@ -132,7 +132,7 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-aircard-local2</p>
+      <p class="version">v0.1.5 / v0.1.6-aircard-local3</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
@@ -146,12 +146,12 @@ const ARUNOMATIC_PAGE = `<!doctype html>
           <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
         </div>
         <div class="version-card">
-          <strong>AIRカード取得テスト版 v0.1.6-aircard-local2 / code 24</strong>
-          <small>AIRウォレット期限対応の優先テスト版です。既存の自動クリッカー制御、Nova連携、ページフラグ探索上限2000、既存のAIR残高確認を維持したまま、カード番号・名義・有効期限・セキュリティコードの端末内暗号化保存、取得成功/失敗・取得日時、失敗AIRだけの再取得、指紋認証付きカード詳細表示、カード番号/CVVコピー、同一カード重複判定を追加しています。まずメイン端末1台で実機確認し、成功後に残り2台へ展開してください。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">AIRカード取得テスト版 code 24 をダウンロード</a>
+          <strong>AIRカード取得テスト版 v0.1.6-aircard-local3 / code 25</strong>
+          <small>AIRウォレット期限対応の優先テスト版です。既存の自動クリッカー制御、Nova連携、ページフラグ探索上限2000、既存のAIR残高確認を維持したまま、カード番号・名義・有効期限・セキュリティコードの端末内暗号化保存、取得成功/失敗・取得日時、失敗AIRだけの再取得、同一カード重複判定を追加しています。カード登録・再取得は指紋認証なしで実行できます。残高・フルカード・セキュリティコードの閲覧時だけ指紋認証を要求します。まずメイン端末1台で実機確認し、成功後に残り2台へ展開してください。</small>
+          <a class="download test" href="/apk/arunomatic-v016-test.apk">AIRカード取得テスト版 code 25 をダウンロード</a>
         </div>
       </div>
-      <p class="guide">v0.1.5は現在の安定版です。AIRカード取得テスト版 code 24 は既存ARUNOMATICへ上書きできます。まず1台でカード取得・保存・指紋認証表示を確認し、成功後に残り2台へ展開してください。</p>
+      <p class="guide">v0.1.5は現在の安定版です。AIRカード取得テスト版 code 25 は既存ARUNOMATICへ上書きできます。カード登録は指紋認証不要、残高・カード詳細の閲覧は指紋認証必須です。まず1台でカード取得・保存を確認し、成功後に残り2台へ展開してください。</p>
       <p class="fixed">このQRは固定です。今後APKを更新しても入口URLは<br><code>download.aruno-id.com/arunomatic</code> のままです。</p>
     </section>
   </main>
