@@ -32,10 +32,10 @@ test("serves the download page", async () => {
 });
 
 test("update manifest is public, uncached and validates release identity", async () => {
-  const manifest={package:"com.aruno.arunomatic",version_code:33,version_name:"v0.1.6-airledger1",download_page:"https://download.aruno-id.com/arunomatic",sha256:"a".repeat(64)};
+  const manifest={package:"com.aruno.arunomatic",version_code:34,version_name:"v0.1.6-airledger2",download_page:"https://download.aruno-id.com/arunomatic",sha256:"a".repeat(64)};
   const env={APK_BUCKET:{get:async key=>key==="releases/arunomatic/latest.json"?{text:async()=>JSON.stringify(manifest)}:null}};
   const response=await worker.fetch(new Request("https://download.aruno-id.com/arunomatic/latest.json"),env);
-  assert.equal(response.status,200);assert.equal(response.headers.get("cache-control"),"no-store");assert.equal((await response.json()).version_code,33);
+  assert.equal(response.status,200);assert.equal(response.headers.get("cache-control"),"no-store");assert.equal((await response.json()).version_code,34);
   manifest.package="wrong.package";assert.equal((await worker.fetch(new Request("https://download.aruno-id.com/arunomatic/latest.json"),env)).status,503);
 });
 
@@ -50,8 +50,8 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /ARUNOMATIC/);
   assert.match(html, /端末03・05・06・99 共通/);
   assert.doesNotMatch(html, /v0\.1\.5|ページフラグ診断|code 19/);
-  assert.match(html, /v0\.1\.6-airledger1/);
-  assert.match(html, /code 33/);
+  assert.match(html, /v0\.1\.6-airledger2/);
+  assert.match(html, /code 34/);
   assert.match(html, /最新版/);
   assert.match(html, /ユーザー番号を自動取得/);
   assert.match(html, /重複はユーザー番号で判定/);
@@ -95,7 +95,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-airledger1-code33\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-airledger2-code34\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
   assert.equal(testBuild.headers.get("cache-control"), "no-store");
 });

@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: arunomatic-download-production-code33-air-user-number
+  group: arunomatic-download-production-code34-air-user-number
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 10
     env:
       EXPECTED_STABLE_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
-      EXPECTED_TEST_SHA256: 650f6be6f5312cbc614d144667580785f22906c531ca73560bf72d7701c694f0
+      EXPECTED_TEST_SHA256: 47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617
       EXPECTED_AIR_TEST_SHA256: 4faa2c43050b50d5242b2252df12d17d672a6a4d609b188270d10e0afb491d6f
     steps:
       - uses: actions/checkout@v4
@@ -52,15 +52,15 @@ jobs:
           verified=0
           for attempt in {1..12}; do
             rm -f /tmp/arunomatic-page.html /tmp/arunomatic-stable.apk /tmp/arunomatic-test.apk /tmp/arunomatic-air-test.apk
-            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?verify=code33&attempt=$attempt" > /tmp/arunomatic-page.html && \
+            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?verify=code34&attempt=$attempt" > /tmp/arunomatic-page.html && \
                curl --fail --silent --show-error --location --output /tmp/arunomatic-stable.apk --dump-header /tmp/arunomatic-stable.headers "https://download.aruno-id.com/apk/arunomatic.apk?attempt=$attempt" && \
-               curl --fail --silent --show-error --location --output /tmp/arunomatic-test.apk --dump-header /tmp/arunomatic-test.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=code33&attempt=$attempt" && \
+               curl --fail --silent --show-error --location --output /tmp/arunomatic-test.apk --dump-header /tmp/arunomatic-test.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=code34&attempt=$attempt" && \
                curl --fail --silent --show-error --location --output /tmp/arunomatic-air-test.apk --dump-header /tmp/arunomatic-air-test.headers "https://download.aruno-id.com/apk/arunomatic-air-balance-test1.apk?verify=airtest1&attempt=$attempt"; then
               STABLE_ACTUAL="$(sha256sum /tmp/arunomatic-stable.apk | cut -d ' ' -f 1)"
               TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
               AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
               if ! grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html && \
-                 grep -q '最新版 v0.1.6-airledger1 / code 33' /tmp/arunomatic-page.html && \
+                 grep -q '最新版 v0.1.6-airledger2 / code 34' /tmp/arunomatic-page.html && \
                  grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html && \
                  test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256" && \
                  test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256" && \
@@ -74,7 +74,7 @@ jobs:
           test "$verified" = "1"
           ! grep -q 'href="/apk/arunomatic.apk"' /tmp/arunomatic-page.html
           ! grep -q 'ページフラグ診断' /tmp/arunomatic-page.html
-          grep -q '最新版 v0.1.6-airledger1 / code 33' /tmp/arunomatic-page.html
+          grep -q '最新版 v0.1.6-airledger2 / code 34' /tmp/arunomatic-page.html
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-test.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-air-test.headers
@@ -93,7 +93,7 @@ jobs:
           import json
           manifest=json.load(open('/tmp/arunomatic-latest.json'))
           assert manifest['package']=='com.aruno.arunomatic'
-          assert manifest['version_code']==33
-          assert manifest['version_name']=='v0.1.6-airledger1'
-          assert manifest['sha256']=='650f6be6f5312cbc614d144667580785f22906c531ca73560bf72d7701c694f0'
+          assert manifest['version_code']==34
+          assert manifest['version_name']=='v0.1.6-airledger2'
+          assert manifest['sha256']=='47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617'
           PY_MANIFEST

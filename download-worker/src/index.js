@@ -34,7 +34,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_v0.1.6-airledger1-code33.apk",
+      filename: "ARUNOMATIC_v0.1.6-airledger2-code34.apk",
       cacheControl: "no-store",
     },
   ],
@@ -132,13 +132,13 @@ const ARUNOMATIC_PAGE = `<!doctype html>
     <section class="card">
       <h1>ARUNOMATIC</h1>
       <p class="sub">端末03・05・06・99 共通</p>
-      <p class="version">v0.1.6-airledger1 / code 33</p>
+      <p class="version">v0.1.6-airledger2 / code 34</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
-          <strong>最新版 v0.1.6-airledger1 / code 33</strong>
+          <strong>最新版 v0.1.6-airledger2 / code 34</strong>
           <small>AIR01〜40の残高確認後、ユーザー番号を自動取得します。中央管理台帳へ自動同期し、端末99で集約・検索できます。一覧は登録済みだけを表示します。重複はユーザー番号で判定し、カード情報は自端末だけに暗号化保存します。カードは後から登録・変更でき、他端末へ送るのは登録状態だけです。ARUNOMATIC内の指紋認証は不要です。</small>
-          <a class="download" href="/apk/arunomatic-v016-test.apk">最新版 code 33 をダウンロード</a>
+          <a class="download" href="/apk/arunomatic-v016-test.apk">最新版 code 34 をダウンロード</a>
         </div>
       </div>
       <p class="guide">端末03・05・06・99へ同じAPKを上書きしてください。既存データを保つためアンインストールは不要です。初回だけ「AIR端末を認証」で既存の端末認証を連携します。登録・取得・変更したAIR情報は自動送信され、端末99の「中央台帳を同期・取得」で集約を更新できます。今後はアプリ内の更新通知・「更新する」からこのページを開けます。</p>
