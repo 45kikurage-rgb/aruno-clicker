@@ -43,8 +43,8 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(html, /サブ端末用/);
   assert.match(html, /v0\.1\.5 安定版/);
   assert.match(html, /v0\.1\.6-aircard-local8/);
-  assert.match(html, /code 30/);
-  assert.match(html, /AIRカード共有登録テスト版/);
+  assert.match(html, /code 31/);
+  assert.match(html, /AIRカード共有登録・端末99集約版/);
   assert.match(html, /ページフラグ探索上限2000/);
   assert.match(html, /カード番号/);
   assert.match(html, /セキュリティコード/);
