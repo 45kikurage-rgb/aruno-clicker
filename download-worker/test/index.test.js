@@ -31,6 +31,14 @@ test("serves the download page", async () => {
   assert.match(html, /\/apk\/aruno-clicker-share-accessibility-test\.apk/);
 });
 
+test("update manifest is public, uncached and validates release identity", async () => {
+  const manifest={package:"com.aruno.arunomatic",version_code:33,version_name:"v0.1.6-airledger1",download_page:"https://download.aruno-id.com/arunomatic",sha256:"a".repeat(64)};
+  const env={APK_BUCKET:{get:async key=>key==="releases/arunomatic/latest.json"?{text:async()=>JSON.stringify(manifest)}:null}};
+  const response=await worker.fetch(new Request("https://download.aruno-id.com/arunomatic/latest.json"),env);
+  assert.equal(response.status,200);assert.equal(response.headers.get("cache-control"),"no-store");assert.equal((await response.json()).version_code,33);
+  manifest.package="wrong.package";assert.equal((await worker.fetch(new Request("https://download.aruno-id.com/arunomatic/latest.json"),env)).status,503);
+});
+
 test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () => {
   const response = await worker.fetch(
     new Request("https://download.aruno-id.com/arunomatic"),
@@ -40,20 +48,20 @@ test("serves ARUNOMATIC sub-device page with fixed QR and APK link", async () =>
   assert.match(response.headers.get("content-type"), /^text\/html/);
   const html = await response.text();
   assert.match(html, /ARUNOMATIC/);
-  assert.match(html, /サブ端末用/);
-  assert.match(html, /v0\.1\.5 安定版/);
-  assert.match(html, /v0\.1\.6-aircard-local10/);
-  assert.match(html, /code 32/);
-  assert.match(html, /AIRユーザー番号取得・端末99確認版/);
+  assert.match(html, /端末03・05・06・99 共通/);
+  assert.doesNotMatch(html, /v0\.1\.5|ページフラグ診断|code 19/);
+  assert.match(html, /v0\.1\.6-airledger1/);
+  assert.match(html, /code 33/);
+  assert.match(html, /最新版/);
   assert.match(html, /ユーザー番号を自動取得/);
   assert.match(html, /重複はユーザー番号で判定/);
   assert.match(html, /カード情報は自端末だけに暗号化保存/);
   assert.match(html, /指紋認証/);
   assert.match(html, /ARUNOMATIC内の指紋認証は不要/);
   assert.match(html, /後から登録・変更/);
-  assert.match(html, /端末03・05・06への展開は保留/);
+  assert.match(html, /中央管理台帳へ自動同期/);
   assert.doesNotMatch(html, /同一カード重複判定|指紋認証必須/);
-  assert.match(html, /\/apk\/arunomatic\.apk/);
+  assert.doesNotMatch(html, /href="\/apk\/arunomatic\.apk"/);
   assert.match(html, /\/apk\/arunomatic-v016-test\.apk/);
         assert.match(html, /data:image\/svg\+xml;base64,/);
   assert.match(html, /download\.aruno-id\.com\/arunomatic/);
@@ -87,7 +95,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local10-code32\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-airledger1-code33\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
   assert.equal(testBuild.headers.get("cache-control"), "no-store");
 });

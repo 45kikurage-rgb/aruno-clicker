@@ -34,7 +34,7 @@ const DOWNLOADS = new Map([
     "/apk/arunomatic-v016-test.apk",
     {
       key: "apk/arunomatic-v016-test.apk",
-      filename: "ARUNOMATIC_v0.1.6-aircard-local10-code32.apk",
+      filename: "ARUNOMATIC_v0.1.6-airledger1-code33.apk",
       cacheControl: "no-store",
     },
   ],
@@ -131,27 +131,17 @@ const ARUNOMATIC_PAGE = `<!doctype html>
   <main>
     <section class="card">
       <h1>ARUNOMATIC</h1>
-      <p class="sub">サブ端末用</p>
-      <p class="version">v0.1.5 / v0.1.6-aircard-local10</p>
+      <p class="sub">端末03・05・06・99 共通</p>
+      <p class="version">v0.1.6-airledger1 / code 33</p>
       <img class="qr" src="${ARUNOMATIC_QR}" alt="ARUNOMATIC サブ端末用ダウンロードページのQRコード">
       <div class="versions">
         <div class="version-card">
-          <strong>ページフラグ診断 DIAG1 / code 19</strong>
-          <small>A：手動表示ページ／B：HOME復帰の認識診断。診断後の横スワイプ・Task起動は行いません。結果をTXT・JSONで共有できます。既存ARUNOMATICへの更新です。code 18以前へはそのまま戻せません。</small>
-          <a class="download test" href="/apk/arunomatic-pageflag-diag1.apk">ページフラグ診断 DIAG1 をダウンロード</a>
-        </div>
-        <div class="version-card">
-          <strong>v0.1.5 安定版</strong>
-          <small>Nova共有・配置換え用。現在の通常運用版です。</small>
-          <a class="download" href="/apk/arunomatic.apk">v0.1.5をダウンロード</a>
-        </div>
-        <div class="version-card">
-          <strong>AIRユーザー番号取得・端末99確認版 v0.1.6-aircard-local10 / code 32</strong>
-          <small>端末99で確認するための試用版です。AIR01〜40の残高確認後、設定・アカウント画面からユーザー番号を自動取得します。重複はユーザー番号で判定します。カード情報は自端末だけに暗号化保存し、後から登録・変更できます。カードありは💳、未登録は＋から操作できます。他端末の共有データにはカードの有無だけを含め、端末99から他端末のカード詳細は開けません。ARUNOMATIC内の指紋認証は不要です。まず端末99で確認してください。端末03・05・06への展開は保留しています。</small>
-          <a class="download test" href="/apk/arunomatic-v016-test.apk">AIRユーザー番号取得・端末99確認版 code 32 をダウンロード</a>
+          <strong>最新版 v0.1.6-airledger1 / code 33</strong>
+          <small>AIR01〜40の残高確認後、ユーザー番号を自動取得します。中央管理台帳へ自動同期し、端末99で集約・検索できます。一覧は登録済みだけを表示します。重複はユーザー番号で判定し、カード情報は自端末だけに暗号化保存します。カードは後から登録・変更でき、他端末へ送るのは登録状態だけです。ARUNOMATIC内の指紋認証は不要です。</small>
+          <a class="download" href="/apk/arunomatic-v016-test.apk">最新版 code 33 をダウンロード</a>
         </div>
       </div>
-      <p class="guide">v0.1.5は現在の安定版です。試用版 v0.1.6-aircard-local10 / code 32 は既存ARUNOMATICへ上書きできます。まず端末99でユーザー番号の取得、カードの登録・変更を確認してください。カード詳細は自端末内だけに保存し、ARUNOMATIC内の指紋認証は不要です。</p>
+      <p class="guide">端末03・05・06・99へ同じAPKを上書きしてください。既存データを保つためアンインストールは不要です。初回だけ「AIR端末を認証」で既存の端末認証を連携します。登録・取得・変更したAIR情報は自動送信され、端末99の「中央台帳を同期・取得」で集約を更新できます。今後はアプリ内の更新通知・「更新する」からこのページを開けます。</p>
       <p class="fixed">このQRは固定です。今後APKを更新しても入口URLは<br><code>download.aruno-id.com/arunomatic</code> のままです。</p>
     </section>
   </main>
@@ -191,7 +181,8 @@ async function apkResponse(request, env, download) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Content-Type", APK_CONTENT_TYPE);
-  headers.set("Content-Disposition", `attachment; filename="${download.filename}"`);
+  const filename = /^[A-Za-z0-9._-]+$/.test(object.customMetadata?.filename || "") ? object.customMetadata.filename : download.filename;
+  headers.set("Content-Disposition", `attachment; filename="${filename}"`);
   headers.set("Content-Length", String(object.size));
   headers.set("Cache-Control", download.cacheControl || "public, max-age=60, must-revalidate");
   headers.set("ETag", object.httpEtag);
@@ -203,6 +194,19 @@ async function apkResponse(request, env, download) {
     return new Response(null, { headers });
   }
   return new Response(object.body, { headers });
+}
+
+async function latestManifest(request, env) {
+  const object = await env.APK_BUCKET.get("releases/arunomatic/latest.json");
+  if (!object) return Response.json({error:"UPDATE_NOT_AVAILABLE"},{status:503,headers:{"cache-control":"no-store"}});
+  try {
+    const manifest = JSON.parse(await object.text());
+    if (manifest.package !== "com.aruno.arunomatic" || !Number.isInteger(manifest.version_code) || manifest.version_code < 1 ||
+        manifest.download_page !== "https://download.aruno-id.com/arunomatic" ||
+        !/^[a-f0-9]{64}$/.test(manifest.sha256 || "")) throw new Error("invalid manifest");
+    const response = Response.json(manifest,{headers:{"cache-control":"no-store","x-content-type-options":"nosniff"}});
+    return request.method === "HEAD" ? new Response(null,{headers:response.headers}) : response;
+  } catch { return Response.json({error:"UPDATE_NOT_AVAILABLE"},{status:503,headers:{"cache-control":"no-store"}}); }
 }
 
 export default {
@@ -220,6 +224,8 @@ export default {
         ? new Response(null, { headers: pageResponse().headers })
         : pageResponse();
     }
+
+    if (url.pathname === "/arunomatic/latest.json") return latestManifest(request, env);
 
     if (url.pathname === "/arunomatic" || url.pathname === "/arunomatic/") {
       return request.method === "HEAD"
