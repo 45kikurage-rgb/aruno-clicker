@@ -86,7 +86,7 @@ test("serves both ARUNOMATIC APK versions with clear filenames", async () => {
   );
   assert.equal(testBuild.status, 200);
   assert.equal(testBuild.headers.get("content-type"), "application/vnd.android.package-archive");
-  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local3-code24\.apk/);
+  assert.match(testBuild.headers.get("content-disposition"), /ARUNOMATIC_v0\.1\.6-aircard-local3-code25\.apk/);
   assert.equal(testBuild.headers.get("x-checksum-sha256"), "abc123");
   assert.equal(testBuild.headers.get("cache-control"), "no-store");
 });
