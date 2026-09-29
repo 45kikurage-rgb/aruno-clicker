@@ -25,7 +25,7 @@ jobs:
       - name: Download signed code24 artifact
         run: |
           set -euo pipefail
-          curl -fLsS --retry 3 'https://sdmntprjapaneast.oaiusercontent.com/files/00000000-e0a4-8209-bcc1-fdb957fa361d/raw?se=2026-09-29T11%3A56%3A21Z&sp=r&sv=2026-02-06&sr=b&scid=09098cc3-1f13-5570-a4b4-20cc68955130&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-29T03%3A53%3A41Z&ske=2026-09-30T03%3A53%3A41Z&sks=b&skv=2026-02-06&sig=dpfUreA%2BbHGFtIv91tooWnXU2cH2m4aQZSLonpzRJdA%3D' -o /tmp/code24.zip
+          curl -fLsS --retry 3 'https://sdmntprindiasocentral.oaiusercontent.com/files/00000000-9ee8-8211-8d18-577205b93681/raw?se=2026-09-29T12%3A04%3A34Z&sp=r&sv=2026-02-06&sr=b&scid=54b4fc5d-cda7-521e-9243-4dba698c4398&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-29T03%3A53%3A26Z&ske=2026-09-30T03%3A53%3A26Z&sks=b&skv=2026-02-06&sig=fnz4H3VHUjtpuH%2B/KLzkxnjGtsAET5wgCuVzK1BntoQ%3D' -o /tmp/code24.zip
           rm -rf /tmp/code24
           mkdir -p /tmp/code24
           unzip -q /tmp/code24.zip -d /tmp/code24
