@@ -1,0 +1,91 @@
+name: Publish ARUNOMATIC code24 AIR card test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-arunomatic-code24-aircard.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arunomatic-download-production-code24-aircard
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SHA256: 98d9c47fd16d9f90652de8b756e40914796c73c640d217eae89ce2ee24a52167
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download signed code24 artifact
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 'https://sdmntprjapaneast.oaiusercontent.com/files/00000000-e0a4-8209-bcc1-fdb957fa361d/raw?se=2026-09-29T11%3A56%3A21Z&sp=r&sv=2026-02-06&sr=b&scid=09098cc3-1f13-5570-a4b4-20cc68955130&skoid=b1bca990-dcac-4c31-8ca1-ac563cf24c54&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-29T03%3A53%3A41Z&ske=2026-09-30T03%3A53%3A41Z&sks=b&skv=2026-02-06&sig=dpfUreA%2BbHGFtIv91tooWnXU2cH2m4aQZSLonpzRJdA%3D' -o /tmp/code24.zip
+          rm -rf /tmp/code24
+          mkdir -p /tmp/code24
+          unzip -q /tmp/code24.zip -d /tmp/code24
+          APK="$(find /tmp/code24 -type f -name '*.apk' | head -1)"
+          test -n "$APK"
+          cp "$APK" /tmp/arunomatic-code24.apk
+          echo "$EXPECTED_SHA256  /tmp/arunomatic-code24.apk" | sha256sum -c -
+
+      - name: Preserve current stable and unrelated APKs
+        run: |
+          set -euo pipefail
+          for name in arunomatic.apk arunomatic-pageflag-diag1.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/before-$name"
+          done
+
+      - name: Upload code24 to R2 fixed and immutable paths
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          ENDPOINT="https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp /tmp/arunomatic-code24.apk             "s3://${R2_BUCKET_NAME}/releases/arunomatic/v0.1.6-aircard-local2/ARUNOMATIC_v0.1.6-aircard-local2-code24.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control no-store             --metadata "sha256=${EXPECTED_SHA256}"             --no-progress --only-show-errors
+          aws s3 cp /tmp/arunomatic-code24.apk             "s3://${R2_BUCKET_NAME}/apk/arunomatic-v016-test.apk"             --endpoint-url "$ENDPOINT" --region auto             --content-type application/vnd.android.package-archive             --cache-control no-store             --metadata "sha256=${EXPECTED_SHA256}"             --no-progress --only-show-errors
+
+      - name: Test and deploy download Worker
+        working-directory: download-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npm test
+          npx --yes wrangler@4.40.0 deploy
+
+      - name: Verify public code24 and preserved APKs
+        run: |
+          set -euo pipefail
+          verified=0
+          for attempt in {1..12}; do
+            if curl -fLsS "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=code24&attempt=$attempt" -o /tmp/public.apk &&                curl -fLsS "https://download.aruno-id.com/arunomatic?verify=code24&attempt=$attempt" -o /tmp/page.html; then
+              ACTUAL="$(sha256sum /tmp/public.apk | cut -d ' ' -f 1)"
+              if test "$ACTUAL" = "$EXPECTED_SHA256" &&                  grep -q 'AIRカード取得テスト版 v0.1.6-aircard-local2 / code 24' /tmp/page.html &&                  grep -q '指紋認証' /tmp/page.html &&                  grep -q 'セキュリティコード' /tmp/page.html; then
+                verified=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$verified" = "1"
+          for name in arunomatic.apk arunomatic-pageflag-diag1.apk arunomatic-air-balance-test1.apk; do
+            curl -fLsS --retry 3 "https://download.aruno-id.com/apk/$name" -o "/tmp/after-$name"
+            cmp "/tmp/before-$name" "/tmp/after-$name"
+          done
+          echo "ARUNOMATIC code24 is public and unrelated APKs are unchanged."
