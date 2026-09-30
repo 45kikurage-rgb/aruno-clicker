@@ -60,7 +60,7 @@ jobs:
               TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
               AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
               if ! grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html && \
-                 grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37)'  /tmp/arunomatic-page.html && \
+                 grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38)'  /tmp/arunomatic-page.html && \
                  grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html && \
                  test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256" && \
                  test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256" && \
@@ -74,7 +74,7 @@ jobs:
           test "$verified" = "1"
           ! grep -q 'href="/apk/arunomatic.apk"' /tmp/arunomatic-page.html
           ! grep -q 'ページフラグ診断' /tmp/arunomatic-page.html
-          grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37)'  /tmp/arunomatic-page.html
+          grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38)'  /tmp/arunomatic-page.html
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-test.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-air-test.headers
@@ -93,6 +93,6 @@ jobs:
           import json
           manifest=json.load(open('/tmp/arunomatic-latest.json'))
           assert manifest['package']=='com.aruno.arunomatic'
-          expected={34:('v0.1.6-airledger2','47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617'),36:('v0.1.7-devicecontrol2','21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'),37:('v0.1.7-air-edit1','adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83')}
+          expected={34:('v0.1.6-airledger2','47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617'),36:('v0.1.7-devicecontrol2','21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'),37:('v0.1.7-air-edit1','adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83'),38:('v0.1.7-air-display1','8fcb498e31f2e32e8cb9c79d3a29ea07e5852b43ffb5f6e02ecbdbd109e6df45')}
           assert (manifest['version_name'],manifest['sha256'])==expected[manifest['version_code']]
           PY_MANIFEST

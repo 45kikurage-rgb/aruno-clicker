@@ -1,6 +1,7 @@
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code38.apk", {key:"releases/arunomatic/v0.1.7-air-display1/ARUNOMATIC_v0.1.7-air-display1-code38.apk",filename:"ARUNOMATIC_v0.1.7-air-display1-code38.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code37.apk", {key:"releases/arunomatic/v0.1.7-air-edit1/ARUNOMATIC_v0.1.7-air-edit1-code37.apk",filename:"ARUNOMATIC_v0.1.7-air-edit1-code37.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code36.apk", {key:"releases/arunomatic/v0.1.7-devicecontrol2/ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",filename:"ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-pageflag-diag1.apk", { key: "apk/arunomatic-pageflag-diag1.apk", filename: "ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk", cacheControl: "no-store" }],
@@ -166,6 +167,15 @@ const ARUNOMATIC_PAGE37 = ARUNOMATIC_PAGE36
   .replace('code36から低い版','code37から低い版')
   .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code36.apk">code36のテスト用APKを保存</a><br>code36のテスト中は結果を記録してからcode37へ更新してください。</p><p class="fixed">');
 
+const ARUNOMATIC_PAGE38 = ARUNOMATIC_PAGE37
+  .replaceAll('v0.1.7-air-edit1 / code 37','v0.1.7-air-display1 / code 38')
+  .replaceAll('code 37 をダウンロード','code 38 をダウンロード')
+  .replaceAll('href="/apk/arunomatic-code37.apk"','href="/apk/arunomatic-code38.apk"')
+  .replace('code37の編集操作は実機未確認です。','code38の表示修正は実機未確認です。右端ボタンを縦並びにし、中断・失敗時も前回残高を表示します。')
+  .replace('code37から低い版','code38から低い版')
+  .replace('code36のテスト中は結果を記録してからcode37へ更新してください。','code37で一覧が空白になる場合はcode38へ上書きし、再取得前の一覧を確認してください。')
+  .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code37.apk">旧code37 APKを保存</a></p><p class="fixed">');
+
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -177,6 +187,9 @@ async function arunomaticPageResponse(env) {
     if(response.ok&&m.version_code===37&&m.version_name==='v0.1.7-air-edit1'&&
        m.sha256==='adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83'&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code37.apk')page=ARUNOMATIC_PAGE37;
+    if(response.ok&&m.version_code===38&&m.version_name==='v0.1.7-air-display1'&&
+       m.sha256==='8fcb498e31f2e32e8cb9c79d3a29ea07e5852b43ffb5f6e02ecbdbd109e6df45'&&
+       m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code38.apk')page=ARUNOMATIC_PAGE38;
   }catch{}
   return new Response(page, {
     headers: {
