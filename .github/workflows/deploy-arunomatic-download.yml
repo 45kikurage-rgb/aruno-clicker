@@ -60,7 +60,7 @@ jobs:
               TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
               AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
               if ! grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html && \
-                 grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38)'  /tmp/arunomatic-page.html && \
+                 grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38|8-device-test1 / code 39)'  /tmp/arunomatic-page.html && \
                  grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html && \
                  test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256" && \
                  test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256" && \
@@ -74,7 +74,7 @@ jobs:
           test "$verified" = "1"
           ! grep -q 'href="/apk/arunomatic.apk"' /tmp/arunomatic-page.html
           ! grep -q 'ページフラグ診断' /tmp/arunomatic-page.html
-          grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38)'  /tmp/arunomatic-page.html
+          grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38|8-device-test1 / code 39)'  /tmp/arunomatic-page.html
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-test.headers
           grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-air-test.headers
