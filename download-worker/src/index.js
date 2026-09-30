@@ -1,6 +1,7 @@
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code36.apk", {key:"releases/arunomatic/v0.1.7-devicecontrol2/ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",filename:"ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-pageflag-diag1.apk", { key: "apk/arunomatic-pageflag-diag1.apk", filename: "ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk", cacheControl: "no-store" }],
   [
     "/apk/aruno-clicker.apk",
@@ -148,8 +149,24 @@ const ARUNOMATIC_PAGE = `<!doctype html>
 </body>
 </html>`;
 
-function arunomaticPageResponse() {
-  return new Response(ARUNOMATIC_PAGE, {
+const ARUNOMATIC_PAGE36 = ARUNOMATIC_PAGE
+  .replaceAll('v0.1.6-airledger2 / code 34','v0.1.7-devicecontrol2 / code 36（実機試験版）')
+  .replaceAll('最新版 code 34 をダウンロード','code 36 をダウンロード')
+  .replaceAll('href="/apk/arunomatic-v016-test.apk"','href="/apk/arunomatic-code36.apk"')
+  .replace('<p class="guide">','<p class="guide">code36は実機未確認です。まず端末03だけで試し、端末通信はOFFのままにしてください。日時のJST表示、重複グループ表示、AIR開始画面の復旧を追加しました。STATUS／COMMANDはサーバー反映後に試験します。</p><p class="guide">')
+  .replace('端末03・05・06・99へ同じAPKを上書きしてください。','既存アプリをアンインストールせず上書きしてください。')
+  .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-v016-test.apk">実機確認済みcode34を保存</a><br>code36から低い版への上書きは通常できません。戻すためにアンインストールしないでください。</p><p class="fixed">');
+
+async function arunomaticPageResponse(env) {
+  let page=ARUNOMATIC_PAGE;
+  try {
+    const response=await latestManifest(new Request('https://download.aruno-id.com/arunomatic/latest.json'),env);
+    const m=await response.json();
+    if(response.ok&&m.version_code===36&&m.version_name==='v0.1.7-devicecontrol2'&&
+       m.sha256==='21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'&&
+       m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code36.apk')page=ARUNOMATIC_PAGE36;
+  }catch{}
+  return new Response(page, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
@@ -229,8 +246,8 @@ export default {
 
     if (url.pathname === "/arunomatic" || url.pathname === "/arunomatic/") {
       return request.method === "HEAD"
-        ? new Response(null, { headers: arunomaticPageResponse().headers })
-        : arunomaticPageResponse();
+        ? new Response(null, { headers: (await arunomaticPageResponse(env)).headers })
+        : arunomaticPageResponse(env);
     }
 
     const download = DOWNLOADS.get(url.pathname);

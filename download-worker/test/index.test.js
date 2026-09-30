@@ -136,3 +136,14 @@ test("serves integrated ARUNOMATIC AIR balance trial APK", async () => {
 });
 
 
+
+test("code36 page switches only with the matching published manifest; code34 remains available",async()=>{
+ const m={package:'com.aruno.arunomatic',version_code:36,version_name:'v0.1.7-devicecontrol2',download_page:'https://download.aruno-id.com/arunomatic',apk_url:'https://download.aruno-id.com/apk/arunomatic-code36.apk',sha256:'21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'};
+ const seen=[];const fallback=environment();
+ const env={APK_BUCKET:{get:async key=>{seen.push(key);if(key==='releases/arunomatic/latest.json')return{text:async()=>JSON.stringify(m)};if(key.startsWith('releases/arunomatic/v0.1.7-devicecontrol2/'))return fallback.APK_BUCKET.get('apk/test');return fallback.APK_BUCKET.get(key);}}};
+ let r=await worker.fetch(new Request('https://download.aruno-id.com/arunomatic'),env);let html=await r.text();
+ assert.match(html,/code 36/);assert.match(html,/実機未確認/);assert.match(html,/端末通信はOFF/);assert.match(html,/href="\/apk\/arunomatic-code36.apk"/);assert.match(html,/href="\/apk\/arunomatic-v016-test.apk"/);
+ r=await worker.fetch(new Request('https://download.aruno-id.com/apk/arunomatic-code36.apk'),env);assert.equal(r.status,200);assert.match(r.headers.get('content-disposition'),/code36/);assert.equal(r.headers.get('cache-control'),'no-store');
+ assert.ok(seen.includes('releases/arunomatic/v0.1.7-devicecontrol2/ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk'));
+ m.sha256='b'.repeat(64);r=await worker.fetch(new Request('https://download.aruno-id.com/arunomatic'),env);assert.doesNotMatch(await r.text(),/code 36/);
+});
