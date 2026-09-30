@@ -1,6 +1,7 @@
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code37.apk", {key:"releases/arunomatic/v0.1.7-air-edit1/ARUNOMATIC_v0.1.7-air-edit1-code37.apk",filename:"ARUNOMATIC_v0.1.7-air-edit1-code37.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code36.apk", {key:"releases/arunomatic/v0.1.7-devicecontrol2/ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",filename:"ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-pageflag-diag1.apk", { key: "apk/arunomatic-pageflag-diag1.apk", filename: "ARUNOMATIC-0.1.6-pageflag-diag1-signed.apk", cacheControl: "no-store" }],
   [
@@ -157,6 +158,14 @@ const ARUNOMATIC_PAGE36 = ARUNOMATIC_PAGE
   .replace('端末03・05・06・99へ同じAPKを上書きしてください。','既存アプリをアンインストールせず上書きしてください。')
   .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-v016-test.apk">実機確認済みcode34を保存</a><br>code36から低い版への上書きは通常できません。戻すためにアンインストールしないでください。</p><p class="fixed">');
 
+const ARUNOMATIC_PAGE37 = ARUNOMATIC_PAGE36
+  .replaceAll('v0.1.7-devicecontrol2 / code 36','v0.1.7-air-edit1 / code 37')
+  .replaceAll('code 36 をダウンロード','code 37 をダウンロード')
+  .replaceAll('href="/apk/arunomatic-code36.apk"','href="/apk/arunomatic-code37.apk"')
+  .replace('code36は実機未確認です。まず端末03だけで試し、端末通信はOFFのままにしてください。日時のJST表示、重複グループ表示、AIR開始画面の復旧を追加しました。STATUS／COMMANDはサーバー反映後に試験します。','code37の編集操作は実機未確認です。まず端末03で試し、端末通信はOFFのままにしてください。自端末AIR一覧に1件削除・上書き・番号訂正を追加。残高取得はcode34式へ戻しました。取得できないAIRは手動で残高画面へ戻して再確認してください。STATUS／COMMANDはサーバー反映後に試験します。')
+  .replace('code36から低い版','code37から低い版')
+  .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code36.apk">code36のテスト用APKを保存</a><br>code36のテスト中は結果を記録してからcode37へ更新してください。</p><p class="fixed">');
+
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -165,6 +174,9 @@ async function arunomaticPageResponse(env) {
     if(response.ok&&m.version_code===36&&m.version_name==='v0.1.7-devicecontrol2'&&
        m.sha256==='21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code36.apk')page=ARUNOMATIC_PAGE36;
+    if(response.ok&&m.version_code===37&&m.version_name==='v0.1.7-air-edit1'&&
+       m.sha256==='adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83'&&
+       m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code37.apk')page=ARUNOMATIC_PAGE37;
   }catch{}
   return new Response(page, {
     headers: {
