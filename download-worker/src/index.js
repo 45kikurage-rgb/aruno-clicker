@@ -1,6 +1,7 @@
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code39.apk", {key:"releases/arunomatic/v0.1.8-device-test1/ARUNOMATIC_v0.1.8-device-test1-code39.apk",filename:"ARUNOMATIC_v0.1.8-device-test1-code39.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code38.apk", {key:"releases/arunomatic/v0.1.7-air-display1/ARUNOMATIC_v0.1.7-air-display1-code38.apk",filename:"ARUNOMATIC_v0.1.7-air-display1-code38.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code37.apk", {key:"releases/arunomatic/v0.1.7-air-edit1/ARUNOMATIC_v0.1.7-air-edit1-code37.apk",filename:"ARUNOMATIC_v0.1.7-air-edit1-code37.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code36.apk", {key:"releases/arunomatic/v0.1.7-devicecontrol2/ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",filename:"ARUNOMATIC_v0.1.7-devicecontrol2-code36.apk",cacheControl:"no-store"}],
@@ -176,6 +177,14 @@ const ARUNOMATIC_PAGE38 = ARUNOMATIC_PAGE37
   .replace('code36のテスト中は結果を記録してからcode37へ更新してください。','code37で一覧が空白になる場合はcode38へ上書きし、再取得前の一覧を確認してください。')
   .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code37.apk">旧code37 APKを保存</a></p><p class="fixed">');
 
+const ARUNOMATIC_PAGE39 = ARUNOMATIC_PAGE
+ .replaceAll('v0.1.6-airledger2 / code 34','v0.1.8-device-test1 / code 39（動作テスト版）')
+ .replaceAll('最新版 code 34 をダウンロード','code 39 をダウンロード')
+ .replaceAll('href="/apk/arunomatic-v016-test.apk"','href="/apk/arunomatic-code39.apk"')
+ .replace('<p class="guide">','<p class="guide">新しいCOMMAND操作は実機未確認です。まず端末03だけで試してください。既存AIR残高確認・途中中断時の前回値保持・右端縦ボタン・削除機能はcode38から維持します。</p><p class="guide">端末通信をONにし、「端末03：軽い動作テストを10分間有効にする」を押します。AccessibilityをON、画面を点灯・解除し、AIR確認・Taskを終了してから、中央の端末管理画面で1件ずつ送ってください。疎通確認、STATUS再送、テスト表示、ホーム移動、現在ページ確認を試せます。終了時は動作テストを終了してください。</p><p class="guide">')
+ .replace('端末03・05・06・99へ同じAPKを上書きしてください。','まず端末03へ上書きしてください。アンインストール・データ削除は不要です。')
+ .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code38.apk">実機確認済みcode38を保存</a><br><a href="/apk/arunomatic-v016-test.apk">基準code34を保存</a><br>低いversionCodeへの上書きは通常できません。戻すためのアンインストールはしないでください。</p><p class="fixed">');
+
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -190,6 +199,9 @@ async function arunomaticPageResponse(env) {
     if(response.ok&&m.version_code===38&&m.version_name==='v0.1.7-air-display1'&&
        m.sha256==='8fcb498e31f2e32e8cb9c79d3a29ea07e5852b43ffb5f6e02ecbdbd109e6df45'&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code38.apk')page=ARUNOMATIC_PAGE38;
+    if(response.ok&&m.version_code===39&&m.version_name==='v0.1.8-device-test1'&&
+       m.sha256==='1eccb60e74ac3adfb48c5e97106a83cfc3aab802df293cac76e1f385ab4db0b5'&&
+       m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code39.apk')page=ARUNOMATIC_PAGE39;
   }catch{}
   return new Response(page, {
     headers: {
