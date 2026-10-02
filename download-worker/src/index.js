@@ -10,7 +10,10 @@ const CODE43_KEY = "releases/arunomatic/v0.1.9-winning-share3/ARUNOMATIC_v0.1.9-
 const CODE43_SHA = "e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de";
 const CODE44_CANDIDATE_KEY = "candidates/arunomatic/code44/a50ba22/ARUNOMATIC-code44-candidate-a50ba22.apk";
 const CODE44_CANDIDATE_SHA = "bd7a31e3e8b5caedb4cf845184991e777142fda0ca0ed9525530191d9f2139cc";
+const CODE45_KEY = "releases/arunomatic/v0.2.1-control-status/ARUNOMATIC_v0.2.1-control-status-code45.apk";
+const CODE45_SHA = "dec5804646e3ff7f02a53c0afb3a94022b38622c2844d1d2592c8e3e099db119";
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code45.apk", {key:CODE45_KEY,filename:"ARUNOMATIC_v0.2.1-control-status-code45.apk",cacheControl:"no-store",expectedSha:CODE45_SHA}],
   ["/apk/arunomatic-code44-candidate.apk", {key:CODE44_CANDIDATE_KEY,filename:"ARUNOMATIC-code44-candidate-a50ba22.apk",cacheControl:"no-store",expectedSha:CODE44_CANDIDATE_SHA}],
   ["/apk/arunomatic-code43.apk", {key:CODE43_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share3-code43.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code42.apk", {key:CODE42_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share2-code42.apk",cacheControl:"no-store"}],
@@ -221,6 +224,12 @@ const ARUNOMATIC_PAGE43 = ARUNOMATIC_PAGE42
  .replaceAll('href="/apk/arunomatic-code42.apk"','href="/apk/arunomatic-code43.apk"')
  .replace('転送・新規・重複・エラー件数を表示します。リンク共有のプレビュー画像による混在エラーを修正しました。','転送結果を大きく表示します。成功・重複は青色、エラーは赤色です。共有からの送信が完了すると2.5秒後に共有画面を閉じます。「表示を残す」も選択できます。')
  .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code42.apk">旧code42 APKを保存</a></p><p class="fixed">');
+const ARUNOMATIC_PAGE45 = ARUNOMATIC_PAGE43
+ .replaceAll('v0.1.9-winning-share3 / code 43','v0.2.1-control-status / code 45')
+ .replaceAll('最新版 code 43','最新版 code 45')
+ .replaceAll('href="/apk/arunomatic-code43.apk"','href="/apk/arunomatic-code45.apk"')
+ .replace('転送結果を大きく表示します。成功・重複は青色、エラーは赤色です。共有からの送信が完了すると2.5秒後に共有画面を閉じます。「表示を残す」も選択できます。','15台CONTROL、端末STATUS、画面ON／OFFに対応。通信トグルでCONTROL受付を切り替えます。完了ボタンを更新するボタンの下へ移動しました。上書き更新後に端末通信・Accessibilityを確認してください。')
+ .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code43.apk">旧code43 APKを保存</a></p><p class="fixed">');
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -247,11 +256,12 @@ async function arunomaticPageResponse(env) {
     if(response.ok&&m.version_code===43&&m.version_name==='v0.1.9-winning-share3'&&
        m.sha256===CODE43_SHA&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code43.apk')page=ARUNOMATIC_PAGE43;
+    if(response.ok&&m.version_code===45&&m.version_name==='v0.2.1-control-status'&&m.sha256===CODE45_SHA&&m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code45.apk')page=ARUNOMATIC_PAGE45;
   }catch{}
   // Show the trial only after the verified APK has been uploaded. Do not change latest.json.
   try {
     const candidate = await env.APK_BUCKET.head(CODE41_KEY);
-    if (page !== ARUNOMATIC_PAGE41 && page !== ARUNOMATIC_PAGE42 && page !== ARUNOMATIC_PAGE43 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
+    if (page !== ARUNOMATIC_PAGE41 && page !== ARUNOMATIC_PAGE42 && page !== ARUNOMATIC_PAGE43 && page !== ARUNOMATIC_PAGE45 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
       page = page.replace('<div class="versions">', `<div class="versions">
         <div class="version-card">
           <strong>実機確認用 v0.1.9-winning-share1 / code 41</strong>
@@ -264,7 +274,7 @@ async function arunomaticPageResponse(env) {
   // Candidate availability never selects the stable version or update manifest.
   try {
     const candidate = await env.APK_BUCKET.head(CODE44_CANDIDATE_KEY);
-    if (candidate?.customMetadata?.sha256 === CODE44_CANDIDATE_SHA) {
+    if (page !== ARUNOMATIC_PAGE45 && candidate?.customMetadata?.sha256 === CODE44_CANDIDATE_SHA) {
       page = page.replace('<div class="versions">', `<div class="versions">
         <div class="version-card">
           <strong>実機試験用 code 44 候補</strong>
@@ -368,6 +378,7 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 };
+
 
 
 

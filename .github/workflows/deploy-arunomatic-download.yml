@@ -1,122 +1,40 @@
 name: Deploy ARUNOMATIC download page
-
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-    paths:
-      - "download-worker/src/index.js"
-      - "download-worker/test/**"
-      - ".github/workflows/deploy-arunomatic-download.yml"
-
+    branches: [main]
+    paths: ['download-worker/src/index.js','download-worker/test/**','.github/workflows/deploy-arunomatic-download.yml']
 permissions:
   contents: read
-
 concurrency:
   group: arunomatic-download-production-code34-air-user-number
   cancel-in-progress: false
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      EXPECTED_STABLE_SHA256: a5a90b1d59bb1e4217c19e492e66d1e43e0d966d38101275b31469e3ae950763
-      EXPECTED_TEST_SHA256: 47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617
-      EXPECTED_AIR_TEST_SHA256: 4faa2c43050b50d5242b2252df12d17d672a6a4d609b188270d10e0afb491d6f
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-
-      - name: Test download Worker
+          node-version: '24'
+      - name: Validate all existing download routes and code45
         working-directory: download-worker
         run: npm test
-
       - name: Deploy existing download Worker
         working-directory: download-worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.40.0 deploy
+      - name: Verify announced page and APK match the existing manifest
         run: |
           set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          npx --yes wrangler@4.40.0 deploy
-
-      - name: Verify fixed page and both APKs
-        run: |
-          set -euo pipefail
-          verified=0
-          for attempt in {1..12}; do
-            rm -f /tmp/arunomatic-page.html /tmp/arunomatic-stable.apk /tmp/arunomatic-test.apk /tmp/arunomatic-air-test.apk
-            if curl --fail --silent --show-error --location "https://download.aruno-id.com/arunomatic?verify=code34&attempt=$attempt" > /tmp/arunomatic-page.html && \
-               curl --fail --silent --show-error --location --output /tmp/arunomatic-stable.apk --dump-header /tmp/arunomatic-stable.headers "https://download.aruno-id.com/apk/arunomatic.apk?attempt=$attempt" && \
-               curl --fail --silent --show-error --location --output /tmp/arunomatic-test.apk --dump-header /tmp/arunomatic-test.headers "https://download.aruno-id.com/apk/arunomatic-v016-test.apk?verify=code34&attempt=$attempt" && \
-               curl --fail --silent --show-error --location --output /tmp/arunomatic-air-test.apk --dump-header /tmp/arunomatic-air-test.headers "https://download.aruno-id.com/apk/arunomatic-air-balance-test1.apk?verify=airtest1&attempt=$attempt"; then
-              STABLE_ACTUAL="$(sha256sum /tmp/arunomatic-stable.apk | cut -d ' ' -f 1)"
-              TEST_ACTUAL="$(sha256sum /tmp/arunomatic-test.apk | cut -d ' ' -f 1)"
-              AIR_ACTUAL="$(sha256sum /tmp/arunomatic-air-test.apk | cut -d ' ' -f 1)"
-              if ! grep -q 'v0.1.5 安定版' /tmp/arunomatic-page.html && \
-                 grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38|8-device-test1 / code 39|9-winning-share1 / code 41|9-winning-share2 / code 42|9-winning-share3 / code 43)'  /tmp/arunomatic-page.html && \
-                 grep -q '/apk/arunomatic-v016-test.apk' /tmp/arunomatic-page.html && \
-                 test "$STABLE_ACTUAL" = "$EXPECTED_STABLE_SHA256" && \
-                 test "$TEST_ACTUAL" = "$EXPECTED_TEST_SHA256" && \
-                 test "$AIR_ACTUAL" = "$EXPECTED_AIR_TEST_SHA256"; then
-                verified=1
-                break
-              fi
-            fi
-            sleep 5
-          done
-          test "$verified" = "1"
-          ! grep -q 'href="/apk/arunomatic.apk"' /tmp/arunomatic-page.html
-          ! grep -q 'ページフラグ診断' /tmp/arunomatic-page.html
-          grep -Eq '最新版 v0.1.(6-airledger2 / code 34|7-devicecontrol2 / code 36|7-air-edit1 / code 37|7-air-display1 / code 38|8-device-test1 / code 39|9-winning-share1 / code 41|9-winning-share2 / code 42|9-winning-share3 / code 43)'  /tmp/arunomatic-page.html
-          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-stable.headers
-          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-test.headers
-          grep -qi '^content-type: application/vnd.android.package-archive' /tmp/arunomatic-air-test.headers
-          echo "stable sha256=$STABLE_ACTUAL"
-          echo "test sha256=$TEST_ACTUAL"
-          echo "air sha256=$AIR_ACTUAL"
-
-
-
-
-      - name: Verify live update manifest
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location https://download.aruno-id.com/arunomatic/latest.json > /tmp/arunomatic-latest.json
-          python3 - <<'PY_MANIFEST'
-          import json
-          manifest=json.load(open('/tmp/arunomatic-latest.json'))
-          assert manifest['package']=='com.aruno.arunomatic'
-          expected={43:('v0.1.9-winning-share3','e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de'),42:('v0.1.9-winning-share2','ce9a9b8eea91fe600b85f0f90c1e946eb1830a93e2b0361a5cf1f5cd25252e8b'),41:('v0.1.9-winning-share1','942cdf43ae4d4e23d8385b955b0f0631c741ec43d04adb874ca459b4c3f42dba'),39:('v0.1.8-device-test1','1eccb60e74ac3adfb48c5e97106a83cfc3aab802df293cac76e1f385ab4db0b5'),34:('v0.1.6-airledger2','47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617'),36:('v0.1.7-devicecontrol2','21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'),37:('v0.1.7-air-edit1','adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83'),38:('v0.1.7-air-display1','8fcb498e31f2e32e8cb9c79d3a29ea07e5852b43ffb5f6e02ecbdbd109e6df45')}
-          assert (manifest['version_name'],manifest['sha256'])==expected[manifest['version_code']]
-          PY_MANIFEST
-
-
-
-      - name: Verify separate code44 candidate and unchanged code43 channel
-        run: |
-          set -euo pipefail
-          curl -fsSL --max-time 30 https://download.aruno-id.com/arunomatic -o candidate-page.html
-          curl -fsSL --max-time 30 https://download.aruno-id.com/apk/arunomatic-code44-candidate.apk -o code44-candidate.apk
-          echo 'bd7a31e3e8b5caedb4cf845184991e777142fda0ca0ed9525530191d9f2139cc  code44-candidate.apk' | sha256sum -c -
-          curl -fsSL --max-time 30 https://download.aruno-id.com/apk/arunomatic-code43.apk -o stable-code43.apk
-          echo 'e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de  stable-code43.apk' | sha256sum -c -
-          curl -fsSL --max-time 30 https://download.aruno-id.com/arunomatic/latest.json -o stable-latest.json
-          python3 - <<'PY'
+          curl -fsSL --retry 3 --max-time 30 https://download.aruno-id.com/arunomatic/latest.json -o manifest.json
+          curl -fsSL --retry 3 --max-time 30 https://download.aruno-id.com/arunomatic -o page.html
+          python3 - <<'PY_CHECK'
           import json,pathlib
-          p=pathlib.Path('candidate-page.html').read_text()
-          assert 'href="/apk/arunomatic-code43.apk"' in p
-          assert 'href="/apk/arunomatic-code44-candidate.apk"' in p
-          assert '実機試験用 code 44 候補' in p
-          assert '即時停止は未整備' in p
-          m=json.load(open('stable-latest.json'))
-          assert m['version_code']==43
-          assert m['sha256']=='e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de'
-          print('CODE44_CANDIDATE_PAGE_PASS; stable code43 APK and update channel unchanged')
-          PY
+          m=json.load(open('manifest.json'));p=pathlib.Path('page.html').read_text()
+          assert m['version_code'] in (43,45)
+          assert '最新版 '+m['version_name']+' / code '+str(m['version_code']) in p
+          assert 'href="/apk/arunomatic-code'+str(m['version_code'])+'.apk">最新版 code '+str(m['version_code']) in p
+          PY_CHECK

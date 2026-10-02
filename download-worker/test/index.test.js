@@ -276,3 +276,12 @@ test("candidate download verifies metadata, supports GET and HEAD, and never red
  assert.equal((await worker.fetch(new Request("https://download.aruno-id.com/apk/arunomatic-code43.apk"),env)).status,404);
  checksum="wrong";assert.equal((await worker.fetch(new Request(url),env)).status,503);
 });
+
+
+test("announced code45 page, manifest and signed APK metadata agree",async()=>{
+ const manifest={package:"com.aruno.arunomatic",version_code:45,version_name:"v0.2.1-control-status",download_page:"https://download.aruno-id.com/arunomatic",apk_url:"https://download.aruno-id.com/apk/arunomatic-code45.apk",sha256:"dec5804646e3ff7f02a53c0afb3a94022b38622c2844d1d2592c8e3e099db119"};
+ const env={APK_BUCKET:{get:async key=>key==="releases/arunomatic/latest.json"?{text:async()=>JSON.stringify(manifest)}:key.endsWith('code45.apk')?{body:new Uint8Array([1]),size:1,httpEtag:'"ok"',customMetadata:{sha256:manifest.sha256},writeHttpMetadata(){}}:null,head:async()=>null}};
+ const html=await (await worker.fetch(new Request(manifest.download_page),env)).text();
+ assert.match(html,/最新版 v0.2.1-control-status \/ code 45/);assert.match(html,/href="\/apk\/arunomatic-code45.apk">最新版 code 45/);assert.ok(!html.includes('実機試験用 code 44 候補'));
+ const apk=await worker.fetch(new Request(manifest.apk_url),env);assert.equal(apk.status,200);assert.equal(apk.headers.get('X-Checksum-SHA256'),manifest.sha256);
+});
