@@ -189,6 +189,15 @@ const ARUNOMATIC_PAGE39 = ARUNOMATIC_PAGE
  .replace('端末03・05・06・99へ同じAPKを上書きしてください。','まず端末03へ上書きしてください。アンインストール・データ削除は不要です。')
  .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code38.apk">実機確認済みcode38を保存</a><br><a href="/apk/arunomatic-v016-test.apk">基準code34を保存</a><br>低いversionCodeへの上書きは通常できません。戻すためのアンインストールはしないでください。</p><p class="fixed">');
 
+const ARUNOMATIC_PAGE41 = ARUNOMATIC_PAGE
+ .replaceAll('v0.1.6-airledger2 / code 34','v0.1.9-winning-share1 / code 41')
+ .replaceAll('最新版 code 34 をダウンロード','最新版 code 41 をダウンロード')
+ .replaceAll('href="/apk/arunomatic-v016-test.apk"','href="/apk/arunomatic-code41.apk"')
+ .replaceAll('端末03・05・06・99 共通','サブ端末用')
+ .replace(/<small>AIR01[\s\S]*?<\/small>/, '<small>当選URL・コードをAndroid共有から転送できます。端末03で上書き更新・Nova転送・既存機能を確認済みです。当選URL管理での受信・保存も利用者確認済みです。</small>')
+ .replace(/<p class="guide">[\s\S]*?<\/p>/, '<p class="guide">既存ARUNOMATICへ上書きしてください。アンインストールは不要です。当選URL送信には各端末で送信専用API・端末トークンの設定が必要です。更新後に端末番号とNova転送を確認してください。</p>')
+ .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code39.apk">旧code39 APKを保存</a><br><a href="/apk/arunomatic-code38.apk">旧code38 APKを保存</a><br><a href="/apk/arunomatic-v016-test.apk">基準code34 APKを保存</a><br>低いversionCodeへの上書きは通常できません。</p><p class="fixed">');
+
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -206,11 +215,14 @@ async function arunomaticPageResponse(env) {
     if(response.ok&&m.version_code===39&&m.version_name==='v0.1.8-device-test1'&&
        m.sha256==='1eccb60e74ac3adfb48c5e97106a83cfc3aab802df293cac76e1f385ab4db0b5'&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code39.apk')page=ARUNOMATIC_PAGE39;
+    if(response.ok&&m.version_code===41&&m.version_name==='v0.1.9-winning-share1'&&
+       m.sha256===CODE41_SHA&&
+       m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code41.apk')page=ARUNOMATIC_PAGE41;
   }catch{}
   // Show the trial only after the verified APK has been uploaded. Do not change latest.json.
   try {
     const candidate = await env.APK_BUCKET.head(CODE41_KEY);
-    if (candidate?.customMetadata?.sha256 === CODE41_SHA) {
+    if (page !== ARUNOMATIC_PAGE41 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
       page = page.replace('<div class="versions">', `<div class="versions">
         <div class="version-card">
           <strong>実機確認用 v0.1.9-winning-share1 / code 41</strong>
@@ -310,5 +322,6 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 };
+
 
 
