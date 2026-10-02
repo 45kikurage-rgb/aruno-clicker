@@ -98,3 +98,25 @@ jobs:
           PY_MANIFEST
 
 
+
+      - name: Verify separate code44 candidate and unchanged code43 channel
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 30 https://download.aruno-id.com/arunomatic -o candidate-page.html
+          curl -fsSL --max-time 30 https://download.aruno-id.com/apk/arunomatic-code44-candidate.apk -o code44-candidate.apk
+          echo 'bd7a31e3e8b5caedb4cf845184991e777142fda0ca0ed9525530191d9f2139cc  code44-candidate.apk' | sha256sum -c -
+          curl -fsSL --max-time 30 https://download.aruno-id.com/apk/arunomatic-code43.apk -o stable-code43.apk
+          echo 'e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de  stable-code43.apk' | sha256sum -c -
+          curl -fsSL --max-time 30 https://download.aruno-id.com/arunomatic/latest.json -o stable-latest.json
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('candidate-page.html').read_text()
+          assert 'href="/apk/arunomatic-code43.apk"' in p
+          assert 'href="/apk/arunomatic-code44-candidate.apk"' in p
+          assert '実機試験用 code 44 候補' in p
+          assert '即時停止は未整備' in p
+          m=json.load(open('stable-latest.json'))
+          assert m['version_code']==43
+          assert m['sha256']=='e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de'
+          print('CODE44_CANDIDATE_PAGE_PASS; stable code43 APK and update channel unchanged')
+          PY

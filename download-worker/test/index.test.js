@@ -244,3 +244,35 @@ test("announced code43 uses latest download card without trial or stale guidance
   manifest.sha256="b".repeat(64);
   assert.doesNotMatch(await page(),/最新版.*code 43/);
 });
+
+const candidateKey="candidates/arunomatic/code44/a50ba22/ARUNOMATIC-code44-candidate-a50ba22.apk";
+const candidateSha="bd7a31e3e8b5caedb4cf845184991e777142fda0ca0ed9525530191d9f2139cc";
+test("code44 candidate is gated independently of stable code43 and latest", async()=>{
+ const stable={package:"com.aruno.arunomatic",version_code:43,version_name:"v0.1.9-winning-share3",download_page:"https://download.aruno-id.com/arunomatic",sha256:"e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de",apk_url:"https://download.aruno-id.com/apk/arunomatic-code43.apk"};
+ let checksum=candidateSha;
+ const env={APK_BUCKET:{get:async key=>key==="releases/arunomatic/latest.json"?{text:async()=>JSON.stringify(stable)}:null,head:async key=>key===candidateKey?{customMetadata:{sha256:checksum}}:null}};
+ let response=await worker.fetch(new Request("https://download.aruno-id.com/arunomatic"),env);
+ let html=await response.text();
+ assert.match(html,/href="\/apk\/arunomatic-code43.apk"/);
+ assert.match(html,/href="\/apk\/arunomatic-code44-candidate.apk"/);
+ assert.match(html,/15台実機試験未実施/);assert.match(html,/即時停止は未整備/);
+ const manifest=await worker.fetch(new Request("https://download.aruno-id.com/arunomatic/latest.json"),env);
+ assert.deepEqual(await manifest.json(),stable);
+ checksum="wrong";
+ html=await (await worker.fetch(new Request("https://download.aruno-id.com/arunomatic"),env)).text();
+ assert.doesNotMatch(html,/href="\/apk\/arunomatic-code44-candidate.apk"/);
+ assert.match(html,/href="\/apk\/arunomatic-code43.apk"/);
+});
+test("candidate download verifies metadata, supports GET and HEAD, and never redirects stable",async()=>{
+ const bytes=new Uint8Array([44,1,2]);let checksum=candidateSha;
+ const env={APK_BUCKET:{get:async key=>key===candidateKey?{body:bytes,size:3,httpEtag:'"candidate"',customMetadata:{sha256:checksum},writeHttpMetadata(){}}:null}};
+ const url="https://download.aruno-id.com/apk/arunomatic-code44-candidate.apk";
+ const response=await worker.fetch(new Request(url),env);
+ assert.equal(response.status,200);assert.equal(response.headers.get("cache-control"),"no-store");
+ assert.equal(response.headers.get("x-checksum-sha256"),candidateSha);
+ assert.match(response.headers.get("content-disposition"),/ARUNOMATIC-code44-candidate-a50ba22.apk/);
+ assert.deepEqual(new Uint8Array(await response.arrayBuffer()),bytes);
+ const head=await worker.fetch(new Request(url,{method:"HEAD"}),env);assert.equal(head.status,200);assert.equal((await head.arrayBuffer()).byteLength,0);
+ assert.equal((await worker.fetch(new Request("https://download.aruno-id.com/apk/arunomatic-code43.apk"),env)).status,404);
+ checksum="wrong";assert.equal((await worker.fetch(new Request(url),env)).status,503);
+});

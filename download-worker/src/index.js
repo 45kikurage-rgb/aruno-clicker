@@ -8,7 +8,10 @@ const CODE42_SHA = "ce9a9b8eea91fe600b85f0f90c1e946eb1830a93e2b0361a5cf1f5cd2525
 
 const CODE43_KEY = "releases/arunomatic/v0.1.9-winning-share3/ARUNOMATIC_v0.1.9-winning-share3-code43.apk";
 const CODE43_SHA = "e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de";
+const CODE44_CANDIDATE_KEY = "candidates/arunomatic/code44/a50ba22/ARUNOMATIC-code44-candidate-a50ba22.apk";
+const CODE44_CANDIDATE_SHA = "bd7a31e3e8b5caedb4cf845184991e777142fda0ca0ed9525530191d9f2139cc";
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code44-candidate.apk", {key:CODE44_CANDIDATE_KEY,filename:"ARUNOMATIC-code44-candidate-a50ba22.apk",cacheControl:"no-store",expectedSha:CODE44_CANDIDATE_SHA}],
   ["/apk/arunomatic-code43.apk", {key:CODE43_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share3-code43.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code42.apk", {key:CODE42_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share2-code42.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code41.apk", {key:CODE41_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share1-code41.apk",cacheControl:"no-store"}],
@@ -258,6 +261,20 @@ async function arunomaticPageResponse(env) {
         </div>`);
     }
   } catch {}
+  // Candidate availability never selects the stable version or update manifest.
+  try {
+    const candidate = await env.APK_BUCKET.head(CODE44_CANDIDATE_KEY);
+    if (candidate?.customMetadata?.sha256 === CODE44_CANDIDATE_SHA) {
+      page = page.replace('<div class="versions">', `<div class="versions">
+        <div class="version-card">
+          <strong>実機試験用 code 44 候補</strong>
+          <small>v0.2.0-control-test1 ／ 端末01〜15の一括CONTROL試験用。1Task・対象グループ・対象ページを指定し、端末ごとに独立実行します。</small>
+          <small style="color:#b91c1c">本番運用未承認・15台実機試験未実施。フローティング即時停止は未整備です。停止手段の確認前に15台実行を開始しないでください。</small>
+          <a class="download test" href="/apk/arunomatic-code44-candidate.apk">code 44 候補をダウンロード</a>
+          <small>既存署名の通常版へ上書き更新できます。公開安定版・自動更新通知はcode 43を維持しています。</small>
+        </div>`);
+    }
+  } catch {}
   return new Response(page, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
@@ -287,6 +304,9 @@ async function apkResponse(request, env, download) {
     return new Response("APK is not available.", { status: 404 });
   }
 
+  if (download.expectedSha && object.customMetadata?.sha256 !== download.expectedSha) {
+    return new Response("Candidate APK verification failed.", {status:503,headers:{"Cache-Control":"no-store"}});
+  }
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Content-Type", APK_CONTENT_TYPE);
