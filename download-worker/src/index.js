@@ -3,7 +3,11 @@ const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 const CODE41_KEY = "releases/arunomatic/v0.1.9-winning-share1/ARUNOMATIC_v0.1.9-winning-share1-code41.apk";
 const CODE41_SHA = "942cdf43ae4d4e23d8385b955b0f0631c741ec43d04adb874ca459b4c3f42dba";
 
+const CODE42_KEY = "releases/arunomatic/v0.1.9-winning-share2/ARUNOMATIC_v0.1.9-winning-share2-code42.apk";
+const CODE42_SHA = "ce9a9b8eea91fe600b85f0f90c1e946eb1830a93e2b0361a5cf1f5cd25252e8b";
+
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code42.apk", {key:CODE42_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share2-code42.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code41.apk", {key:CODE41_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share1-code41.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code39.apk", {key:"releases/arunomatic/v0.1.8-device-test1/ARUNOMATIC_v0.1.8-device-test1-code39.apk",filename:"ARUNOMATIC_v0.1.8-device-test1-code39.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code38.apk", {key:"releases/arunomatic/v0.1.7-air-display1/ARUNOMATIC_v0.1.7-air-display1-code38.apk",filename:"ARUNOMATIC_v0.1.7-air-display1-code38.apk",cacheControl:"no-store"}],
@@ -198,6 +202,13 @@ const ARUNOMATIC_PAGE41 = ARUNOMATIC_PAGE
  .replace(/<p class="guide">[\s\S]*?<\/p>/, '<p class="guide">既存ARUNOMATICへ上書きしてください。アンインストールは不要です。当選URL送信には各端末で送信専用API・端末トークンの設定が必要です。更新後に端末番号とNova転送を確認してください。</p>')
  .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code39.apk">旧code39 APKを保存</a><br><a href="/apk/arunomatic-code38.apk">旧code38 APKを保存</a><br><a href="/apk/arunomatic-v016-test.apk">基準code34 APKを保存</a><br>低いversionCodeへの上書きは通常できません。</p><p class="fixed">');
 
+const ARUNOMATIC_PAGE42 = ARUNOMATIC_PAGE41
+ .replaceAll('v0.1.9-winning-share1 / code 41','v0.1.9-winning-share2 / code 42')
+ .replaceAll('最新版 code 41','最新版 code 42')
+ .replaceAll('href="/apk/arunomatic-code41.apk"','href="/apk/arunomatic-code42.apk"')
+ .replace('当選URL・コードをAndroid共有から転送できます。端末03で上書き更新・Nova転送・既存機能を確認済みです。当選URL管理での受信・保存も利用者確認済みです。','転送・新規・重複・エラー件数を表示します。リンク共有のプレビュー画像による混在エラーを修正しました。Nova転送・既存機能の自動回帰テストと既存署名との一致を確認済みです。')
+ .replace('<p class="fixed">','<p class="guide"><a href="/apk/arunomatic-code41.apk">旧code41 APKを保存</a></p><p class="fixed">');
+
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -218,11 +229,14 @@ async function arunomaticPageResponse(env) {
     if(response.ok&&m.version_code===41&&m.version_name==='v0.1.9-winning-share1'&&
        m.sha256===CODE41_SHA&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code41.apk')page=ARUNOMATIC_PAGE41;
+    if(response.ok&&m.version_code===42&&m.version_name==='v0.1.9-winning-share2'&&
+       m.sha256===CODE42_SHA&&
+       m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code42.apk')page=ARUNOMATIC_PAGE42;
   }catch{}
   // Show the trial only after the verified APK has been uploaded. Do not change latest.json.
   try {
     const candidate = await env.APK_BUCKET.head(CODE41_KEY);
-    if (page !== ARUNOMATIC_PAGE41 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
+    if (page !== ARUNOMATIC_PAGE41 && page !== ARUNOMATIC_PAGE42 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
       page = page.replace('<div class="versions">', `<div class="versions">
         <div class="version-card">
           <strong>実機確認用 v0.1.9-winning-share1 / code 41</strong>
