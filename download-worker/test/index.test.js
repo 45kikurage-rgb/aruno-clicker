@@ -228,3 +228,19 @@ test("announced code42 uses latest download card without trial or stale guidance
   manifest.sha256="b".repeat(64);
   assert.doesNotMatch(await page(),/最新版.*code 42/);
 });
+
+test("announced code43 uses latest download card without trial or stale guidance", async () => {
+  const manifest={package:"com.aruno.arunomatic",version_code:43,version_name:"v0.1.9-winning-share3",download_page:"https://download.aruno-id.com/arunomatic",apk_url:"https://download.aruno-id.com/apk/arunomatic-code43.apk",sha256:"e51c37e68cddb2d607e79982e0ced7c7e1063f653fe3dd3476640bb46bc2b0de"};
+  const env={APK_BUCKET:{get:async()=>({text:async()=>JSON.stringify(manifest)}),head:async()=>({customMetadata:{sha256:manifest.sha256}})}};
+  const page=async()=>await (await worker.fetch(new Request(manifest.download_page),env)).text();
+  const html=await page();
+  assert.match(html,/最新版 v0.1.9-winning-share3 \/ code 43/);
+  assert.match(html,/href="\/apk\/arunomatic-code43.apk">最新版 code 43/);
+  assert.doesNotMatch(html,/実機確認用|更新通知への切り替えは実機確認後|まず端末03|端末通信はOFF/);
+  assert.match(html,/href="\/apk\/arunomatic-v016-test.apk"/);
+  const latest=await worker.fetch(new Request(manifest.download_page+"/latest.json"),env);
+  assert.deepEqual(await latest.json(),manifest);
+  assert.equal(latest.headers.get("cache-control"),"no-store");
+  manifest.sha256="b".repeat(64);
+  assert.doesNotMatch(await page(),/最新版.*code 43/);
+});
