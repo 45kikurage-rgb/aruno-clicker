@@ -180,3 +180,20 @@ test("code39 page switches only with the matching published manifest; code34 rem
  assert.ok(seen.includes('releases/arunomatic/v0.1.8-device-test1/ARUNOMATIC_v0.1.8-device-test1-code39.apk'));
  m.sha256='b'.repeat(64);r=await worker.fetch(new Request('https://download.aruno-id.com/arunomatic'),env);assert.doesNotMatch(await r.text(),/code 39/);
 });
+
+
+test("code41 trial appears only for verified candidate without changing latest", async () => {
+  const manifest = {package:"com.aruno.arunomatic",version_code:39,version_name:"v0.1.8-device-test1",download_page:"https://download.aruno-id.com/arunomatic",apk_url:"https://download.aruno-id.com/apk/arunomatic-code39.apk",sha256:"1eccb60e74ac3adfb48c5e97106a83cfc3aab802df293cac76e1f385ab4db0b5"};
+  const key="releases/arunomatic/v0.1.9-winning-share1/ARUNOMATIC_v0.1.9-winning-share1-code41.apk";
+  let sha="942cdf43ae4d4e23d8385b955b0f0631c741ec43d04adb874ca459b4c3f42dba";
+  const fallback=environment();
+  const env={APK_BUCKET:{head:async k=>k===key?{customMetadata:{sha256:sha}}:null,get:async k=>k==="releases/arunomatic/latest.json"?{text:async()=>JSON.stringify(manifest)}:k===key?fallback.APK_BUCKET.get("apk/test"):null}};
+  const page=async()=>await (await worker.fetch(new Request("https://download.aruno-id.com/arunomatic"),env)).text();
+  assert.match(await page(),/href="\/apk\/arunomatic-code41.apk"/);
+  assert.match(await page(),/最新版 v0.1.8-device-test1 \/ code 39/);
+  const latest=await worker.fetch(new Request("https://download.aruno-id.com/arunomatic/latest.json"),env);
+  assert.deepEqual(await latest.json(),manifest);
+  const apk=await worker.fetch(new Request("https://download.aruno-id.com/apk/arunomatic-code41.apk"),env);
+  assert.equal(apk.status,200);assert.match(apk.headers.get("content-disposition"),/code41.apk/);
+  sha="wrong";assert.doesNotMatch(await page(),/href="\/apk\/arunomatic-code41.apk"/);
+});

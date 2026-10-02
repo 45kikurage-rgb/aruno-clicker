@@ -93,6 +93,7 @@ jobs:
           import json
           manifest=json.load(open('/tmp/arunomatic-latest.json'))
           assert manifest['package']=='com.aruno.arunomatic'
-          expected={34:('v0.1.6-airledger2','47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617'),36:('v0.1.7-devicecontrol2','21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'),37:('v0.1.7-air-edit1','adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83'),38:('v0.1.7-air-display1','8fcb498e31f2e32e8cb9c79d3a29ea07e5852b43ffb5f6e02ecbdbd109e6df45')}
+          expected={39:('v0.1.8-device-test1','1eccb60e74ac3adfb48c5e97106a83cfc3aab802df293cac76e1f385ab4db0b5'),34:('v0.1.6-airledger2','47eb0dc35891352a18036eac559800e0fa5ad40d34a4bc15e17cbf1b228d1617'),36:('v0.1.7-devicecontrol2','21eda0634986500afc3744f50487628a1858714fc25a6ee149bd3c9e24e3f479'),37:('v0.1.7-air-edit1','adc6e54fa64197ea015f544f002a2d9e4e2e51e25c4dbc36a88aa7a43b3bdb83'),38:('v0.1.7-air-display1','8fcb498e31f2e32e8cb9c79d3a29ea07e5852b43ffb5f6e02ecbdbd109e6df45')}
           assert (manifest['version_name'],manifest['sha256'])==expected[manifest['version_code']]
           PY_MANIFEST
+

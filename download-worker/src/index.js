@@ -1,6 +1,10 @@
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
 
+const CODE41_KEY = "releases/arunomatic/v0.1.9-winning-share1/ARUNOMATIC_v0.1.9-winning-share1-code41.apk";
+const CODE41_SHA = "942cdf43ae4d4e23d8385b955b0f0631c741ec43d04adb874ca459b4c3f42dba";
+
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code41.apk", {key:CODE41_KEY,filename:"ARUNOMATIC_v0.1.9-winning-share1-code41.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code39.apk", {key:"releases/arunomatic/v0.1.8-device-test1/ARUNOMATIC_v0.1.8-device-test1-code39.apk",filename:"ARUNOMATIC_v0.1.8-device-test1-code39.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code38.apk", {key:"releases/arunomatic/v0.1.7-air-display1/ARUNOMATIC_v0.1.7-air-display1-code38.apk",filename:"ARUNOMATIC_v0.1.7-air-display1-code38.apk",cacheControl:"no-store"}],
   ["/apk/arunomatic-code37.apk", {key:"releases/arunomatic/v0.1.7-air-edit1/ARUNOMATIC_v0.1.7-air-edit1-code37.apk",filename:"ARUNOMATIC_v0.1.7-air-edit1-code37.apk",cacheControl:"no-store"}],
@@ -203,6 +207,19 @@ async function arunomaticPageResponse(env) {
        m.sha256==='1eccb60e74ac3adfb48c5e97106a83cfc3aab802df293cac76e1f385ab4db0b5'&&
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code39.apk')page=ARUNOMATIC_PAGE39;
   }catch{}
+  // Show the trial only after the verified APK has been uploaded. Do not change latest.json.
+  try {
+    const candidate = await env.APK_BUCKET.head(CODE41_KEY);
+    if (candidate?.customMetadata?.sha256 === CODE41_SHA) {
+      page = page.replace('<div class="versions">', `<div class="versions">
+        <div class="version-card">
+          <strong>実機確認用 v0.1.9-winning-share1 / code 41</strong>
+          <small>当選URL・コード共有の送信口を追加しました。まず1台でNova転送・AIR Wallet・端末設定などの既存機能を確認してください。Vaultへの送信は送信専用API・端末トークンの準備後に確認します。</small>
+          <a class="download test" href="/apk/arunomatic-code41.apk">code 41 をダウンロード</a>
+          <small>通常版ARUNOMATICへ上書きしてください。アンインストールは不要です。更新通知への切り替えは実機確認後です。</small>
+        </div>`);
+    }
+  } catch {}
   return new Response(page, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
@@ -293,4 +310,5 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 };
+
 
