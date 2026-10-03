@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Validate all existing download routes and code46
+      - name: Validate all existing download routes and code47
         working-directory: download-worker
         run: npm test
       - name: Deploy existing download Worker
@@ -34,7 +34,7 @@ jobs:
           python3 - <<'PY_CHECK'
           import json,pathlib
           m=json.load(open('manifest.json'));p=pathlib.Path('page.html').read_text()
-          assert m['version_code'] in (43,45,46)
+          assert m['version_code'] in (43,45,46,47)
           assert '最新版 '+m['version_name']+' / code '+str(m['version_code']) in p
           assert 'href="/apk/arunomatic-code'+str(m['version_code'])+'.apk">最新版 code '+str(m['version_code']) in p
           PY_CHECK

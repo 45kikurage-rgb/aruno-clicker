@@ -14,7 +14,10 @@ const CODE45_KEY = "releases/arunomatic/v0.2.1-control-status/ARUNOMATIC_v0.2.1-
 const CODE45_SHA = "dec5804646e3ff7f02a53c0afb3a94022b38622c2844d1d2592c8e3e099db119";
 const CODE46_KEY = "releases/arunomatic/v0.2.2-control-layout/ARUNOMATIC_v0.2.2-control-layout-code46.apk";
 const CODE46_SHA = "e776f7d8275a493961c8ef90125cebd07ff046570a8d81d47b07271e5713d6ca";
+const CODE47_KEY = "releases/arunomatic/v0.2.3-dock-position/ARUNOMATIC_v0.2.3-dock-position-code47.apk";
+const CODE47_SHA = "e76892b29420e5f4b15b3f2fd3129112488c4cee4eb1f25a847a500b9be7dc52";
 const DOWNLOADS = new Map([
+  ["/apk/arunomatic-code47.apk", {key:CODE47_KEY,filename:"ARUNOMATIC_v0.2.3-dock-position-code47.apk",cacheControl:"no-store",expectedSha:CODE47_SHA}],
   ["/apk/arunomatic-code46.apk", {key:CODE46_KEY,filename:"ARUNOMATIC_v0.2.2-control-layout-code46.apk",cacheControl:"no-store",expectedSha:CODE46_SHA}],
   ["/apk/arunomatic-code45.apk", {key:CODE45_KEY,filename:"ARUNOMATIC_v0.2.1-control-status-code45.apk",cacheControl:"no-store",expectedSha:CODE45_SHA}],
   ["/apk/arunomatic-code44-candidate.apk", {key:CODE44_CANDIDATE_KEY,filename:"ARUNOMATIC-code44-candidate-a50ba22.apk",cacheControl:"no-store",expectedSha:CODE44_CANDIDATE_SHA}],
@@ -238,6 +241,11 @@ const ARUNOMATIC_PAGE46 = ARUNOMATIC_PAGE45
  .replaceAll('最新版 code 45','最新版 code 46')
  .replaceAll('href="/apk/arunomatic-code45.apk"','href="/apk/arunomatic-code46.apk"')
  .replace('15台CONTROL、端末STATUS、画面ON／OFFに対応。通信トグルでCONTROL受付を切り替えます。完了ボタンを更新するボタンの下へ移動しました。上書き更新後に端末通信・Accessibilityを確認してください。','端末STATUSを3列表示に整理。確認済み移動履歴、画面・ロック操作、選択端末のCONTROLに対応。アプリのタイトルと完了操作を固定しました。PIN・指紋ロックは端末で解除してください。');
+const ARUNOMATIC_PAGE47 = ARUNOMATIC_PAGE46
+ .replaceAll('v0.2.2-control-layout / code 46','v0.2.3-dock-position / code 47')
+ .replaceAll('最新版 code 46','最新版 code 47')
+ .replaceAll('href="/apk/arunomatic-code46.apk"','href="/apk/arunomatic-code47.apk"')
+ .replace('端末STATUSを3列表示に整理。確認済み移動履歴、画面・ロック操作、選択端末のCONTROLに対応。アプリのタイトルと完了操作を固定しました。PIN・指紋ロックは端末で解除してください。','CONTROLのTaskをドック右側3枠の位置で起動します。右からRight・Center・Leftの順です。Task名の入力と設定ボタンは不要になりました。位置を確定できない場合は起動せず停止します。');
 async function arunomaticPageResponse(env) {
   let page=ARUNOMATIC_PAGE;
   try {
@@ -266,11 +274,12 @@ async function arunomaticPageResponse(env) {
        m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code43.apk')page=ARUNOMATIC_PAGE43;
     if(response.ok&&m.version_code===45&&m.version_name==='v0.2.1-control-status'&&m.sha256===CODE45_SHA&&m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code45.apk')page=ARUNOMATIC_PAGE45;
     if(response.ok&&m.version_code===46&&m.version_name==='v0.2.2-control-layout'&&m.sha256===CODE46_SHA&&m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code46.apk')page=ARUNOMATIC_PAGE46;
+    if(response.ok&&m.version_code===47&&m.version_name==='v0.2.3-dock-position'&&m.sha256===CODE47_SHA&&m.apk_url==='https://download.aruno-id.com/apk/arunomatic-code47.apk')page=ARUNOMATIC_PAGE47;
   }catch{}
   // Show the trial only after the verified APK has been uploaded. Do not change latest.json.
   try {
     const candidate = await env.APK_BUCKET.head(CODE41_KEY);
-    if (page !== ARUNOMATIC_PAGE41 && page !== ARUNOMATIC_PAGE42 && page !== ARUNOMATIC_PAGE43 && page !== ARUNOMATIC_PAGE45 && page !== ARUNOMATIC_PAGE46 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
+    if (page !== ARUNOMATIC_PAGE41 && page !== ARUNOMATIC_PAGE42 && page !== ARUNOMATIC_PAGE43 && page !== ARUNOMATIC_PAGE45 && page !== ARUNOMATIC_PAGE46 && page !== ARUNOMATIC_PAGE47 && candidate?.customMetadata?.sha256 === CODE41_SHA) {
       page = page.replace('<div class="versions">', `<div class="versions">
         <div class="version-card">
           <strong>実機確認用 v0.1.9-winning-share1 / code 41</strong>
@@ -283,7 +292,7 @@ async function arunomaticPageResponse(env) {
   // Candidate availability never selects the stable version or update manifest.
   try {
     const candidate = await env.APK_BUCKET.head(CODE44_CANDIDATE_KEY);
-    if (page !== ARUNOMATIC_PAGE45 && page !== ARUNOMATIC_PAGE46 && candidate?.customMetadata?.sha256 === CODE44_CANDIDATE_SHA) {
+    if (page !== ARUNOMATIC_PAGE45 && page !== ARUNOMATIC_PAGE46 && page !== ARUNOMATIC_PAGE47 && candidate?.customMetadata?.sha256 === CODE44_CANDIDATE_SHA) {
       page = page.replace('<div class="versions">', `<div class="versions">
         <div class="version-card">
           <strong>実機試験用 code 44 候補</strong>
