@@ -285,3 +285,11 @@ test("announced code45 page, manifest and signed APK metadata agree",async()=>{
  assert.match(html,/最新版 v0.2.1-control-status \/ code 45/);assert.match(html,/href="\/apk\/arunomatic-code45.apk">最新版 code 45/);assert.ok(!html.includes('実機試験用 code 44 候補'));
  const apk=await worker.fetch(new Request(manifest.apk_url),env);assert.equal(apk.status,200);assert.equal(apk.headers.get('X-Checksum-SHA256'),manifest.sha256);
 });
+
+test("announced code46 page, manifest and signed APK metadata agree",async()=>{
+ const manifest={package:"com.aruno.arunomatic",version_code:46,version_name:"v0.2.2-control-layout",download_page:"https://download.aruno-id.com/arunomatic",apk_url:"https://download.aruno-id.com/apk/arunomatic-code46.apk",sha256:"e776f7d8275a493961c8ef90125cebd07ff046570a8d81d47b07271e5713d6ca"};
+ const env={APK_BUCKET:{get:async key=>key==="releases/arunomatic/latest.json"?{text:async()=>JSON.stringify(manifest)}:key.endsWith('code46.apk')?{body:new Uint8Array([1]),size:1,httpEtag:'"ok"',customMetadata:{sha256:manifest.sha256},writeHttpMetadata(){}}:null,head:async()=>null}};
+ const html=await (await worker.fetch(new Request(manifest.download_page),env)).text();
+ assert.match(html,/最新版 v0.2.2-control-layout \/ code 46/);assert.match(html,/href="\/apk\/arunomatic-code46.apk">最新版 code 46/);assert.ok(!html.includes('実機試験用 code 44 候補'));
+ const apk=await worker.fetch(new Request(manifest.apk_url),env);assert.equal(apk.status,200);assert.equal(apk.headers.get('X-Checksum-SHA256'),manifest.sha256);
+});
