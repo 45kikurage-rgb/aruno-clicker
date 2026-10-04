@@ -301,3 +301,18 @@ test("announced code47 page, manifest and signed APK metadata agree",async()=>{
  assert.match(html,/最新版 v0.2.3-dock-position \/ code 47/);assert.match(html,/href="\/apk\/arunomatic-code47.apk">最新版 code 47/);assert.ok(!html.includes('実機試験用 code 44 候補'));
  const apk=await worker.fetch(new Request(manifest.apk_url),env);assert.equal(apk.status,200);assert.equal(apk.headers.get('X-Checksum-SHA256'),manifest.sha256);
 });
+
+
+test('test channel and fixed APK are isolated from stable manifest and page',async()=>{
+ const commit='c'.repeat(40),sha='a'.repeat(64),key='candidates/arunomatic/code48/'+commit+'/ARUNOMATIC-code48-test.apk';
+ const stable={package:'com.aruno.arunomatic',version_code:47,version_name:'v0.2.3-dock-position',download_page:'https://download.aruno-id.com/arunomatic',apk_url:'https://download.aruno-id.com/apk/arunomatic-code47.apk',sha256:'e76892b29420e5f4b15b3f2fd3129112488c4cee4eb1f25a847a500b9be7dc52'};
+ const candidate={channel:'test',package:'com.aruno.arunomatic',version_code:48,version_name:'v0.2.4-remote-settings-ui',commit,sha256:sha,apk_url:'https://download.aruno-id.com/apk/arunomatic-test-code48-'+commit+'.apk',notes:'test'};
+ let objectSha=sha;const env={APK_BUCKET:{get:async k=>k==='releases/arunomatic/latest.json'?{text:async()=>JSON.stringify(stable)}:k==='releases/arunomatic/test.json'?{text:async()=>JSON.stringify(candidate)}:k===key?{body:new Uint8Array([1,2]),size:2,httpEtag:'"test"',customMetadata:{sha256:objectSha},writeHttpMetadata(){}}:null}};
+ const get=path=>worker.fetch(new Request('https://download.aruno-id.com'+path),env);
+ assert.deepEqual(await (await get('/arunomatic/test.json')).json(),candidate);
+ for(const path of ['/apk/arunomatic-test.apk','/apk/arunomatic-test-code48-'+commit+'.apk']){const r=await get(path);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');assert.equal(r.headers.get('x-checksum-sha256'),sha);}
+ assert.deepEqual(await (await get('/arunomatic/latest.json')).json(),stable);
+ const html=await (await get('/arunomatic')).text();assert.match(html,/最新版 v0.2.3-dock-position \/ code 47/);assert.doesNotMatch(html,/arunomatic-test-code48|テスト版をダウンロード/);
+ objectSha='b'.repeat(64);assert.equal((await get('/apk/arunomatic-test.apk')).status,503);
+ candidate.channel='stable';assert.equal((await get('/arunomatic/test.json')).status,503);
+});
