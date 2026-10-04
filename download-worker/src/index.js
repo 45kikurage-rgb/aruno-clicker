@@ -366,6 +366,22 @@ async function latestManifest(request, env) {
   } catch { return Response.json({error:"UPDATE_NOT_AVAILABLE"},{status:503,headers:{"cache-control":"no-store"}}); }
 }
 
+async function testManifest(request,env) {
+  try {
+    const object=await env.APK_BUCKET.get("releases/arunomatic/test.json");
+    if(!object)throw new Error("missing");
+    const m=JSON.parse(await object.text());
+    if(m.channel!=="test"||m.package!=="com.aruno.arunomatic"||m.version_code!==48||
+       !/^[a-f0-9]{40}$/.test(m.commit||"")||!/^[a-f0-9]{64}$/.test(m.sha256||"")||
+       m.apk_url!=="https://download.aruno-id.com/apk/arunomatic-test-code48-"+m.commit+".apk")throw new Error("invalid");
+    const response=Response.json(m,{headers:{"cache-control":"no-store","x-content-type-options":"nosniff"}});
+    return request.method==="HEAD"?new Response(null,{headers:response.headers}):response;
+  }catch{return Response.json({error:"TEST_NOT_AVAILABLE"},{status:503,headers:{"cache-control":"no-store"}});}
+}
+async function testApk(request,env,commit,expectedSha) {
+ return apkResponse(request,env,{key:"candidates/arunomatic/code48/"+commit+"/ARUNOMATIC-code48-test.apk",filename:"ARUNOMATIC-code48-test.apk",cacheControl:"no-store",expectedSha});
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -383,6 +399,15 @@ export default {
     }
 
     if (url.pathname === "/arunomatic/latest.json") return latestManifest(request, env);
+    if (url.pathname === "/arunomatic/test.json") return testManifest(request,env);
+    if (url.pathname === "/apk/arunomatic-test.apk") {
+      const response=await testManifest(new Request("https://download.aruno-id.com/arunomatic/test.json"),env);
+      if(!response.ok)return response;
+      const m=await response.json();return testApk(request,env,m.commit,m.sha256);
+    }
+    const testPath=url.pathname.match(/^\/apk\/arunomatic-test-code48-([a-f0-9]{40})\.apk$/);
+    if(testPath)return testApk(request,env,testPath[1]);
+
 
     if (url.pathname === "/arunomatic" || url.pathname === "/arunomatic/") {
       return request.method === "HEAD"
@@ -396,6 +421,7 @@ export default {
     return new Response("Not Found", { status: 404 });
   },
 };
+
 
 
 
