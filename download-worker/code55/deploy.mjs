@@ -13,8 +13,12 @@ assert.equal(s.bindings.length,1);assert.equal(s.bindings[0].type,'r2_bucket');a
 assert.equal(s.compatibility_date,'2026-09-25');assert.deepEqual(s.compatibility_flags,[]);assert.deepEqual(s.tail_consumers,[]);assert.deepEqual(s.placement,{});assert.equal(s.logpush,false);assert.equal(s.usage_model,'standard');
 assert(Object.keys(s).every(k=>['bindings','compatibility_date','compatibility_flags','tail_consumers','placement','logpush','usage_model','tags','annotations'].includes(k)),'Unknown live setting; refusing to discard it');
 const old=await api(''), bytes=Buffer.from(await old.arrayBuffer());
-const form=await new Response(bytes,{headers:{'content-type':old.headers.get('content-type')}}).formData();const names=[...form.keys()];assert.deepEqual(names,['worker-code53.js']);
-const oldSource=form.get(names[0]),source=typeof oldSource==='string'?Buffer.from(oldSource):Buffer.from(await oldSource.arrayBuffer());
+const form=await new Response(bytes,{headers:{'content-type':old.headers.get('content-type')}}).formData();const names=[...form.keys()].sort();
+const alreadyPublished=names.join(',')==='code55.js,live-code53.js';
+if(!alreadyPublished)assert.deepEqual(names,['worker-code53.js']);
+async function moduleBytes(name){const value=form.get(name);return typeof value==='string'?Buffer.from(value):Buffer.from(await value.arrayBuffer());}
+const source=await moduleBytes(alreadyPublished?'live-code53.js':'worker-code53.js');
+if(alreadyPublished)assert.deepEqual(await moduleBytes('code55.js'),readFileSync(new URL('./code55.js',import.meta.url)),'Live test wrapper moved; inspect before deploying');
 assert.equal(hash(source),'d00c49989de91e3d7275f963469e5f5b13c22d52925eae5c1ee0d6ba2323baf1','Live source moved; inspect before deploying');
 assert.equal(hash(readFileSync(new URL('./live-code53.js',import.meta.url))),hash(source));
 mkdirSync('code55-download-proof',{recursive:true});writeFileSync('code55-download-proof/worker-before.bin',bytes);writeFileSync('code55-download-proof/settings-before.json',JSON.stringify(before));
@@ -25,7 +29,8 @@ const legacyPaths=['/','/arunomatic/code53','/apk/arunomatic-code53.apk','/apk/a
 const legacy=[];for(const path of legacyPaths){const r=await publicRead(path,'HEAD');legacy.push({path,status:r.status,type:r.headers.get('content-type'),size:r.headers.get('content-length')});}
 const metadata={main_module:'code55.js',bindings:s.bindings,compatibility_date:s.compatibility_date,compatibility_flags:s.compatibility_flags,usage_model:s.usage_model,tags:s.tags,tail_consumers:s.tail_consumers,logpush:s.logpush};
 const upload=new FormData();upload.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));for(const name of ['code55.js','live-code53.js'])upload.append(name,new Blob([readFileSync(new URL('./'+name,import.meta.url))],{type:'application/javascript+module'}),name);
-const result=await (await api('',{method:'PUT',body:upload})).json();if(!result.success)throw Error('Worker upload rejected');
+if(!alreadyPublished){const result=await (await api('',{method:'PUT',body:upload})).json();if(!result.success)throw Error('Worker upload rejected');}
+else console.log('Exact test55 modules already deployed; verify without uploading');
 const after=await Promise.all(['settings','schedules','subdomain'].map(json));
 function settings(x){const {annotations,...other}=x;return other;}
 assert.deepEqual(settings(after[0]),settings(before[0]));assert.deepEqual(after[1],before[1]);assert.deepEqual(after[2],before[2]);

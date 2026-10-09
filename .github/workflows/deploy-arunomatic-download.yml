@@ -1,8 +1,8 @@
-name: Deploy ARUNOMATIC download page
+name: Verify and deploy preserved ARUNOMATIC download channel
 on:
   push:
     branches: [main]
-    paths: ['download-worker/src/index.js','download-worker/test/**','.github/workflows/deploy-arunomatic-download.yml']
+    paths: ['download-worker/src/index.js','download-worker/test/**','download-worker/code55/**','.github/workflows/deploy-arunomatic-download.yml']
 permissions:
   contents: read
 concurrency:
@@ -17,24 +17,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Validate all existing download routes and code47
-        working-directory: download-worker
-        run: npm test
-      - name: Deploy existing download Worker
-        working-directory: download-worker
+      - name: Validate legacy route fixtures and test55 wrapper
+        run: |
+          npm test --prefix download-worker
+          node --test download-worker/code55/code55.test.mjs
+      - name: Preserve live source and operating channel; verify exact test55
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx --yes wrangler@4.40.0 deploy
-      - name: Verify announced page and APK match the existing manifest
-        run: |
-          set -euo pipefail
-          curl -fsSL --retry 3 --max-time 30 https://download.aruno-id.com/arunomatic/latest.json -o manifest.json
-          curl -fsSL --retry 3 --max-time 30 https://download.aruno-id.com/arunomatic -o page.html
-          python3 - <<'PY_CHECK'
-          import json,pathlib
-          m=json.load(open('manifest.json'));p=pathlib.Path('page.html').read_text()
-          assert m['version_code'] in (43,45,46,47)
-          assert '最新版 '+m['version_name']+' / code '+str(m['version_code']) in p
-          assert 'href="/apk/arunomatic-code'+str(m['version_code'])+'.apk">最新版 code '+str(m['version_code']) in p
-          PY_CHECK
+        run: node download-worker/code55/deploy.mjs
+      - name: Verify actual HTTP APK uses the fixed signer
+        run: python3 download-worker/code55/verify-apk-signature.py code55-download-proof/ARUNOMATIC_v0.3.1-safe-task-start-code55.apk code55-download-proof/signature.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code55-canonical-distribution-proof
+          path: code55-download-proof/
+          if-no-files-found: ignore
