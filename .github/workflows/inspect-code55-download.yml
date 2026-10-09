@@ -1,0 +1,46 @@
+name: Inspect existing download deployment
+on:
+  push:
+    branches: [integration/code55-test-distribution]
+    paths: ['.github/workflows/inspect-code55-download.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read live Worker and immutable stable manifest
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'JS'
+          import {mkdirSync,writeFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          mkdirSync('snapshot',{recursive:true});
+          const root='https://api.cloudflare.com/client/v4/accounts/'+process.env.CLOUDFLARE_ACCOUNT_ID+'/workers/scripts/aruno-clicker-download';
+          for(const kind of ['settings','schedules','subdomain','source']){
+            const r=await fetch(root+(kind==='source'?'':'/'+kind),{headers:{Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN},signal:AbortSignal.timeout(30000)});
+            if(!r.ok)throw Error('Download Worker '+kind+' read blocked: HTTP '+r.status);
+            const bytes=Buffer.from(await r.arrayBuffer());
+            writeFileSync('snapshot/'+kind+(kind==='source'?'.bin':'.json'),bytes);
+            if(kind==='source')writeFileSync('snapshot/source-content-type.txt',r.headers.get('content-type')||'');
+            console.log(kind+': HTTP '+r.status+', bytes '+bytes.length+', SHA256 '+createHash('sha256').update(bytes).digest('hex'));
+          }
+          for(const route of ['latest.json','test.json']){
+            const r=await fetch('https://download.aruno-id.com/arunomatic/'+route,{signal:AbortSignal.timeout(30000)});
+            if(!r.ok)throw Error('Existing '+route+' HTTP '+r.status);
+            const bytes=Buffer.from(await r.arrayBuffer());writeFileSync('snapshot/'+route,bytes);
+            const j=JSON.parse(bytes);console.log(route+': code '+j.version_code+', SHA256 '+j.sha256);
+          }
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: code55-existing-download-snapshot
+          path: snapshot/
+          if-no-files-found: error
