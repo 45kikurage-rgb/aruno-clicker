@@ -1,0 +1,11 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {wrap,RELEASE,KEY} from './code55.js';
+const object={size:182315,customMetadata:{sha256:RELEASE.sha256,filename:'ARUNOMATIC_v0.3.1-safe-task-start-code55.apk'},body:new Uint8Array([1,2,3])};
+const env={APK_BUCKET:{head:async key=>key===KEY?object:null,get:async()=>object}};
+test('test manifest and APK HEAD match exact signed candidate',async()=>{
+ const handler=wrap({fetch:async()=>new Response('legacy')});const r=await handler.fetch(new Request('https://download.aruno-id.com/arunomatic/test.json'),env);assert.deepEqual(await r.json(),RELEASE);
+ const head=await handler.fetch(new Request(RELEASE.apk_url,{method:'HEAD'}),env);assert.equal(head.status,200);assert.equal(head.headers.get('content-length'),'182315');assert.equal(head.headers.get('x-apk-sha256'),RELEASE.sha256);assert.equal((await head.arrayBuffer()).byteLength,0);
+});
+test('missing or wrong APK fails closed',async()=>{const handler=wrap({fetch:async()=>new Response('legacy')});for(const path of ['/arunomatic/test.json','/apk/arunomatic-code55.apk','/arunomatic/code55'])assert.equal((await handler.fetch(new Request('https://download.aruno-id.com'+path),{APK_BUCKET:{head:async()=>({...object,customMetadata:{sha256:'wrong'}})}})).status,503);});
+test('all stable, code53, clicker and backup routes retain original response',async()=>{for(const path of ['/arunomatic/latest.json','/apk/arunomatic-latest.apk','/apk/arunomatic-code52.apk','/arunomatic/code53','/apk/aruno-clicker.apk','/apk/aruno-clicker-ver-s.apk','/']){const handler=wrap({fetch:async request=>new Response(request.url,{status:201,headers:{'x-legacy':'kept'}}),scheduled:()=>42});const r=await handler.fetch(new Request('https://download.aruno-id.com'+path),env);assert.equal(r.status,201);assert.equal(r.headers.get('x-legacy'),'kept');assert.equal(await r.text(),'https://download.aruno-id.com'+path);assert.equal(handler.scheduled(),42);}});
+test('main page adds test55 while retaining stable markup and links',async()=>{const handler=wrap({fetch:async()=>new Response('<main><a href="/apk/arunomatic-code52.apk">code52</a></main>')});const r=await handler.fetch(new Request('https://download.aruno-id.com/arunomatic'),env);const s=await r.text();assert(s.includes('/arunomatic/code55'));assert(s.includes('/apk/arunomatic-code52.apk'));});

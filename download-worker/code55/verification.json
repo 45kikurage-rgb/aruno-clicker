@@ -1,0 +1,21 @@
+{
+  "source": {
+    "repository": "45kikurage-rgb/45kikurage-rgb-arunomatic",
+    "run_id": 37881259381,
+    "head_sha": "78f7cf0b7fd84ddc41b4b37bddb7a653dc076280",
+    "conclusion": "success",
+    "html_url": "https://github.com/45kikurage-rgb/45kikurage-rgb-arunomatic/actions/runs/37881259381",
+    "updated_at": "2026-10-09T03:55:38Z"
+  },
+  "stage": {
+    "repository": "45kikurage-rgb/45kikurage-rgb-arunomatic",
+    "run_id": 37881589746,
+    "head_sha": "60a60c0dc93dd6f0bf38a0c8a2b49a7bf66a088e",
+    "conclusion": "success",
+    "html_url": "https://github.com/45kikurage-rgb/45kikurage-rgb-arunomatic/actions/runs/37881589746",
+    "updated_at": "2026-10-09T03:57:09Z"
+  },
+  "apk_sha256": "31a1186bb78b7d84276d3661d012f73529591f78b0207bd76e6a836e3bae8d15",
+  "signed_artifact_id": 11594486199,
+  "signed_artifact_zip_sha256": "d1f4203f58a26a6af7446befc519a99887b59879fdc3f7fb9f8930bba0233fc7"
+}

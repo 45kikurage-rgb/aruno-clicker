@@ -1,0 +1,56 @@
+name: Publish verified code55 test channel
+on:
+  push:
+    branches: [integration/code55-test-distribution]
+    paths: ['download-worker/code55/**','.github/workflows/publish-code55-test.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arunomatic-download-production-code34-air-user-number
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify pinned signed build and immutable staging receipts
+        run: |
+          python3 - <<'PY_CHECK'
+          import json
+          j=json.load(open('download-worker/code55/verification.json'))
+          assert j['source']['conclusion']=='success' and j['source']['run_id']==37881259381
+          assert j['source']['head_sha']=='78f7cf0b7fd84ddc41b4b37bddb7a653dc076280'
+          assert j['stage']['conclusion']=='success' and j['stage']['run_id']==37881589746
+          assert j['stage']['head_sha']=='60a60c0dc93dd6f0bf38a0c8a2b49a7bf66a088e'
+          assert j['apk_sha256']=='31a1186bb78b7d84276d3661d012f73529591f78b0207bd76e6a836e3bae8d15'
+          PY_CHECK
+      - run: node --test download-worker/code55/code55.test.mjs
+      - name: Preserve live Worker and stable channel, publish only test55
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node download-worker/code55/deploy.mjs
+      - name: Verify downloaded HTTP APK signature and manifest
+        run: |
+          set -euo pipefail
+          APK=code55-download-proof/ARUNOMATIC_v0.3.1-safe-task-start-code55.apk
+          python3 download-worker/code55/verify-apk-signature.py "$APK" code55-download-proof/signature.txt
+          TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          "$TOOLS/aapt2" dump badging "$APK" > code55-download-proof/badging.txt
+          grep -Fq "package: name='com.aruno.arunomatic' versionCode='55' versionName='v0.3.1-safe-task-start'" code55-download-proof/badging.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > code55-download-proof/manifest.xml
+          grep -Fq 'android.permission.BIND_ACCESSIBILITY_SERVICE' code55-download-proof/manifest.xml
+          grep -Fq 'android.intent.action.SEND_MULTIPLE' code55-download-proof/manifest.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code55-test-publication-proof
+          path: |
+            code55-download-proof/
+            download-worker/code55/verification.json
+          if-no-files-found: error
