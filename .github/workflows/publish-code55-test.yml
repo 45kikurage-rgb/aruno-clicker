@@ -18,17 +18,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Require successful exact signed build and immutable R2 stage
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify pinned signed build and immutable staging receipts
         run: |
-          gh api repos/45kikurage-rgb/45kikurage-rgb-arunomatic/actions/runs/37881259381 > source-ci.json
-          gh api repos/45kikurage-rgb/45kikurage-rgb-arunomatic/actions/runs/37881589746 > stage-ci.json
           python3 - <<'PY_CHECK'
           import json
-          a=json.load(open('source-ci.json'));b=json.load(open('stage-ci.json'))
-          assert a['conclusion']=='success' and a['head_sha']=='78f7cf0b7fd84ddc41b4b37bddb7a653dc076280'
-          assert b['conclusion']=='success' and b['head_sha']=='60a60c0dc93dd6f0bf38a0c8a2b49a7bf66a088e'
+          j=json.load(open('download-worker/code55/verification.json'))
+          assert j['source']['conclusion']=='success' and j['source']['run_id']==37881259381
+          assert j['source']['head_sha']=='78f7cf0b7fd84ddc41b4b37bddb7a653dc076280'
+          assert j['stage']['conclusion']=='success' and j['stage']['run_id']==37881589746
+          assert j['stage']['head_sha']=='60a60c0dc93dd6f0bf38a0c8a2b49a7bf66a088e'
+          assert j['apk_sha256']=='31a1186bb78b7d84276d3661d012f73529591f78b0207bd76e6a836e3bae8d15'
           PY_CHECK
       - run: node --test download-worker/code55/code55.test.mjs
       - name: Preserve live Worker and stable channel, publish only test55
@@ -53,6 +52,5 @@ jobs:
           name: code55-test-publication-proof
           path: |
             code55-download-proof/
-            source-ci.json
-            stage-ci.json
+            download-worker/code55/verification.json
           if-no-files-found: error
