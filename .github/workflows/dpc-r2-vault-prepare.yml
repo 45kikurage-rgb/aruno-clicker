@@ -1,0 +1,70 @@
+name: Prepare DPC private R2 vault
+on:
+  push:
+    branches: ['audit/dpc-r2-access-20261017']
+    paths: ['.github/workflows/dpc-r2-vault-prepare.yml']
+permissions: {}
+concurrency:
+  group: dpc-r2-vault-prepare
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Create private DPC bucket and verify harmless object roundtrip
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        shell: python
+        run: |
+          import os, json, urllib.request, urllib.error, urllib.parse, hashlib, sys
+          bucket = "aruno-dpc-test-signing-private"
+          phase = "CONFIG"
+          def report(**data):
+              data.update(phase=phase, keys_created=False)
+              line = json.dumps(data, sort_keys=True)
+              print(line)
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f: f.write(line + "\n")
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs): return None
+          try:
+              token, account = os.environ["CF_TOKEN"], os.environ["CF_ACCOUNT"]
+              if not token or not account: raise ValueError()
+              root = "https://api.cloudflare.com/client/v4/accounts/" + urllib.parse.quote(account, safe="") + "/r2/buckets"
+              opener = urllib.request.build_opener(NoRedirect)
+              def call(method, suffix="", data=None, json_body=True):
+                  headers = {"Authorization":"Bearer " + token}
+                  if data is not None:
+                      headers["Content-Type"] = "application/json" if json_body else "application/octet-stream"
+                      if json_body: data = json.dumps(data).encode()
+                  req = urllib.request.Request(root + suffix, headers=headers, data=data, method=method)
+                  with opener.open(req, timeout=30) as r: return r.read()
+              def api(method, suffix="", data=None):
+                  result = json.loads(call(method, suffix, data))
+                  if result.get("success") is not True: raise ValueError()
+                  return result["result"]
+              phase = "BUCKET"
+              buckets = api("GET")["buckets"]
+              existing = any(b.get("name")==bucket for b in buckets)
+              if not existing: api("POST", data={"name":bucket})
+              report(result="BUCKET_EXISTS" if existing else "BUCKET_CREATED", bucket=bucket)
+              path = "/" + bucket
+              phase = "PRIVACY"
+              managed = api("GET", path + "/domains/managed")
+              custom = api("GET", path + "/domains/custom")
+              if managed.get("enabled") is not False or custom.get("domains") != []: raise ValueError()
+              report(result="PRIVATE_VERIFIED", managed_public=False, custom_domains=0)
+              phase = "ROUNDTRIP"
+              object_path = path + "/objects/" + urllib.parse.quote("checks/prepare-" + os.environ["GITHUB_RUN_ID"] + ".txt", safe="")
+              payload = b"ARUNO DPC non-secret storage readiness probe\n"
+              call("PUT", object_path, payload, False)
+              actual = call("GET", object_path)
+              if actual != payload: raise ValueError()
+              report(result="WRITE_READ_PASS", sha256=hashlib.sha256(actual).hexdigest(), size=len(actual))
+          except urllib.error.HTTPError as e:
+              report(result="HTTP_FAILURE", http_status=e.code)
+              sys.exit(1)
+          except Exception:
+              report(result="FAILED_CLOSED")
+              sys.exit(1)
