@@ -19,11 +19,15 @@ object ControlContract {
     const val START_MODE_FIRST = "first"
     const val START_MODE_REPEAT = "repeat"
     const val START_MODE_AUTO = "auto"
+    const val START_MODE_URL_RUNNER = "url-runner"
     const val AUTOMATION_SERVICE = "jp.aruno.clicker.automation.AutomationService"
 
     fun startFirst(context: Context) = sendToService(context, ACTION_START, START_MODE_FIRST)
     fun startRepeat(context: Context) = sendToService(context, ACTION_START, START_MODE_REPEAT)
     fun startAutomatic(context: Context) = sendToService(context, ACTION_START, START_MODE_AUTO)
+
+    /** URL順次展開の開始。開始直前の自動取得は行わず、保存済み設定だけを使う経路。 */
+    fun startUrlRunner(context: Context) = sendToService(context, ACTION_START, START_MODE_URL_RUNNER)
     fun stop(context: Context) = sendToService(context, ACTION_STOP)
 
     private fun sendToService(context: Context, action: String, startMode: String? = null) {

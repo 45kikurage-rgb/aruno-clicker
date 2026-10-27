@@ -92,7 +92,7 @@ import jp.aruno.clicker.RemoteSyncUiState
 import jp.aruno.clicker.data.AppSettings
 import kotlin.math.roundToInt
 
-private enum class AppScreen { HOME, SETTINGS, DETAILS }
+private enum class AppScreen { HOME, SETTINGS, DETAILS, URL_RUNNER_SETTINGS, URL_INPUT }
 
 @Composable
 fun ArunoClickerApp(
@@ -106,11 +106,14 @@ fun ArunoClickerApp(
     startFirstAutomation: () -> Unit,
     startRepeatAutomation: () -> Unit,
     startAutomaticAutomation: () -> Unit,
+    startUrlRunnerAutomation: () -> Unit,
     stopAutomation: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val remoteSyncState by viewModel.remoteSyncState.collectAsStateWithLifecycle()
+    val urlRunnerState by viewModel.urlRunnerState.collectAsStateWithLifecycle()
     val isRunning by viewModel.automationRequested.collectAsStateWithLifecycle()
+    val automationMessage by viewModel.automationMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     if (!settings.onboardingComplete) {
@@ -128,25 +131,86 @@ fun ArunoClickerApp(
 
     var screen by rememberSaveable { mutableStateOf(AppScreen.HOME) }
     BackHandler(enabled = screen != AppScreen.HOME) { screen = AppScreen.HOME }
+    BackHandler(enabled = screen == AppScreen.URL_INPUT) { screen = AppScreen.URL_RUNNER_SETTINGS }
+
+    // URLランナーの編集状態は画面遷移をまたいで保持する（範囲切替・画面移動で消えない）。
+    val urlEditState = viewModel.urlEditState
+    val editRevision by viewModel.editRevision.collectAsStateWithLifecycle()
+    var homeNotice by remember { mutableStateOf<String?>(null) }
+    var settingsNotice by remember { mutableStateOf<String?>(null) }
+    val accessibilityGranted = remember(permissionRefresh) {
+        val enabled = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty()
+        enabled.contains(context.packageName, ignoreCase = true) &&
+            enabled.contains("ArunoAccessibilityService", ignoreCase = true)
+    }
 
     when (screen) {
-        AppScreen.HOME -> HomeScreen(
-            settings = settings,
+        AppScreen.HOME -> UrlRunnerHomeScreen(
+            isAdmin = settings.remoteAdminMode,
             isRunning = isRunning,
-            isVerS = isVerS,
-            onStartFirst = {
-                startFirstAutomation()
+            savedConfig = urlRunnerState.savedConfig,
+            statusMessage = homeNotice ?: automationMessage,
+            syncBusy = urlRunnerState.busy,
+            syncMessage = urlRunnerState.message,
+            accessibilityGranted = accessibilityGranted,
+            openAccessibilitySettings = openAccessibilitySettings,
+            onStartVideo = {
+                val saved = urlRunnerState.savedConfig
+                when {
+                    isRunning -> homeNotice = "既に実行中です"
+                    saved == null ->
+                        homeNotice = "保存済み設定がありません。先にデータダウンロードしてください"
+                    saved.validate().isNotEmpty() ->
+                        homeNotice = "保存済み設定に問題があります: ${saved.validate().first().message}"
+                    !accessibilityGranted ->
+                        homeNotice = "ユーザー補助をONにしてください"
+                    else -> {
+                        homeNotice = null
+                        startUrlRunnerAutomation()
+                    }
+                }
             },
-            onStartRepeat = {
-                startRepeatAutomation()
+            onStop = { stopAutomation() },
+            onDownload = {
+                homeNotice = null
+                viewModel.downloadUrlRunnerConfig()
             },
-            onStartAutomatic = {
-                startAutomaticAutomation()
+            onOpenSettings = { screen = AppScreen.URL_RUNNER_SETTINGS },
+            onOpenLegacySettings = { screen = AppScreen.SETTINGS },
+        )
+
+        AppScreen.URL_RUNNER_SETTINGS -> UrlRunnerSettingsScreen(
+            editState = urlEditState,
+            editRevision = editRevision,
+            isAdmin = settings.remoteAdminMode,
+            syncBusy = urlRunnerState.busy,
+            syncMessage = settingsNotice ?: urlRunnerState.message,
+            onOpenUrlInput = { screen = AppScreen.URL_INPUT },
+            onPublish = {
+                val issues = mutableListOf<String>()
+                val built = urlEditState.buildConfig(
+                    configVersion = urlRunnerState.savedConfig?.configVersion ?: 0L,
+                    issues = issues,
+                )
+                if (built == null) {
+                    // 送信せず、理由をその場に表示する（黙って補正・切り捨てをしない）。
+                    settingsNotice = issues.joinToString(" / ")
+                } else {
+                    settingsNotice = null
+                    viewModel.publishUrlRunnerConfig(built)
+                }
             },
-            onStop = {
-                stopAutomation()
-            },
-            openSettings = { screen = AppScreen.SETTINGS },
+            onOpenLegacySettings = { screen = AppScreen.SETTINGS },
+            onBack = { screen = AppScreen.HOME },
+        )
+
+        AppScreen.URL_INPUT -> UrlInputScreen(
+            editState = urlEditState,
+            editRevision = editRevision,
+            onBack = { screen = AppScreen.URL_RUNNER_SETTINGS },
         )
 
         AppScreen.SETTINGS -> SettingsScreen(

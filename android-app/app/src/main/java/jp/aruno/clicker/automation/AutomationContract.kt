@@ -21,4 +21,7 @@ object AutomationContract {
     const val START_MODE_FIRST = "first"
     const val START_MODE_REPEAT = "repeat"
     const val START_MODE_AUTO = "auto"
+
+    /** URL順次展開（URLランナー）の開始モード。従来モードとは開始経路を分離する。 */
+    const val START_MODE_URL_RUNNER = "url-runner"
 }
