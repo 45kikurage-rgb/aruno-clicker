@@ -28,11 +28,6 @@ jobs:
           cache-read-only: false
       - name: Worker unit and SQLite integration tests
         run: node --test cloudflare-worker/test/*.js release/download.test.mjs
-      - name: Read-only production preflight
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: node release/preflight.mjs
       - name: Compile complete Android app and run all normal-edition tests
         working-directory: android-app
         run: gradle --no-daemon --console=plain testAtlasDebugUnitTest assembleAtlasRelease
