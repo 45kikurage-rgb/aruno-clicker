@@ -68,7 +68,15 @@ secrets, schedules, routes and ARUNOMATIC payloads remain preserved. Any failed
 post-deploy check restores prior Worker code. Additive empty tables can remain;
 production data is not automatically rewound.
 
-Intended page: https://download.aruno-id.com/tiker
-Intended APK: https://download.aruno-id.com/apk/aru-tiker-code17.apk
+Published page: https://download.aruno-id.com/tiker
+Published APK: https://download.aruno-id.com/apk/aru-tiker-code17.apk
 Publication proof is recorded separately in the platform repository.
 Physical updating, native foreground behavior and TikTok playback: NOT RUN.
+
+Production run40492853224 succeeded at2026-10-27 20:01 JST. Existing configuration
+rows and authentication were preserved. D1 export restore, private encrypted backup
+readback, two public APK alias hash checks and ten unchanged ARUNOMATIC route hashes
+passed. Published APK size14751479 bytes. Detailed proof:
+https://github.com/45kikurage-rgb/aruno-platform-ops/blob/main/docs/ARU_TIKER_CODE17.md
+Browser UI independently showed0.6.0/code17 and the matching SHA. Physical testing
+remains unperformed.
