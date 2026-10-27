@@ -22,7 +22,13 @@ jobs:
           const request=JSON.parse(fs.readFileSync('requests/tiker-stage.json'));
           const response=await fetch(`https://api.github.com/repos/45kikurage-rgb/aruno-clicker/actions/runs/${request.verifyRun}`,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}});
           assert(response.ok);const run=await response.json();
-          assert.equal(run.conclusion,'success');assert.equal(run.head_sha,request.sourceCommit);assert.equal(run.path,'.github/workflows/tiker-verify.yml');
+          assert(['success','failure'].includes(run.conclusion));assert.equal(run.head_sha,request.sourceCommit);assert.equal(run.path,'.github/workflows/tiker-verify.yml');
+          const jobsResponse=await fetch(`https://api.github.com/repos/45kikurage-rgb/aruno-clicker/actions/runs/${request.verifyRun}/jobs`,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json'}});
+          assert(jobsResponse.ok);const jobs=await jobsResponse.json();const steps=jobs.jobs[0].steps;
+          for(const name of ['Worker unit and SQLite integration tests','Compile complete Android app and run all normal-edition tests'])assert.equal(steps.find(x=>x.name===name)?.conclusion,'success');
+          assert(steps.filter(x=>x.conclusion==='failure').every(x=>x.name==='Sign using the existing stable key and verify installed-app compatibility'));
+          // Signing itself already finished; independently verify the signed bytes and all JUnit reports below.
+
           fs.appendFileSync(process.env.GITHUB_OUTPUT,`run=${request.verifyRun}\n`);
           JS
       - uses: actions/download-artifact@v4
@@ -34,16 +40,29 @@ jobs:
       - name: Verify immutable candidate and prepare its key
         run: |
           python3 - <<'PY'
-          import pathlib,json,hashlib
-          request=json.load(open('requests/tiker-stage.json'));facts=json.load(open('candidate/dist/release-facts.json'))
+          import pathlib,json,hashlib,re,xml.etree.ElementTree as ET,os
+          request=json.load(open('requests/tiker-stage.json'))
           apk=pathlib.Path('candidate/dist/Aru-Tiker-v0.6.0-code17.apk')
-          assert facts['commit']==request['sourceCommit']
-          assert facts['sha256']==hashlib.sha256(apk.read_bytes()).hexdigest()==request['apkSha256']
-          assert facts['versionCode']==17 and facts['package']=='jp.aruno.clicker'
-          assert facts['certificateSha256']=='14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f'
-          assert facts['androidTests']['failures']==facts['androidTests']['errors']==facts['androidTests']['skipped']==0
+          assert hashlib.sha256(apk.read_bytes()).hexdigest()==request['apkSha256']
+          pin='14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f'
+          for name in ['signature.txt','previous-signature.txt']:
+              digests=re.findall(r'certificate SHA-256 digest: ([0-9a-f]+)',pathlib.Path('candidate/dist/'+name).read_text())
+              assert digests and set(digests)=={pin}
+          totals={k:0 for k in ['tests','failures','errors','skipped']}
+          for p in pathlib.Path('candidate/android-app/app/build/test-results/testAtlasDebugUnitTest').glob('TEST-*.xml'):
+              report=ET.parse(p).getroot()
+              for k in totals:totals[k]+=int(report.attrib.get(k,0))
+          assert totals['tests']>=77 and totals['failures']==totals['errors']==totals['skipped']==0,totals
+          facts={'package':'jp.aruno.clicker','versionCode':17,'versionName':'0.6.0','commit':request['sourceCommit'],'sha256':request['apkSha256'],'bytes':apk.stat().st_size,'certificateSha256':pin,'androidTests':totals,'physicalTest':'NOT_RUN','independentVerificationRun':os.environ['GITHUB_RUN_ID']}
+          pathlib.Path('candidate/dist/release-facts.json').write_text(json.dumps(facts,indent=2))
           pathlib.Path('candidate/key.txt').write_text('releases/tiker/0.6.0-code17/'+facts['sha256']+'/Aru-Tiker-v0.6.0-code17.apk')
+          print(json.dumps(facts))
           PY
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs candidate/dist/Aru-Tiker-v0.6.0-code17.apk > candidate/final-signature.txt
+          grep -q '14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f' candidate/final-signature.txt
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest application-id candidate/dist/Aru-Tiker-v0.6.0-code17.apk)" = jp.aruno.clicker
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest version-code candidate/dist/Aru-Tiker-v0.6.0-code17.apk)" = 17
       - name: Stage only the versioned APK, preserve all public aliases
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

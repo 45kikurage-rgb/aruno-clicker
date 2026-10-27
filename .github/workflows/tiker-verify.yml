@@ -54,7 +54,7 @@ jobs:
           apk=pathlib.Path('dist/Aru-Tiker-v0.6.0-code17.apk')
           pin='14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f'
           for name in ['signature.txt','previous-signature.txt']:
-              actual=re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-f]+)',pathlib.Path('dist/'+name).read_text()).group(1)
+              actual=re.search(r'certificate SHA-256 digest: ([0-9a-f]+)',pathlib.Path('dist/'+name).read_text()).group(1)
               assert actual==pin, 'Existing signature mismatch'
           totals={k:0 for k in ['tests','failures','errors','skipped']}
           for p in pathlib.Path('android-app/app/build/test-results/testAtlasDebugUnitTest').glob('TEST-*.xml'):
