@@ -39,28 +39,28 @@ async function workerState(name){
   const type=response.headers.get('content-type');assert(type?.includes('multipart/form-data'),'Inspect non-module Worker before deployment');
   const form=await new Response(bytes,{headers:{'Content-Type':type}}).formData();
   const modules={};for(const [name,value] of form){modules[name]=Buffer.from(typeof value==='string'?value:await value.arrayBuffer()).toString('base64');}
-  const names=Object.keys(modules).sort();let main;
+  const names=Object.keys(modules).sort();let main=response.headers.get('cf-entrypoint');
   if(name===downloadWorker){
-    assert.deepEqual(names,['code55.js','live-code53.js'],'Shared download modules changed; review before publication');
+    assert.deepEqual(names,['code55.js','code56.js','live-code53.js'],'Shared download modules changed; review before publication');
     for(const filename of names)assert.equal(sha(Buffer.from(modules[filename],'base64')),sha(readFileSync('download-worker/code55/'+filename)),'Shared live source changed');
-    main='code55.js';
-  }else {assert.equal(names.length,1,'Review multi-module config Worker');main=names[0];}
+    assert.equal(main,'code56.js','Shared live entrypoint changed');
+  }else {assert.equal(names.length,1,'Review multi-module config Worker');main=main || names[0];}
   return {settings,schedules,subdomain,modules,main};
 }
 function metadata(settings,main){
   const allowed=new Set(['bindings','compatibility_date','compatibility_flags','tail_consumers','placement','logpush','usage_model','tags','annotations','observability','limits']);
-  assert(Object.keys(settings).every(k=>allowed.has(k)),'Unknown live setting: review before uploading');
+  // Content-only upload retains every existing setting, including unknown future keys.
   const result={main_module:main,bindings:settings.bindings.filter(x=>x.type!=='secret_text'),keep_bindings:['secret_text']};
   for(const key of ['compatibility_date','compatibility_flags','tail_consumers','logpush','usage_model','tags','observability','limits'])if(settings[key]!==undefined)result[key]=settings[key];
   if(settings.placement && Object.keys(settings.placement).length)result.placement=settings.placement;
   return result;
 }
 async function uploadWorker(name,state,modules,main){
-  const form=new FormData();form.append('metadata',new Blob([JSON.stringify(metadata(state.settings,main))],{type:'application/json'}));
+  const form=new FormData();form.append('metadata',new Blob([JSON.stringify({main_module:main})],{type:'application/json'}));
   for(const [filename,encoded] of Object.entries(modules))form.append(filename,new Blob([Buffer.from(encoded,'base64')],{type:'application/javascript+module'}),filename);
-  return json('/workers/scripts/'+name,{method:'PUT',body:form});
+  return json('/workers/scripts/'+name+'/content',{method:'PUT',headers:{'CF-WORKER-MAIN-MODULE-PART':main},body:form});
 }
-function comparable(settings){const {annotations,...value}=settings;return canonical(value);}
+function comparable(settings){const {annotations,...value}=settings;return sha(canonical(value));}
 async function verifySettings(name,before){
   const prefix='/workers/scripts/'+name;
   const [settings,schedules,subdomain]=await Promise.all(['settings','schedules','subdomain'].map(x=>json(prefix+'/'+x)));
@@ -68,7 +68,7 @@ async function verifySettings(name,before){
   assert.equal(canonical(schedules),canonical(before.schedules));assert.equal(canonical(subdomain),canonical(before.subdomain));
 }
 async function legacyRows(){const rows={};for(const [table,order] of [['remote_config','id'],['config_history','config_version'],['admin_settings','id']])rows[table]=(await sql(`SELECT * FROM ${table} ORDER BY ${order}`))[0].results;return rows;}
-const preservedPaths=['/arunomatic','/arunomatic/latest.json','/arunomatic/test.json','/arunomatic/code53','/arunomatic/code55','/apk/arunomatic-code52.apk','/apk/arunomatic-code53.apk','/apk/arunomatic-code55.apk'];
+const preservedPaths=['/arunomatic','/arunomatic/latest.json','/arunomatic/test.json','/arunomatic/code53','/arunomatic/code55','/arunomatic/code56','/apk/arunomatic-code56.apk','/apk/arunomatic-code52.apk','/apk/arunomatic-code53.apk','/apk/arunomatic-code55.apk'];
 
 if(process.argv[2]==='inspect'){
   const states={};for(const name of [configWorker,downloadWorker]){const state=await workerState(name);metadata(state.settings,'inspection.mjs');states[name]={settingsKeys:Object.keys(state.settings),bindingNames:state.settings.bindings.map(x=>({name:x.name,type:x.type})),modules:Object.fromEntries(Object.entries(state.modules).map(([name,value])=>[name,sha(Buffer.from(value,'base64'))]))};}
@@ -84,7 +84,13 @@ if(process.argv[2]==='inspect'){
   const columns=(await sql('PRAGMA table_info(remote_config)'))[0].results.map(x=>x.name);
   for(const column of ['name1','url1','name2','url2','share_name','share_url'])assert(columns.includes(column),'Legacy schema incomplete');
   const urlTables=(await sql("SELECT name FROM sqlite_master WHERE name IN ('url_runner_config','url_runner_history')"))[0].results;
-  assert.equal(urlTables.length,0,'Runner table already exists: inspect before migrating');
+  if(urlTables.length){
+    assert.equal(urlTables.length,2,'Incomplete runner schema');
+    for(const table of ['url_runner_config','url_runner_history']){
+      assert.equal((await sql(`SELECT count(*) AS n FROM ${table}`))[0].results[0].n,0,'Existing runner data requires review');
+      assert((await sql(`PRAGMA table_info(${table})`))[0].results.some(x=>x.name==='options_json'),'Runner schema differs');
+    }
+  }
   let exported=await json('/d1/database/'+database+'/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({output_format:'polling'})});
   for(let attempt=0;attempt<30 && exported.status!=='complete';attempt++){
     assert.notEqual(exported.status,'error','D1 export failed');assert(exported.at_bookmark);
@@ -96,7 +102,7 @@ if(process.argv[2]==='inspect'){
   const exportResponse=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(60000)});assert(exportResponse.ok,'D1 export download failed');
   const exportSql=await exportResponse.text();assert(exportSql.length>0 && exportSql.length<10*1024*1024,'Unexpected export size');
   const restored=new DatabaseSync(':memory:');restored.exec(exportSql);
-  for(const [table,rows] of Object.entries(beforeRows)){const order=table==='config_history'?'config_version':'id';assert.equal(canonical(restored.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).all()),canonical(rows),'Export restore data mismatch');}
+  for(const [table,rows] of Object.entries(beforeRows)){const order=table==='config_history'?'config_version':'id';assert.equal(sha(canonical(restored.prepare(`SELECT * FROM ${table} ORDER BY ${order}`).all())),sha(canonical(rows)),'Export restore data mismatch');}
   restored.close();
   const publicBefore={};for(const path of preservedPaths){const response=await publicRead(path);publicBefore[path]={sha256:sha(Buffer.from(await response.arrayBuffer())),type:response.headers.get('Content-Type')};}
   const state={config,download,beforeRows,exportSql,bookmark:exported.at_bookmark,publicBefore};
@@ -119,9 +125,9 @@ if(process.argv[2]==='inspect'){
   const state=JSON.parse(readFileSync('.private/state.json','utf8'));
   // Recheck before first mutation; do not deploy over a concurrent change.
   for(const [name,before] of [[configWorker,state.config],[downloadWorker,state.download]]){
-    const current=await workerState(name);assert.equal(canonical(current.modules),canonical(before.modules));assert.equal(comparable(current.settings),comparable(before.settings));
+    const current=await workerState(name);assert.equal(sha(canonical(current.modules)),sha(canonical(before.modules)));assert.equal(comparable(current.settings),comparable(before.settings));
   }
-  assert.equal(canonical(await legacyRows()),canonical(state.beforeRows),'Configuration changed since backup');
+  assert.equal(sha(canonical(await legacyRows())),sha(canonical(state.beforeRows)),'Configuration changed since backup');
   const schema=readFileSync('cloudflare-worker/migrations/0004_url_runner.sql','utf8');
   await sql(schema);
   await sql('INSERT OR IGNORE INTO d1_migrations(name) VALUES (?)',['0004_url_runner.sql']);
@@ -132,7 +138,7 @@ if(process.argv[2]==='inspect'){
     const configResponse=await fetch('https://aruno-clicker-config.45kikurage.workers.dev/v1/url-runner',{signal:AbortSignal.timeout(30000)});assert.equal(configResponse.status,200);
     const runner=await configResponse.json();assert.equal(runner.schemaVersion,3);assert.equal(runner.configVersion,0);assert.deepEqual(runner.urls,[]);
     const unauthorized=await fetch('https://aruno-clicker-config.45kikurage.workers.dev/v1/url-runner',{method:'PUT',headers:{'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(30000)});assert.equal(unauthorized.status,401);
-    assert.equal(canonical(await legacyRows()),canonical(state.beforeRows),'Legacy data changed');
+    assert.equal(sha(canonical(await legacyRows())),sha(canonical(state.beforeRows)),'Legacy data changed');
     const source=readFileSync('release/tiker-download.js','utf8').replaceAll('__LIVE_MAIN__',state.download.main).replaceAll('__RELEASE_FACTS__',JSON.stringify(facts));
     const modules={...state.download.modules,'tiker-download.mjs':Buffer.from(source).toString('base64')};
     await uploadWorker(downloadWorker,state.download,modules,'tiker-download.mjs');downloadUploaded=true;

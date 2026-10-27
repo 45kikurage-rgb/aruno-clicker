@@ -1,0 +1,17 @@
+{
+  "package": "jp.aruno.clicker",
+  "versionCode": 17,
+  "versionName": "0.6.0",
+  "commit": "c57fb5199e573693fa1e467f7995e8d95053d0a1",
+  "sha256": "963bfb4c4908d69b5a1227c6cdb7db857ead5b715a9b0cda13b54fae1f21a8d8",
+  "bytes": 14751479,
+  "certificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "androidTests": {
+    "tests": 77,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "physicalTest": "NOT_RUN",
+  "independentVerificationRun": "40492015488"
+}
