@@ -113,6 +113,7 @@ fun ArunoClickerApp(
     val remoteSyncState by viewModel.remoteSyncState.collectAsStateWithLifecycle()
     val urlRunnerState by viewModel.urlRunnerState.collectAsStateWithLifecycle()
     val isRunning by viewModel.automationRequested.collectAsStateWithLifecycle()
+    val automationMessage by viewModel.automationMessage.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     if (!settings.onboardingComplete) {
@@ -151,7 +152,7 @@ fun ArunoClickerApp(
             isAdmin = settings.remoteAdminMode,
             isRunning = isRunning,
             savedConfig = urlRunnerState.savedConfig,
-            statusMessage = homeNotice ?: urlRunnerState.message,
+            statusMessage = homeNotice ?: automationMessage,
             syncBusy = urlRunnerState.busy,
             syncMessage = urlRunnerState.message,
             accessibilityGranted = accessibilityGranted,

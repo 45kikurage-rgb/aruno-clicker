@@ -371,7 +371,7 @@ open class AutomationOverlayService : Service() {
         } else {
             "経過 --:--:--  /  残り --:--:--"
         }
-        countText?.text = "スライド ${state.swipeCount}回"
+        countText?.text = "URL順次展開"
         startButton?.text = if (state.requested) "停止" else "動画スタート"
         startButton?.background = roundedBackground(
             if (state.requested) Color.rgb(165, 39, 39) else Color.rgb(15, 116, 54),

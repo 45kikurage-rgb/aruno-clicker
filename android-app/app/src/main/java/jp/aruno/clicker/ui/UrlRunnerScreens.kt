@@ -372,11 +372,18 @@ fun UrlInputScreen(
             item {
                 OutlinedTextField(
                     value = pasteText,
-                    onValueChange = { pasteText = it },
+                    onValueChange = { value ->
+                        val pasted = value.length > pasteText.length + 1
+                        pasteText = value
+                        if (pasted && jp.aruno.clicker.data.UrlExtractor.extract(value).isNotEmpty()) {
+                            report = editState.applyPaste(value, PasteMode.APPEND)
+                            pasteText = ""
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp),
-                    label = { Text("一括貼り付け（文章・改行を含んでいてもURLだけを抽出します）") },
+                    label = { Text("一括貼り付け（URLを自動で末尾へ追加）") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 Spacer(Modifier.height(8.dp))

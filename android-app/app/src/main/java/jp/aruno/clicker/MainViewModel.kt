@@ -66,9 +66,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val remoteSyncState: StateFlow<RemoteSyncUiState> = mutableRemoteSyncState.asStateFlow()
     private val mutableAutomationRequested = MutableStateFlow(AutomationRuntime.snapshot().requested)
     val automationRequested: StateFlow<Boolean> = mutableAutomationRequested.asStateFlow()
+    private val mutableAutomationMessage = MutableStateFlow(AutomationRuntime.snapshot().message)
+    val automationMessage: StateFlow<String> = mutableAutomationMessage.asStateFlow()
     private val automationReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             mutableAutomationRequested.value = AutomationRuntime.snapshot().requested
+            mutableAutomationMessage.value = AutomationRuntime.snapshot().message
         }
     }
 
