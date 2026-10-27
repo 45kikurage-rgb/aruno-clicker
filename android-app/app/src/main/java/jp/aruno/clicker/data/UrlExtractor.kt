@@ -50,7 +50,7 @@ object UrlExtractor {
         val urls = mutableListOf<String>()
         val rejected = mutableListOf<RejectedCandidate>()
         for (match in CANDIDATE_PATTERN.findAll(text)) {
-            val trimmed = trimTrailing(match.value)
+            val trimmed = trimTrailing(match.value, text.getOrNull(match.range.first - 1))
             when {
                 trimmed.isEmpty() || trimmed.equals("http://", ignoreCase = true) ||
                     trimmed.equals("https://", ignoreCase = true) -> {
@@ -66,12 +66,12 @@ object UrlExtractor {
     }
 
     /** 末尾の句読点と、対応する開き括弧が不足する閉じ括弧だけを取り除く。 */
-    internal fun trimTrailing(candidate: String): String {
+    internal fun trimTrailing(candidate: String, outerOpening: Char? = null): String {
         var result = candidate
         while (result.isNotEmpty()) {
             val last = result.last()
             when {
-                last in CLOSING_TO_OPENING -> {
+                last in CLOSING_TO_OPENING && CLOSING_TO_OPENING[last] == outerOpening -> {
                     val opening = CLOSING_TO_OPENING.getValue(last)
                     val openings = result.count { it == opening }
                     val closings = result.count { it == last }

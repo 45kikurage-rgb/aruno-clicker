@@ -82,4 +82,8 @@ class UrlExtractorTest {
         val values = listOf("!", "?", ".", ",", ";", ":", "!?").map { "https://lite.tiktok.com/t/AbC/?x=wow$it" }
         assertEquals(values, UrlExtractor.extract(values.joinToString("\n")))
     }
+    @Test fun keepsLegitimateUnbalancedClosingParenthesisWithoutOuterWrapper() {
+        val url = "https://lite.tiktok.com/t/ABC/?x=)"
+        assertEquals(listOf(url), UrlExtractor.extract(url))
+    }
 }
