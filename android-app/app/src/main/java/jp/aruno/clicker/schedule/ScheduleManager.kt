@@ -14,12 +14,16 @@ object ScheduleManager {
         val store = AutomationConfigStore(context)
         store.save(store.load().copy(scheduleEnabled = true, scheduleHour = hour, scheduleMinute = minute))
         val triggerAt = nextDailyTrigger(hour, minute)
-        scheduleAt(context, triggerAt)
+        cancelPending(context)
         return triggerAt
     }
 
     fun scheduleOnce(context: Context, triggerAtMillis: Long) {
-        scheduleAt(context, triggerAtMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L))
+        cancelPending(context)
+    }
+
+    fun cancelPending(context: Context) {
+        context.getSystemService(AlarmManager::class.java).cancel(pendingIntent(context))
     }
 
     fun cancel(context: Context) {
@@ -30,11 +34,8 @@ object ScheduleManager {
     }
 
     fun rearmFromSettings(context: Context): Long? {
-        val config = AutomationConfigStore(context).load()
-        if (!config.scheduleEnabled) return null
-        val triggerAt = nextDailyTrigger(config.scheduleHour, config.scheduleMinute)
-        scheduleAt(context, triggerAt)
-        return triggerAt
+        cancelPending(context)
+        return null
     }
 
     fun canScheduleExact(context: Context): Boolean {

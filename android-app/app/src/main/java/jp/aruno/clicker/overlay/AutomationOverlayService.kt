@@ -78,7 +78,7 @@ open class AutomationOverlayService : Service() {
                 stopSelf()
             }
             AutomationContract.ACTION_SHOW_OVERLAY -> showOverlay()
-            AutomationContract.ACTION_START_AUTOMATION, null -> {
+            AutomationContract.ACTION_START_AUTOMATION -> {
                 if (configStore.load().floatingController) showOverlay()
                 requestStart(
                     durationOverride = intent?.getLongExtra(AutomationContract.EXTRA_DURATION_MS, -1L)
@@ -87,9 +87,7 @@ open class AutomationOverlayService : Service() {
                         ?.takeIf { it > 0L },
                     source = intent?.getStringExtra(AutomationContract.EXTRA_SOURCE)
                         ?: AutomationContract.SOURCE_MANUAL,
-                    startMode = intent?.getStringExtra(AutomationContract.EXTRA_START_MODE)
-                        ?: if (BuildConfig.IS_VER_S) AutomationContract.START_MODE_AUTO
-                        else AutomationContract.START_MODE_REPEAT,
+                    startMode = AutomationContract.START_MODE_URL_RUNNER,
                 )
             }
         }
@@ -99,6 +97,7 @@ open class AutomationOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        requestStop()
         handler.removeCallbacksAndMessages(null)
         removeOverlay()
         super.onDestroy()
@@ -115,21 +114,14 @@ open class AutomationOverlayService : Service() {
         source: String,
         startMode: String = AutomationContract.START_MODE_REPEAT,
     ) {
-        val config = configStore.load()
-        val duration = durationOverride ?: config.timeLimitMs
-        val interval = intervalOverride ?: config.intervalMs
-        AutomationRuntime.requestStart(this, duration, startMode)
-        sendBroadcast(
-            Intent(AutomationContract.ACTION_START_AUTOMATION)
-                .setPackage(packageName)
-                .putExtra(AutomationContract.EXTRA_DURATION_MS, duration)
-                .putExtra(AutomationContract.EXTRA_INTERVAL_MS, interval)
-                .putExtra(AutomationContract.EXTRA_SOURCE, source)
-                .putExtra(AutomationContract.EXTRA_START_MODE, startMode),
-        )
-        if (ArunoAccessibilityService.instance == null) {
-            AutomationRuntime.markWaiting(this, "アクセシビリティをONにしてください")
-            Toast.makeText(this, "ARUNO CLICKERのアクセシビリティをONにしてください", Toast.LENGTH_LONG).show()
+        if (AutomationRuntime.snapshot().requested) return
+        val service = ArunoAccessibilityService.instance
+        if (service == null) {
+            // No queued start: enabling accessibility later must not start unexpectedly.
+            AutomationRuntime.stop(this, "ユーザー補助をONにしてから動画スタートを押してください")
+            Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
+        } else if (source != AutomationContract.SOURCE_SCHEDULE) {
+            service.startUrlRunnerSequence()
         }
         refreshOverlay()
     }
@@ -224,7 +216,7 @@ open class AutomationOverlayService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val idleButtonText = if (BuildConfig.IS_VER_S) "スタート" else "2回目以降"
+        val idleButtonText = "動画スタート"
         val actionButton = compactButton(idleButtonText, Color.rgb(15, 116, 54)).apply {
             setOnClickListener {
                 if (AutomationRuntime.snapshot().requested) {
@@ -232,11 +224,7 @@ open class AutomationOverlayService : Service() {
                 } else {
                     requestStart(
                         source = AutomationContract.SOURCE_MANUAL,
-                        startMode = if (BuildConfig.IS_VER_S) {
-                            AutomationContract.START_MODE_AUTO
-                        } else {
-                            AutomationContract.START_MODE_REPEAT
-                        },
+                        startMode = AutomationContract.START_MODE_URL_RUNNER,
                     )
                 }
             }
@@ -384,7 +372,7 @@ open class AutomationOverlayService : Service() {
             "経過 --:--:--  /  残り --:--:--"
         }
         countText?.text = "スライド ${state.swipeCount}回"
-        startButton?.text = if (state.requested) "停止" else if (BuildConfig.IS_VER_S) "スタート" else "2回目以降"
+        startButton?.text = if (state.requested) "停止" else "動画スタート"
         startButton?.background = roundedBackground(
             if (state.requested) Color.rgb(165, 39, 39) else Color.rgb(15, 116, 54),
             Color.TRANSPARENT,

@@ -40,6 +40,23 @@ class ArunoAccessibilityService : AccessibilityService() {
     private val gaugeExecutor = Executors.newSingleThreadExecutor()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var startSyncJob: Job? = null
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) stopAutomation("画面がOFFになったため停止しました")
+        }
+    }
+
+    private fun urlRunnerDeviceReady(): Boolean {
+        if (instance !== this) return false
+        val power = getSystemService(PowerManager::class.java)
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        return power.isInteractive && !keyguard.isKeyguardLocked
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        stopAutomation("ユーザー補助が切断されたため停止しました")
+        return super.onUnbind(intent)
+    }
     private lateinit var configStore: AutomationConfigStore
     private var activeConfig = AutomationConfig()
     private var wakeLock: PowerManager.WakeLock? = null
@@ -73,7 +90,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     if (BuildConfig.USE_ACCESSIBILITY_OVERLAY && configStore.load().floatingController) {
                         showAccessibilityOverlay()
                     }
-                    startWithLatestRemoteConfig(intent)
+                    startUrlRunnerSequence()
                 }
                 AutomationContract.ACTION_STOP_AUTOMATION -> stopAutomation("停止しました")
             }
@@ -156,6 +173,8 @@ class ArunoAccessibilityService : AccessibilityService() {
         lastPopupScanAtMs = android.os.SystemClock.elapsedRealtime()
         val generation = automationGeneration
         if (
+            // URLランナー実行中は×認識等のポップアップ処理を実行しない。
+            urlSequenceRunner == null &&
             isSessionActive(generation) &&
             !restartInProgress &&
             isTargetForeground()
@@ -206,21 +225,16 @@ class ArunoAccessibilityService : AccessibilityService() {
         ) {
             showAccessibilityOverlay()
         }
-        restoredRequest?.let { restored ->
-            if (restored.pendingStart) {
-                startWithLatestRemoteConfig(
-                    Intent()
-                        .putExtra(AutomationContract.EXTRA_DURATION_MS, restored.durationMs)
-                        .putExtra(AutomationContract.EXTRA_START_MODE, restored.startMode),
-                )
-            } else if (config.autoResume) {
-                startAutomation(
-                    config.copy(timeLimitMs = restored.durationMs).sanitized(),
-                    startMode = AutomationContract.START_MODE_REPEAT,
-                )
-            } else {
-                AutomationRuntime.stop(this, "自動再開はOFFです")
-            }
+        // A reconnect never consumes a stale persisted start or resumes old gestures.
+        if (restoredRequest != null) {
+            AutomationRuntime.stop(this, "サービスが再接続されました。動画スタートを押してください")
+        }
+        val screenFilter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(screenOffReceiver, screenFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(screenOffReceiver, screenFilter)
         }
     }
 
@@ -239,7 +253,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        AutomationRuntime.markWaiting(this, "アクセシビリティが中断されました")
+        stopAutomation("アクセシビリティが中断されました。再開には動画スタートを押してください")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -248,12 +262,17 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        // サービス切断時は実行中扱いにせず、URLランナーを停止する。
+        stopAutomation("サービスが切断されました。再開には動画スタートを押してください")
+        urlSequenceRunner = null
+        urlSequenceScheduler = null
         automationGeneration += 1L
         handler.removeCallbacksAndMessages(null)
         gaugeExecutor.shutdownNow()
         startSyncJob?.cancel()
         serviceScope.cancel()
         runCatching { unregisterReceiver(commandReceiver) }
+        runCatching { unregisterReceiver(screenOffReceiver) }
         accessibilityOverlayController?.destroy()
         accessibilityOverlayController = null
         releaseWakeLock()
@@ -270,7 +289,13 @@ class ArunoAccessibilityService : AccessibilityService() {
         accessibilityOverlayController?.hide()
     }
 
+    // Compatibility entry for old UI integrations; never execute old gestures.
     fun startAutomation(
+        config: AutomationConfig = configStore.load(),
+        startMode: String = AutomationContract.START_MODE_REPEAT,
+    ) = startUrlRunnerSequence()
+
+    private fun startLegacyAutomation(
         config: AutomationConfig = configStore.load(),
         startMode: String = AutomationContract.START_MODE_REPEAT,
     ) {
@@ -312,7 +337,10 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     /** Every manual, overlay and scheduled start synchronizes shared URLs before choosing its mode. */
-    private fun startWithLatestRemoteConfig(intent: Intent) {
+    private fun startWithLatestRemoteConfig(intent: Intent) = startUrlRunnerSequence()
+
+    @Suppress("unused")
+    private fun startLegacyWithLatestRemoteConfig(intent: Intent) {
         startSyncJob?.cancel()
         val durationOverride = intent.getLongExtra(AutomationContract.EXTRA_DURATION_MS, -1L)
             .takeIf { it >= 0L }
@@ -335,11 +363,16 @@ class ArunoAccessibilityService : AccessibilityService() {
                 timeLimitMs = durationOverride ?: stored.timeLimitMs,
                 intervalMs = intervalOverride ?: stored.intervalMs,
             ).sanitized()
-            startAutomation(activeConfig, startMode)
+            startLegacyAutomation(activeConfig, startMode)
         }
     }
 
     fun stopAutomation(reason: String = "停止しました") {
+        // フロート／通知／ホームからの停止が URLランナーにも届くようにする。
+        urlSequenceRunner?.stop(reason)
+        urlSequenceRunner = null
+        urlSequenceScheduler?.cancelAll()
+        urlSequenceScheduler = null
         startSyncJob?.cancel()
         startSyncJob = null
         automationGeneration += 1L
@@ -350,6 +383,144 @@ class ArunoAccessibilityService : AccessibilityService() {
         handler.removeCallbacksAndMessages(null)
         releaseWakeLock()
         AutomationRuntime.stop(this, reason)
+    }
+
+    // ---- URLランナー（URL順次展開） ----
+    //
+    // 既存の初回／スライド経路とは分離した新しい実行経路。
+    // この経路では ×認識・広告判定・スワイプ・定期再起動・Recents削除を呼ばない。
+    // URLを開く処理は既存 openTargetUrl をそのまま再利用し、前面確認は既存
+    // waitForTargetForeground と同じ条件（10秒制限・600ms安定・200ms間隔）で
+    // ランナー専用にポーリングする（既存関数は世代管理が従来経路専用のため）。
+
+    private var urlSequenceRunner: UrlSequenceRunnerCore? = null
+    private var urlSequenceScheduler: UrlRunnerHandlerScheduler? = null
+
+    private inner class UrlRunnerHandlerScheduler : DelayScheduler {
+        private val pending = mutableSetOf<Runnable>()
+
+        override fun schedule(delayMs: Long, task: () -> Unit): ScheduledTask {
+            val runnable = object : Runnable {
+                override fun run() {
+                    pending.remove(this)
+                    task()
+                }
+            }
+            pending += runnable
+            handler.postDelayed(runnable, delayMs)
+            return ScheduledTask {
+                pending.remove(runnable)
+                handler.removeCallbacks(runnable)
+            }
+        }
+
+        override fun cancelAll() {
+            pending.forEach { handler.removeCallbacks(it) }
+            pending.clear()
+        }
+    }
+
+    private inner class UrlRunnerForegroundChecker : ForegroundChecker {
+        override fun awaitForeground(generation: Long, callback: (Boolean) -> Unit) {
+            val deadline = android.os.SystemClock.elapsedRealtime() + TARGET_LAUNCH_TIMEOUT_MS
+            var stableSince = 0L
+            val check = object : Runnable {
+                override fun run() {
+                    val runner = urlSequenceRunner
+                    if (runner == null || !runner.isRunning() || runner.generation != generation) return
+                    // 画面ロック中・画面OFFは前面確認の成功として扱わない。
+                    val power = getSystemService(PowerManager::class.java)
+                    val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+                    if (!power.isInteractive || keyguard.isKeyguardLocked) {
+                        callback(false)
+                        return
+                    }
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (isTargetForeground()) {
+                        if (stableSince == 0L) stableSince = now
+                        if (now - stableSince >= TARGET_FOREGROUND_STABLE_MS) {
+                            callback(true)
+                            return
+                        }
+                    } else {
+                        stableSince = 0L
+                        if (now >= deadline) {
+                            callback(false)
+                            return
+                        }
+                    }
+                    handler.postDelayed(this, FOREGROUND_CHECK_INTERVAL_MS)
+                }
+            }
+            handler.post(check)
+        }
+    }
+
+    fun startUrlRunnerSequence() {
+        // Check the existing instance BEFORE stopping/replacing it.
+        if (urlSequenceRunner?.isRunning() == true) return
+        // 従来経路が動いていれば止めてから開始する（世代加算とコールバック全除去を含む）。
+        stopAutomation("URLランナーを開始します")
+        val repository = jp.aruno.clicker.data.UrlRunnerRepository(applicationContext)
+        val saved = repository.loadForStart()
+        if (saved == null) {
+            AutomationRuntime.stop(
+                this,
+                repository.load().detail.ifBlank { "保存済み設定がないため開始できません" },
+            )
+            return
+        }
+        val power = getSystemService(PowerManager::class.java)
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        if (!power.isInteractive || keyguard.isKeyguardLocked) {
+            AutomationRuntime.stop(this, "画面ロック中は開始できません")
+            return
+        }
+        activeConfig = configStore.load().sanitized()
+        automationGeneration += 1L
+        val scheduler = UrlRunnerHandlerScheduler()
+        urlSequenceScheduler = scheduler
+        val runner = UrlSequenceRunnerCore(
+            opener = UrlOpener { url -> urlRunnerDeviceReady() && openTargetUrl(url) },
+            canContinue = { urlRunnerDeviceReady() },
+            foregroundChecker = UrlRunnerForegroundChecker(),
+            scheduler = scheduler,
+            clock = UrlRunnerClock { android.os.SystemClock.elapsedRealtime() },
+            statusSink = UrlRunnerStatusSink { status ->
+                AutomationRuntime.markWaiting(this, status.message)
+                if (
+                    status.phase == UrlRunnerPhase.FINISHED ||
+                    status.phase == UrlRunnerPhase.STOPPED ||
+                    status.phase == UrlRunnerPhase.FAILED
+                ) {
+                    urlSequenceRunner = null
+                    urlSequenceScheduler = null
+                    scheduler.cancelAll()
+                    releaseWakeLock()
+                    AutomationRuntime.stop(this, status.message)
+                }
+            },
+        )
+        urlSequenceRunner = runner
+        AutomationRuntime.requestStart(this, 0L, AutomationContract.START_MODE_URL_RUNNER)
+        AutomationRuntime.markSessionActive(this)
+        if (activeConfig.keepScreenAwake) acquireWakeLock(0L)
+        when (val result = runner.start(saved)) {
+            is UrlRunnerStartResult.Invalid -> {
+                urlSequenceRunner = null
+                urlSequenceScheduler = null
+                scheduler.cancelAll()
+                releaseWakeLock()
+                AutomationRuntime.stop(
+                    this,
+                    "設定に問題があるため開始できません: ${result.messages.firstOrNull().orEmpty()}",
+                )
+            }
+            UrlRunnerStartResult.AlreadyRunning -> {
+                AutomationRuntime.markWaiting(this, "既に実行中です")
+            }
+            UrlRunnerStartResult.Started -> Unit
+        }
     }
 
     private fun launchTargetApp(preferredPackage: String, resetTask: Boolean = false): Boolean {

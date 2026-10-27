@@ -2,6 +2,20 @@ const MAX_BODY_BYTES = 8 * 1024;
 const MAX_URL_LENGTH = 2048;
 const MAX_NAME_LENGTH = 80;
 const SCHEMA_VERSION = 2;
+
+// ---- URL runner (/v1/url-runner, schemaVersion 3) ----
+// Added without changing the legacy /v1/config contract (schemaVersion 2).
+// Body limit rationale: a valid body holds at most 120 URLs of up to 2048
+// characters each (120 * 2048 = 245,760 bytes) plus per-URL JSON syntax
+// (quotes/comma, ~3 bytes each), five individual seconds, one common
+// seconds value and expectedConfigVersion. The worst valid case is about
+// 246 KB, so the limit is set to 512 KiB (about 2.1x headroom).
+const URL_RUNNER_SCHEMA_VERSION = 3;
+const MAX_URL_RUNNER_BODY_BYTES = 512 * 1024;
+const MAX_URL_RUNNER_URLS = 120;
+const URL_RUNNER_INDIVIDUAL_COUNT = 5;
+const MIN_RUNNER_SECONDS = 1;
+const MAX_RUNNER_SECONDS = 3600;
 const ADMIN_KEY_PATTERN = /^[A-Za-z0-9]{8}$/;
 const ALLOWED_TIKTOK_HOSTS = new Set([
   "tiktok.com", "www.tiktok.com", "lite.tiktok.com", "m.tiktok.com", "vm.tiktok.com", "vt.tiktok.com",
@@ -23,7 +37,7 @@ async function route(request, env) {
   if (request.method === "OPTIONS") return handleOptions(request, env);
   if (url.pathname === "/healthz" || url.pathname === "/" || url.pathname.startsWith("/v1/")) {
     requireDb(env);
-    await ensureLatestSchema(env.DB);
+
   }
   if (url.pathname === "/healthz" && request.method === "GET") {
     return jsonResponse({ ok: true, schemaVersion: SCHEMA_VERSION }, 200, request, env);
@@ -32,6 +46,11 @@ async function route(request, env) {
   if (url.pathname === "/" || url.pathname === "/v1/config") {
     if (request.method === "GET") return getConfig(request, env);
     if (request.method === "PUT") return updateConfig(request, env);
+    return methodNotAllowed(request, env, "GET, PUT, OPTIONS");
+  }
+  if (url.pathname === "/v1/url-runner") {
+    if (request.method === "GET") return getUrlRunnerConfig(request, env);
+    if (request.method === "PUT") return updateUrlRunnerConfig(request, env);
     return methodNotAllowed(request, env, "GET, PUT, OPTIONS");
   }
   if (url.pathname === "/v1/history") {
@@ -198,6 +217,203 @@ async function updateConfig(request, env) {
     name2: name2.value, url2: url2.value,
     shareName: shareName.value, shareUrl: shareUrl.value,
     configVersion: nextVersion, updatedAt, schemaVersion: SCHEMA_VERSION,
+  }, 200, request, env, { "Cache-Control": "no-store, max-age=0" });
+}
+
+// ---- URL runner handlers ----
+// Storage is a new single-row table (url_runner_config) plus a history
+// table trimmed to the latest 20 versions, mirroring the legacy config
+// flow. The legacy remote_config / config_history tables are untouched.
+
+function toPublicUrlRunnerConfig(row) {
+  if (!row) {
+    return {
+      urls: [],
+      individualSeconds: [10, 10, 10, 10, 10],
+      commonSeconds: 10,
+      configVersion: 0,
+      updatedAt: null,
+      schemaVersion: URL_RUNNER_SCHEMA_VERSION,
+      loopMode: "STOP", waitFromForeground: true, startIndex: 0,
+    };
+  }
+  return {
+    ...JSON.parse(row.options_json || '{"loopMode":"STOP","waitFromForeground":true,"startIndex":0}'),
+    urls: JSON.parse(row.urls_json),
+    individualSeconds: JSON.parse(row.individual_seconds_json),
+    commonSeconds: Number(row.common_seconds),
+    configVersion: Number(row.config_version),
+    updatedAt: row.updated_at,
+    schemaVersion: URL_RUNNER_SCHEMA_VERSION,
+  };
+}
+
+async function readUrlRunnerRow(env) {
+  return env.DB.prepare(
+    `SELECT urls_json, individual_seconds_json, common_seconds,
+            config_version, updated_at, update_id, options_json
+     FROM url_runner_config WHERE id = 1`,
+  ).first();
+}
+
+async function getUrlRunnerConfig(request, env) {
+  requireDb(env);
+  const row = await readUrlRunnerRow(env);
+  return jsonResponse(toPublicUrlRunnerConfig(row), 200, request, env, { "Cache-Control": "no-store, max-age=0" });
+}
+
+// Validates one URL-runner payload. Every problem is collected so the
+// response can name the offending positions instead of silently dropping
+// entries. Host rules reuse validateStartupUrl (HTTPS + TikTok allowlist).
+function validateUrlRunnerPayload(body) {
+  const errors = [];
+  if (!isPlainObject(body)) return { ok: false, errors: ["Request body must be a JSON object"] };
+  const allowedKeys = new Set(["urls", "individualSeconds", "commonSeconds", "expectedConfigVersion", "schemaVersion", "loopMode", "waitFromForeground", "startIndex"]);
+  for (const key of Object.keys(body)) {
+    if (!allowedKeys.has(key)) errors.push(`Unexpected field: ${key}`);
+  }
+  if (body.schemaVersion !== undefined && body.schemaVersion !== URL_RUNNER_SCHEMA_VERSION) {
+    errors.push(`schemaVersion must be ${URL_RUNNER_SCHEMA_VERSION}`);
+  }
+
+  let urls = null;
+  if (!Array.isArray(body.urls)) {
+    errors.push("urls must be an array");
+  } else if (body.urls.length === 0) {
+    errors.push("urls must contain at least one URL");
+  } else if (body.urls.length > MAX_URL_RUNNER_URLS) {
+    errors.push(`urls must contain at most ${MAX_URL_RUNNER_URLS} entries (received ${body.urls.length})`);
+  } else {
+    urls = [];
+    body.urls.forEach((value, index) => {
+      const result = validateStartupUrl(value, `urls[${index}]`);
+      if (!result.ok) errors.push(result.message);
+      else urls.push(result.value);
+    });
+    if (errors.length > 0) urls = null;
+  }
+
+  let individualSeconds = null;
+  if (!Array.isArray(body.individualSeconds) ||
+      body.individualSeconds.length !== URL_RUNNER_INDIVIDUAL_COUNT) {
+    errors.push(`individualSeconds must contain exactly ${URL_RUNNER_INDIVIDUAL_COUNT} values`);
+  } else if (!body.individualSeconds.every(
+    (value) => Number.isSafeInteger(value) && value >= MIN_RUNNER_SECONDS && value <= MAX_RUNNER_SECONDS,
+  )) {
+    errors.push(`individualSeconds values must be integers between ${MIN_RUNNER_SECONDS} and ${MAX_RUNNER_SECONDS}`);
+  } else {
+    individualSeconds = [...body.individualSeconds];
+  }
+
+  let commonSeconds = null;
+  if (!Number.isSafeInteger(body.commonSeconds) ||
+      body.commonSeconds < MIN_RUNNER_SECONDS || body.commonSeconds > MAX_RUNNER_SECONDS) {
+    errors.push(`commonSeconds must be an integer between ${MIN_RUNNER_SECONDS} and ${MAX_RUNNER_SECONDS}`);
+  } else {
+    commonSeconds = body.commonSeconds;
+  }
+
+  if (body.expectedConfigVersion !== undefined &&
+      (!Number.isSafeInteger(body.expectedConfigVersion) || body.expectedConfigVersion < 0)) {
+    errors.push("expectedConfigVersion must be a non-negative integer");
+  }
+
+  const loopMode = body.loopMode ?? "STOP";
+  const waitFromForeground = body.waitFromForeground ?? true;
+  const startIndex = body.startIndex ?? 0;
+  if (!["STOP", "LOOP"].includes(loopMode)) errors.push("loopMode must be STOP or LOOP");
+  if (typeof waitFromForeground !== "boolean") errors.push("waitFromForeground must be boolean");
+  if (!Number.isSafeInteger(startIndex) || startIndex < 0 || startIndex >= (body.urls?.length || 1)) errors.push("startIndex is outside urls");
+  if (errors.length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: {
+      urls,
+      individualSeconds,
+      commonSeconds, loopMode, waitFromForeground, startIndex,
+      expectedConfigVersion: body.expectedConfigVersion,
+    },
+  };
+}
+
+async function updateUrlRunnerConfig(request, env) {
+  const authFailure = await authenticate(request, env);
+  if (authFailure) return authFailure;
+  requireDb(env);
+
+  const contentType = request.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    return apiError(415, "unsupported_media_type", "Content-Type must be application/json", request, env);
+  }
+  const declaredLength = Number(request.headers.get("Content-Length") || "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_URL_RUNNER_BODY_BYTES) {
+    return apiError(413, "payload_too_large", "Request body is too large", request, env);
+  }
+  const rawBody = await request.text();
+  if (new TextEncoder().encode(rawBody).byteLength > MAX_URL_RUNNER_BODY_BYTES) {
+    return apiError(413, "payload_too_large", "Request body is too large", request, env);
+  }
+
+  let body;
+  try { body = JSON.parse(rawBody); }
+  catch { return apiError(400, "invalid_json", "Request body is not valid JSON", request, env); }
+
+  const validation = validateUrlRunnerPayload(body);
+  if (!validation.ok) return validationError(validation.errors.join("; "), request, env);
+  const value = validation.value;
+
+  const current = await readUrlRunnerRow(env);
+  const currentVersion = current ? Number(current.config_version) : 0;
+  if (value.expectedConfigVersion !== undefined && value.expectedConfigVersion !== currentVersion) {
+    return versionConflict(currentVersion, request, env);
+  }
+
+  const nextVersion = currentVersion + 1;
+  const updatedAt = new Date().toISOString();
+  const updateId = crypto.randomUUID();
+  const urlsJson = JSON.stringify(value.urls);
+  const secondsJson = JSON.stringify(value.individualSeconds);
+  const results = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO url_runner_config
+         (id, urls_json, individual_seconds_json, common_seconds, config_version, updated_at, update_id, options_json)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         urls_json = excluded.urls_json,
+         individual_seconds_json = excluded.individual_seconds_json,
+         common_seconds = excluded.common_seconds,
+         config_version = excluded.config_version,
+         updated_at = excluded.updated_at,
+         update_id = excluded.update_id,
+         options_json = excluded.options_json
+       WHERE url_runner_config.config_version = ?`,
+    ).bind(urlsJson, secondsJson, value.commonSeconds, nextVersion, updatedAt, updateId, JSON.stringify({loopMode:value.loopMode,waitFromForeground:value.waitFromForeground,startIndex:value.startIndex}), currentVersion),
+    env.DB.prepare(
+      `INSERT INTO url_runner_history
+         (config_version, urls_json, individual_seconds_json, common_seconds, updated_at, options_json)
+       SELECT config_version, urls_json, individual_seconds_json, common_seconds, updated_at, options_json
+       FROM url_runner_config WHERE id = 1 AND update_id = ?`,
+    ).bind(updateId),
+    env.DB.prepare(
+      `DELETE FROM url_runner_history WHERE config_version NOT IN (
+         SELECT config_version FROM url_runner_history ORDER BY config_version DESC LIMIT 20
+       )`,
+    ),
+  ]);
+
+  if (!results[0]?.success) throw new Error("D1 update failed");
+  if (Number(results[0]?.meta?.changes || 0) !== 1) {
+    const latest = await readUrlRunnerRow(env);
+    return versionConflict(latest ? Number(latest.config_version) : currentVersion, request, env);
+  }
+  return jsonResponse({
+    urls: value.urls,
+    individualSeconds: value.individualSeconds,
+    commonSeconds: value.commonSeconds,
+    loopMode: value.loopMode, waitFromForeground: value.waitFromForeground, startIndex: value.startIndex,
+    configVersion: nextVersion,
+    updatedAt,
+    schemaVersion: URL_RUNNER_SCHEMA_VERSION,
   }, 200, request, env, { "Cache-Control": "no-store, max-age=0" });
 }
 
@@ -369,4 +585,8 @@ function methodNotAllowed(request, env, allow) {
 }
 function isPlainObject(value) { return Boolean(value && typeof value === "object" && !Array.isArray(value)); }
 
-export const testables = { ALLOWED_TIKTOK_HOSTS, validateName, validateStartupUrl, ensureLatestSchema };
+export const testables = {
+  ALLOWED_TIKTOK_HOSTS, validateName, validateStartupUrl, ensureLatestSchema,
+  validateUrlRunnerPayload,
+  MAX_URL_RUNNER_BODY_BYTES, MAX_URL_RUNNER_URLS,
+};
