@@ -269,7 +269,7 @@ class UrlSequenceRunnerCore(
                 when {
                     noMoreInCycle -> "（全リンク失敗、連続再試行は中止）"
                     hasNextUrl -> "、TikTok Liteを起動し直して次へ"
-                    else -> "、次のURLなし",
+                    else -> "、次のURLなし"
                 },
         )
         if (!isCurrent(gen)) return
