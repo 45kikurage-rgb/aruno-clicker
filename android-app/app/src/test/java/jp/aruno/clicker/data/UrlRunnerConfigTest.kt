@@ -34,10 +34,19 @@ class UrlRunnerConfigTest {
     }
 
     @Test
-    fun boundary120IsValidAnd121IsTooMany() {
-        assertTrue(config(120).validate().isEmpty())
-        val issues = config(121).validate()
+    fun boundary200IsValidAnd201IsTooMany() {
+        assertTrue(config(120).validate().isEmpty()) // old saved datasets remain valid
+        assertTrue(config(200).validate().isEmpty())
+        val issues = config(201).validate()
         assertTrue(issues.any { it.code == UrlRunnerIssue.TOO_MANY_URLS })
+    }
+
+    @Test
+    fun blankPositionsAreValidButAllBlankFails() {
+        val sparse = UrlRunnerConfig(urls = listOf("", url(2), "", url(4)), startIndex = 0)
+        assertTrue(sparse.validate().isEmpty())
+        val invalid = UrlRunnerConfig(urls = listOf("", " ", ""))
+        assertTrue(invalid.validate().any { it.code == UrlRunnerIssue.URLS_EMPTY })
     }
 
     @Test
