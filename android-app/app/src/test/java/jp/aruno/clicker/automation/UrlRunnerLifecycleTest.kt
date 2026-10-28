@@ -83,6 +83,39 @@ class UrlRunnerLifecycleTest {
         assertTrue(AutomationRuntime.snapshot().requested)
     }
 
+
+    @Test fun eachSuccessiveUrlRecreatesTikTokActivityTaskWithoutDeletingAppData() {
+        start()
+        val first = shadowOf(app).nextStartedActivity
+        assertNotNull(first)
+        assertEquals(url, first!!.data.toString())
+        assertEquals(0, first.flags and Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        assertTrue(first.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
+        // First clip: 600 ms stable target foreground + one-second hold.
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_500))
+        val second = shadowOf(app).nextStartedActivity
+        assertNotNull("Second URL must be launched", second)
+        assertEquals("https://lite.tiktok.com/t/BBB/", second!!.data.toString())
+        assertTrue("Following URLs must get a new Activity task",
+            second.flags and Intent.FLAG_ACTIVITY_CLEAR_TASK != 0)
+        assertTrue(second.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+    }
+
+    @Test fun urlRunnerCountdownTracksNextVideoAndResetsWhenStopped() {
+        start()
+        shadowOf(app).nextStartedActivity
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(800))
+        val during = AutomationRuntime.snapshot()
+        assertTrue(during.urlRunnerActive)
+        assertTrue(during.urlRunnerHasNext)
+        assertNotNull(during.urlRunnerSecondsToNext)
+        assertTrue(during.urlRunnerSecondsToNext!! in 0..1)
+        service.onInterrupt()
+        val stopped = AutomationRuntime.snapshot()
+        assertFalse(stopped.urlRunnerActive)
+        assertNull(stopped.urlRunnerSecondsToNext)
+    }
+
     @Test fun screenOffCancelsDelayedNextUrl() {
         start()
         assertEquals(1, openedCount())
