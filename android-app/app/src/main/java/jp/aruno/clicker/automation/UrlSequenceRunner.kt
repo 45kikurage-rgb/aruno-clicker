@@ -73,6 +73,8 @@ data class UrlRunnerStatus(
     /** 前面確認後からの経過秒数。 */
     val waitElapsedSeconds: Int,
     val message: String,
+    /** Next non-blank slot in this run; null if the current URL is the last. */
+    val nextIndex: Int? = null,
 )
 
 /** 状態の受け口（Android 側は AutomationRuntime へ流す）。 */
@@ -264,6 +266,13 @@ class UrlSequenceRunnerCore(
                 waitTotalSeconds = waitTotalSeconds,
                 waitElapsedSeconds = waitElapsedSeconds,
                 message = message,
+                nextIndex = config?.let { current ->
+                    val next = ((index + 1) until current.urls.size)
+                        .firstOrNull { current.urls[it].isNotBlank() }
+                    next ?: if ((loopMode ?: current.loopMode) == LoopMode.LOOP) {
+                        current.urls.indexOfFirst(String::isNotBlank).takeIf { it >= 0 }
+                    } else null
+                },
             ),
         )
     }
