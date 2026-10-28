@@ -55,7 +55,7 @@ data class SecondsParseResult(
  *
  * - URLは常に [UrlRunnerLimits.MAX_URLS] 件分のスロットで保持するため、
  *   範囲（001–010 等）を切り替えても編集中の内容は失われない。
- * - 中間の空欄は保持し、確定時（送信・保存）の検証で明示する。末尾の空欄だけを一覧外とする。
+ * - 中間の空欄は保持して実行時にスキップする。末尾の空欄だけを一覧外とする。
  * - Compose に依存しない純粋クラスとして単体テスト可能にしている。
  */
 class UrlListEditState(private val onChanged: () -> Unit = {}) {
@@ -124,12 +124,15 @@ class UrlListEditState(private val onChanged: () -> Unit = {}) {
      */
     fun applyPaste(text: String, mode: PasteMode): PasteReport {
         val extraction = UrlExtractor.extractDetailed(text)
-        if (mode == PasteMode.REPLACE) slots.fill("")
+        // The first five positions are always edited individually; bulk paste only touches 6+.
+        if (mode == PasteMode.REPLACE) {
+            for (index in UrlRunnerLimits.INDIVIDUAL_COUNT until slots.size) slots[index] = ""
+        }
         val startIndex = if (mode == PasteMode.REPLACE) {
-            0
+            UrlRunnerLimits.INDIVIDUAL_COUNT
         } else {
             val lastNonBlank = slots.indexOfLast { it.isNotBlank() }
-            lastNonBlank + 1
+            maxOf(UrlRunnerLimits.INDIVIDUAL_COUNT, lastNonBlank + 1)
         }
         var applied = 0
         val excess = mutableListOf<String>()
@@ -195,8 +198,8 @@ class UrlListEditState(private val onChanged: () -> Unit = {}) {
         issues += seconds.errors
         if (!seconds.isValid) return null
         val startNumber = startNumberText.toIntOrNull()
-        if (startNumber == null || startNumber !in 1..filledCount().coerceAtLeast(1)) {
-            issues += "開始番号は登録済みURLの範囲で指定してください"
+        if (startNumber == null || startNumber !in 1..effectiveUrls().size.coerceAtLeast(1)) {
+            issues += "開始番号は1〜最後の登録位置の範囲で指定してください"
             return null
         }
         val config = UrlRunnerConfig(
