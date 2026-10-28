@@ -22,7 +22,8 @@ import jp.aruno.clicker.data.UrlRunnerLimits
  * 成功の区別:
  * - 成功扱いにするのは「URLを開き、対象アプリの前面表示を確認した」まで。
  * - 動画が再生されたかどうかは確認しない（状態表示でも未確認と明記する）。
- * - 起動失敗・前面未確認は失敗として終了し、成功扱いにしない。
+ * - 起動失敗・前面未確認はスキップとして記録し、後続URLへ進む。成功とは扱わない。
+ * - 画面OFF/ロック/ユーザー停止/サービス切断は従来どおり即時停止する。
  */
 
 /** URLを開く処理。開く要求が受理されたら true、起動失敗は false。 */
@@ -56,6 +57,7 @@ enum class UrlRunnerPhase {
     OPENING,
     WAITING_FOREGROUND,
     HOLDING,
+    SKIPPED,
     FINISHED,
     STOPPED,
     FAILED,
@@ -109,6 +111,8 @@ class UrlSequenceRunnerCore(
     private var index: Int = -1
     private var active: Boolean = false
     private var openRequestedAtMs = 0L
+    private var skippedFailureCount = 0
+    private var consecutiveFailures = 0
 
     fun isRunning(): Boolean = active
 
@@ -125,6 +129,8 @@ class UrlSequenceRunnerCore(
         snapshot = config.snapshot()
         index = config.startIndex
         active = true
+        skippedFailureCount = 0
+        consecutiveFailures = 0
         generation += 1L
         openCurrent(generation)
         return UrlRunnerStartResult.Started
@@ -153,10 +159,7 @@ class UrlSequenceRunnerCore(
                 index = 0
                 openCurrent(gen) // validate() guarantees at least one nonblank URL.
             } else {
-                active = false
-                phase = UrlRunnerPhase.FINISHED
-                report(phase, config.urls.size - 1, 0, 0,
-                    "全${config.urls.size}枠を確認し、登録済みURLを開きました（空欄はスキップ・動画の再生は未確認）")
+                finish("全${config.urls.size}枠を確認しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             }
             return
         }
@@ -171,7 +174,7 @@ class UrlSequenceRunnerCore(
         val opened = runCatching { opener.open(url) }.getOrDefault(false)
         if (!isCurrent(gen)) return
         if (!opened) {
-            fail(gen, "${index + 1}番目のURLを開けませんでした（起動失敗）")
+            skipFailedUrl(gen, "起動失敗")
             return
         }
         phase = UrlRunnerPhase.WAITING_FOREGROUND
@@ -183,7 +186,7 @@ class UrlSequenceRunnerCore(
         foregroundChecker.awaitForeground(gen) { ready ->
             if (!isCurrent(gen)) return@awaitForeground
             if (!ready) {
-                fail(gen, "${index + 1}番目のURLの表示を確認できませんでした")
+                skipFailedUrl(gen, "10秒以内に画面を確認できませんでした")
                 return@awaitForeground
             }
             beginHold(gen)
@@ -199,6 +202,7 @@ class UrlSequenceRunnerCore(
         val config = snapshot ?: return
         val totalSeconds = config.secondsFor(index)
         val startedAtMs = if (config.waitFromForeground) clock.nowMs() else openRequestedAtMs
+        consecutiveFailures = 0
         phase = UrlRunnerPhase.HOLDING
         reportHold(gen, startedAtMs, totalSeconds)
     }
@@ -227,6 +231,48 @@ class UrlSequenceRunnerCore(
         val config = snapshot ?: return
         index += 1
         openCurrent(gen)
+    }
+
+    /**
+     * The app can remain open on a popup or a previous video even when a link fails.
+     * Record the failure, then continue on the *next* numbered URL instead of
+     * reporting a fake success or stopping the entire run.
+     *
+     * A bounded delay avoids recursively opening hundreds of broken URLs.
+     * In LOOP mode stop after an entire unsuccessful cycle to avoid an endless
+     * link-opening loop. Explicit/device safety stops always take priority.
+     */
+    private fun skipFailedUrl(gen: Long, reason: String) {
+        if (!checkCanContinue(gen)) return
+        val config = snapshot ?: return
+        skippedFailureCount += 1
+        consecutiveFailures += 1
+        phase = UrlRunnerPhase.SKIPPED
+        val nonBlankCount = config.urls.count { it.isNotBlank() }
+        val noMoreInCycle = (loopMode ?: config.loopMode) == LoopMode.LOOP &&
+            consecutiveFailures >= nonBlankCount
+        report(
+            UrlRunnerPhase.SKIPPED, index, 0, 0,
+            "${index + 1}番：$reason。失敗として記録" +
+                if (noMoreInCycle) "（全リンク失敗、連続再試行は中止）"
+                else "、次のURLへ進みます",
+        )
+        if (!isCurrent(gen)) return
+        if (noMoreInCycle) {
+            finish("全${nonBlankCount}件のリンクで表示確認できませんでした（失敗${skippedFailureCount}件・安全停止）")
+            return
+        }
+        scheduler.schedule(FAILED_LINK_SKIP_DELAY_MS) {
+            if (!checkCanContinue(gen)) return@schedule
+            index += 1
+            openCurrent(gen)
+        }
+    }
+
+    private fun finish(message: String) {
+        active = false
+        phase = UrlRunnerPhase.FINISHED
+        report(phase, (snapshot?.urls?.size ?: 1) - 1, 0, 0, message)
     }
 
     private fun fail(gen: Long, reason: String) {
@@ -280,5 +326,6 @@ class UrlSequenceRunnerCore(
     companion object {
         /** 待機中の状態更新間隔（既存 holdUrlWithCountdown の1秒刻み表示に合わせる）。 */
         const val TICK_MS = 200L
+        const val FAILED_LINK_SKIP_DELAY_MS = 650L
     }
 }
