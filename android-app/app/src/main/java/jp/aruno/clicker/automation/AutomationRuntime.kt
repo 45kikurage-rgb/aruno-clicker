@@ -11,6 +11,9 @@ data class AutomationSnapshot(
     val endsAtElapsed: Long,
     val swipeCount: Int,
     val message: String,
+    val urlRunnerActive: Boolean = false,
+    val urlRunnerSecondsToNext: Int? = null,
+    val urlRunnerHasNext: Boolean = false,
 ) {
     val elapsedMs: Long
         get() = if (startedAtElapsed <= 0L) 0L else (SystemClock.elapsedRealtime() - startedAtElapsed).coerceAtLeast(0L)
@@ -32,6 +35,9 @@ object AutomationRuntime {
     @Volatile private var endsAtElapsed = 0L
     @Volatile private var swipeCount = 0
     @Volatile private var message = "停止中"
+    @Volatile private var urlRunnerActive = false
+    @Volatile private var urlRunnerSecondsToNext: Int? = null
+    @Volatile private var urlRunnerHasNext = false
 
     fun requestStart(
         context: Context,
@@ -44,6 +50,9 @@ object AutomationRuntime {
         endsAtElapsed = if (durationMs <= 0L) Long.MAX_VALUE else now + durationMs
         swipeCount = 0
         message = "開始準備中"
+        urlRunnerActive = startMode == AutomationContract.START_MODE_URL_RUNNER
+        urlRunnerSecondsToNext = null
+        urlRunnerHasNext = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_REQUESTED, true)
             .putBoolean(KEY_PENDING_START, true)
@@ -96,6 +105,17 @@ object AutomationRuntime {
         notifyChanged(context)
     }
 
+    /** Video-specific countdown is separate from the unlimited session timer. */
+    fun markUrlRunnerStatus(context: Context, status: UrlRunnerStatus) {
+        running = false
+        message = PresentationText.sanitize(status.message)
+        urlRunnerSecondsToNext = if (status.phase == UrlRunnerPhase.HOLDING) {
+            (status.waitTotalSeconds - status.waitElapsedSeconds).coerceAtLeast(0)
+        } else null
+        urlRunnerHasNext = status.nextIndex != null
+        notifyChanged(context)
+    }
+
     fun incrementSwipe(context: Context) {
         swipeCount += 1
         notifyChanged(context)
@@ -106,6 +126,9 @@ object AutomationRuntime {
         running = false
         endsAtElapsed = 0L
         message = PresentationText.sanitize(text)
+        urlRunnerActive = false
+        urlRunnerSecondsToNext = null
+        urlRunnerHasNext = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_REQUESTED, false)
             .putBoolean(KEY_PENDING_START, false)
@@ -120,6 +143,9 @@ object AutomationRuntime {
         endsAtElapsed = endsAtElapsed,
         swipeCount = swipeCount,
         message = message,
+        urlRunnerActive = urlRunnerActive,
+        urlRunnerSecondsToNext = urlRunnerSecondsToNext,
+        urlRunnerHasNext = urlRunnerHasNext,
     )
 
     private fun notifyChanged(context: Context) {
