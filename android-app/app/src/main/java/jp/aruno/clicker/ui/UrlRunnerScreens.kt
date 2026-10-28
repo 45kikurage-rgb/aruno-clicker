@@ -53,9 +53,11 @@ import jp.aruno.clicker.data.UrlRunnerLimits
  * 実行中の停止は既存どおりフロート／通知／この画面の「停止する」から行う。
  */
 
-/** 10件ごとの範囲一覧（001–010 … 111–120、3列×4段）。 */
+/** Bulk URL slots start at 006. The first 5 slots remain individually editable. */
 val URL_RUNNER_RANGES: List<IntRange> =
-    (0 until UrlRunnerLimits.MAX_URLS / 10).map { block -> (block * 10 + 1)..(block * 10 + 10) }
+    (UrlRunnerLimits.INDIVIDUAL_COUNT until UrlRunnerLimits.MAX_URLS step 10).map { start ->
+        (start + 1)..minOf(UrlRunnerLimits.MAX_URLS, start + 10)
+    }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -368,7 +370,21 @@ fun UrlInputScreen(
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // 上部: 一括貼り付け欄
+            item { SectionTitle("1〜5番：個別URL指定") }
+            for (number in 1..UrlRunnerLimits.INDIVIDUAL_COUNT) {
+                item(key = "individual-url-$number") {
+                    OutlinedTextField(
+                        value = editState.slotAt(number - 1),
+                        onValueChange = { editState.setSlot(number - 1, it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("$number 番の動画URL") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                }
+            }
+            item { SectionTitle("6〜200番：URLをまとめて貼り付け") }
+            // 一括貼り付けは6番以降だけ。1〜5番は保持する。
             item {
                 OutlinedTextField(
                     value = pasteText,
@@ -383,7 +399,7 @@ fun UrlInputScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp),
-                    label = { Text("一括貼り付け（URLを自動で末尾へ追加）") },
+                    label = { Text("URL一覧を貼り付け（6番以降へ順番に追加）") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -391,11 +407,11 @@ fun UrlInputScreen(
                     Button(
                         onClick = { report = editState.applyPaste(pasteText, PasteMode.APPEND) },
                         modifier = Modifier.weight(1f),
-                    ) { Text("追記する") }
+                    ) { Text("6番以降に追記") }
                     OutlinedButton(
                         onClick = { report = editState.applyPaste(pasteText, PasteMode.REPLACE) },
                         modifier = Modifier.weight(1f),
-                    ) { Text("置換する") }
+                    ) { Text("6番以降を置換") }
                 }
                 report?.let { current ->
                     Text(
@@ -422,14 +438,18 @@ fun UrlInputScreen(
                     }
                 }
             }
-            // 範囲選択ボタン: 3列×4段
-            item { SectionTitle("範囲を選択（現在${editState.filledCount()}件入力済み）") }
+            // 6〜200番は10件単位で確認・個別修正も可能。
+            item { SectionTitle("6〜200番の確認・修正（現在${editState.filledCount()}件入力済み）") }
+            item {
+                Text("URLがない番号は実行時に自動スキップします。1〜5番は上部で個別指定してください。",
+                    style = MaterialTheme.typography.bodySmall, color = MatrixTextMuted)
+            }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     URL_RUNNER_RANGES.chunked(3).forEach { rowRanges ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             rowRanges.forEach { range ->
-                                val rangeIndex = (range.first - 1) / 10
+                                val rangeIndex = (range.first - UrlRunnerLimits.INDIVIDUAL_COUNT - 1) / 10
                                 val selected = rangeIndex == selectedRangeIndex
                                 if (selected) {
                                     Button(
