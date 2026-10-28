@@ -154,7 +154,7 @@ class UrlSequenceRunnerCore(
                 active = false
                 phase = UrlRunnerPhase.FINISHED
                 report(phase, config.urls.size - 1, 0, 0,
-                    "全${config.urls.size}枠の処理を完了しました（空欄はスキップ・動画の再生は未確認）")
+                    "全${config.urls.size}枠を確認し、登録済みURLを開きました（空欄はスキップ・動画の再生は未確認）")
             }
             return
         }
