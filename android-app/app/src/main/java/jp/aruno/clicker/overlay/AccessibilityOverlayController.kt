@@ -29,6 +29,7 @@ import java.util.Locale
 class AccessibilityOverlayController(
     private val service: AccessibilityService,
     private val onStart: () -> Unit,
+    private val onStartFromSixth: () -> Unit,
     private val onStop: () -> Unit,
     private val onClose: () -> Unit,
 ) {
@@ -43,6 +44,7 @@ class AccessibilityOverlayController(
     private var timeText: TextView? = null
     private var countText: TextView? = null
     private var startButton: Button? = null
+    private var startSixthButton: Button? = null
     private var sizeButton: Button? = null
     private var compactOverlay = true
 
@@ -149,6 +151,11 @@ class AccessibilityOverlayController(
             }
         }
         val buttonHeight = dp(if (compactOverlay) 40 else 56)
+        val sixthButton = compactButton("6番目からスタート", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 12f else 16f
+            setOnClickListener { if (!AutomationRuntime.snapshot().requested) onStartFromSixth(); refresh() }
+        }
+        startSixthButton = sixthButton
         val buttonGap = dp(if (compactOverlay) 3 else 6)
         actionButton.textSize = if (compactOverlay) 13f else 17f
         closeButton.textSize = if (compactOverlay) 13f else 17f
@@ -159,6 +166,9 @@ class AccessibilityOverlayController(
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)
         root.addView(countText)
+        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+            topMargin = dp(if (compactOverlay) 5 else 9)
+        })
         root.addView(
             buttons,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -274,6 +284,7 @@ class AccessibilityOverlayController(
 
     private fun refresh() {
         val state = AutomationRuntime.snapshot()
+        startSixthButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
         val (statusTitle, statusDetail) = splitStatus(state.message)
         statusTitleText?.apply {
             text = statusTitle
@@ -314,6 +325,7 @@ class AccessibilityOverlayController(
         timeText = null
         countText = null
         startButton = null
+        startSixthButton = null
         sizeButton = null
     }
 

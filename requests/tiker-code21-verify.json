@@ -1,0 +1,9 @@
+{
+  "release": "Aru-Tiker 0.6.4/code21",
+  "sourceCommit": "2b86a17a59c8f6d575e1967dfc9a566f8dec631a",
+  "versionCode": 21,
+  "purpose": "Initial accessibility settings and one-run URL6 start, preserving code20 recovery and saved URL numbering",
+  "action": "verify-and-sign-only",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "productionChange": false
+}

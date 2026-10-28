@@ -45,6 +45,7 @@ open class AutomationOverlayService : Service() {
     private var timeText: TextView? = null
     private var countText: TextView? = null
     private var startButton: Button? = null
+    private var startSixthButton: Button? = null
     private var sizeButton: Button? = null
     private var compactOverlay = true
     private val handler = Handler(Looper.getMainLooper())
@@ -89,6 +90,7 @@ open class AutomationOverlayService : Service() {
                     source = intent?.getStringExtra(AutomationContract.EXTRA_SOURCE)
                         ?: AutomationContract.SOURCE_MANUAL,
                     startMode = AutomationContract.START_MODE_URL_RUNNER,
+                    fromSixth = intent?.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false) == true,
                 )
             }
         }
@@ -114,6 +116,7 @@ open class AutomationOverlayService : Service() {
         intervalOverride: Long? = null,
         source: String,
         startMode: String = AutomationContract.START_MODE_REPEAT,
+        fromSixth: Boolean = false,
     ) {
         if (AutomationRuntime.snapshot().requested) return
         val service = ArunoAccessibilityService.instance
@@ -122,7 +125,7 @@ open class AutomationOverlayService : Service() {
             AutomationRuntime.stop(this, "ユーザー補助をONにしてから動画スタートを押してください")
             Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
         } else if (source != AutomationContract.SOURCE_SCHEDULE) {
-            service.startUrlRunnerSequence()
+            service.startUrlRunnerSequence(fromSixth)
         }
         refreshOverlay()
     }
@@ -239,6 +242,11 @@ open class AutomationOverlayService : Service() {
             }
         }
         val buttonHeight = dp(if (compactOverlay) 40 else 56)
+        val sixthButton = compactButton("6番目からスタート", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 12f else 16f
+            setOnClickListener { requestStart(source = AutomationContract.SOURCE_MANUAL, fromSixth = true) }
+        }
+        startSixthButton = sixthButton
         val buttonGap = dp(if (compactOverlay) 3 else 6)
         actionButton.textSize = if (compactOverlay) 13f else 17f
         closeButton.textSize = if (compactOverlay) 13f else 17f
@@ -248,6 +256,9 @@ open class AutomationOverlayService : Service() {
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)
         root.addView(countText)
+        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+            topMargin = dp(if (compactOverlay) 5 else 9)
+        })
         root.addView(buttons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(if (compactOverlay) 5 else 9)
         })
@@ -317,6 +328,7 @@ open class AutomationOverlayService : Service() {
         timeText = null
         countText = null
         startButton = null
+        startSixthButton = null
         sizeButton = null
     }
 
@@ -352,6 +364,7 @@ open class AutomationOverlayService : Service() {
 
     private fun refreshOverlay() {
         val state = AutomationRuntime.snapshot()
+        startSixthButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
         val (statusTitle, statusDetail) = splitStatus(state.message)
         statusTitleText?.apply {
             text = statusTitle

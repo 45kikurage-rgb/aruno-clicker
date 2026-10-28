@@ -106,7 +106,7 @@ fun ArunoClickerApp(
     startFirstAutomation: () -> Unit,
     startRepeatAutomation: () -> Unit,
     startAutomaticAutomation: () -> Unit,
-    startUrlRunnerAutomation: () -> Unit,
+    startUrlRunnerAutomation: (Boolean) -> Unit,
     stopAutomation: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -147,6 +147,20 @@ fun ArunoClickerApp(
             enabled.contains("ArunoAccessibilityService", ignoreCase = true)
     }
 
+    fun requestUrlStart(fromSixth: Boolean) {
+        val saved = urlRunnerState.savedConfig
+        val issue = saved?.let { jp.aruno.clicker.data.UrlRunnerStartSelection.issue(it, fromSixth) }
+        when {
+            isRunning -> homeNotice = "既に実行中です"
+            saved == null -> homeNotice = "保存済み設定がありません。先にデータダウンロードしてください"
+            issue != null -> homeNotice = "開始できません: $issue"
+            !accessibilityGranted -> homeNotice = "ユーザー補助設定を開き、Aru-TikerをONにしてください"
+            else -> {
+                homeNotice = null
+                startUrlRunnerAutomation(fromSixth)
+            }
+        }
+    }
     when (screen) {
         AppScreen.HOME -> UrlRunnerHomeScreen(
             isAdmin = settings.remoteAdminMode,
@@ -157,22 +171,8 @@ fun ArunoClickerApp(
             syncMessage = urlRunnerState.message,
             accessibilityGranted = accessibilityGranted,
             openAccessibilitySettings = openAccessibilitySettings,
-            onStartVideo = {
-                val saved = urlRunnerState.savedConfig
-                when {
-                    isRunning -> homeNotice = "既に実行中です"
-                    saved == null ->
-                        homeNotice = "保存済み設定がありません。先にデータダウンロードしてください"
-                    saved.validate().isNotEmpty() ->
-                        homeNotice = "保存済み設定に問題があります: ${saved.validate().first().message}"
-                    !accessibilityGranted ->
-                        homeNotice = "ユーザー補助をONにしてください"
-                    else -> {
-                        homeNotice = null
-                        startUrlRunnerAutomation()
-                    }
-                }
-            },
+            onStartVideo = { requestUrlStart(false) },
+            onStartFromSixth = { requestUrlStart(true) },
             onStop = { stopAutomation() },
             onDownload = {
                 homeNotice = null

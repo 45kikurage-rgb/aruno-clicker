@@ -75,6 +75,57 @@ class UrlRunnerLifecycleTest {
 
     @After fun teardown() { service.onDestroy() }
 
+    private fun saveSevenSlots(blankSixth: Boolean = false) {
+        val urls = (1..7).map { if (it == 6 && blankSixth) "" else "https://lite.tiktok.com/t/slot$it/" }
+        assertTrue(UrlRunnerRepository(app).save(UrlRunnerConfig(urls = urls, commonSeconds = 1)).success)
+        urls.filter { it.isNotBlank() }.forEach { value ->
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(value)).setPackage(AutomationConfig.TARGET_PACKAGES.first())
+            shadowOf(app.packageManager).addResolveInfoForIntent(intent, ResolveInfo().apply {
+                activityInfo = ActivityInfo().apply {
+                    packageName = AutomationConfig.TARGET_PACKAGES.first()
+                    name = "TargetActivity"
+                }
+            })
+        }
+    }
+
+    @Test fun sixthStartOpensSlotSixWithoutChangingSavedDataset() {
+        saveSevenSlots()
+        val before = UrlRunnerRepository(app).loadForStart()
+        service.startUrlRunnerSequence(true)
+        assertEquals("https://lite.tiktok.com/t/slot6/", shadowOf(app).nextStartedActivity.data.toString())
+        assertTrue(AutomationRuntime.snapshot().message.contains("6番目"))
+        assertEquals(before, UrlRunnerRepository(app).loadForStart())
+    }
+
+    @Test fun sixthEmptySlotSkipsToSeventhPosition() {
+        saveSevenSlots(blankSixth = true)
+        service.startUrlRunnerSequence(true)
+        assertEquals("https://lite.tiktok.com/t/slot7/", shadowOf(app).nextStartedActivity.data.toString())
+        assertTrue(AutomationRuntime.snapshot().message.contains("7番目"))
+    }
+
+    @Test fun missingSixthRangeDoesNotRunEarlierSlots() {
+        service.startUrlRunnerSequence(true)
+        assertEquals(0, openedCount())
+        assertFalse(AutomationRuntime.snapshot().requested)
+        assertTrue(AutomationRuntime.snapshot().message.contains("6番目以降"))
+    }
+
+    @Test fun sixthOverlayRequestUsesSameRunnerAndScreenOffStillCancels() {
+        saveSevenSlots()
+        val controller = Robolectric.buildService(AutomationOverlayService::class.java).create()
+        val overlay = controller.get()
+        overlay.onStartCommand(Intent(AutomationContract.ACTION_START_AUTOMATION)
+            .putExtra(AutomationContract.EXTRA_START_FROM_SIXTH, true), 0, 1)
+        assertEquals("https://lite.tiktok.com/t/slot6/", shadowOf(app).nextStartedActivity.data.toString())
+        app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(20))
+        assertEquals(0, openedCount())
+        assertFalse(AutomationRuntime.snapshot().requested)
+        controller.destroy()
+    }
+
     @Test fun duplicateBridgeStartDoesNotReopenFirstUrl() {
         start()
         assertEquals(1, openedCount())
