@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +41,7 @@ import jp.aruno.clicker.R
 import jp.aruno.clicker.data.PasteMode
 import jp.aruno.clicker.data.PasteReport
 import jp.aruno.clicker.data.UrlListEditState
+import jp.aruno.clicker.data.UrlExtractor
 import jp.aruno.clicker.data.UrlRunnerConfig
 import jp.aruno.clicker.data.UrlRunnerLimits
 
@@ -348,28 +350,118 @@ fun UrlInputScreen(
     editRevision: Int,
     onBack: () -> Unit,
 ) {
+    val clipboardManager = LocalClipboardManager.current
     var pasteText by rememberSaveable { mutableStateOf("") }
+    var clipboardMessage by remember { mutableStateOf<String?>(null) }
     var report by remember { mutableStateOf<PasteReport?>(null) }
     var selectedRangeIndex by rememberSaveable { mutableStateOf(0) }
+    // Recalculate only when the draft changes. Never import or clear a draft
+    // inside onValueChange: that made ordinary Android paste appear to fail.
+    val preview = remember(pasteText) { UrlExtractor.extractDetailed(pasteText) }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("URL入力", fontWeight = FontWeight.Black) },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("戻る") }
-                },
+                navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MatrixBlack),
             )
         },
         containerColor = MatrixBlack,
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item { SectionTitle("6〜200番：URLをまとめて貼り付け") }
+            item {
+                Text(
+                    "先にURLを貼り付け、内容を確認してから「追加する」を押してください。貼り付けただけでは登録されません。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MatrixTextMuted,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        val clipboardText = clipboardManager.getText()?.text.orEmpty()
+                        if (clipboardText.isBlank()) {
+                            clipboardMessage = "クリップボードに文字がありません。URLをコピーしてから押してください。"
+                        } else {
+                            pasteText = clipboardText
+                            report = null
+                            clipboardMessage = "クリップボードから貼り付けました。下の枠でURLを確認してください。"
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                ) { Text("クリップボードから貼り付け") }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = pasteText,
+                    onValueChange = {
+                        // Do not silently consume a pasted URL and empty this field.
+                        pasteText = it
+                        report = null
+                        clipboardMessage = null
+                    },
+                    modifier = Modifier.fillMaxWidth().height(164.dp),
+                    label = { Text("貼り付けたURLの確認・編集") },
+                    placeholder = { Text("ここを長押しして貼り付けてもOK") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                )
+                clipboardMessage?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MatrixTextMuted,
+                        modifier = Modifier.padding(top = 6.dp))
+                }
+                Text(
+                    "検出したURL：${preview.urls.size}件" +
+                        if (preview.rejected.isNotEmpty()) "（読み取れない候補：${preview.rejected.size}件）" else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            val result = editState.applyPaste(pasteText, PasteMode.APPEND)
+                            report = result
+                            if (result.appliedCount > 0) {
+                                pasteText = ""
+                                selectedRangeIndex = 0
+                                clipboardMessage = "${result.appliedCount}件を追加しました。下の番号欄で確認できます。"
+                            }
+                        },
+                        enabled = preview.urls.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                    ) { Text("6番以降に追加する") }
+                    OutlinedButton(
+                        onClick = {
+                            val result = editState.applyPaste(pasteText, PasteMode.REPLACE)
+                            report = result
+                            if (result.appliedCount > 0) {
+                                pasteText = ""
+                                selectedRangeIndex = 0
+                                clipboardMessage = "6番以降を${result.appliedCount}件で置き換えました。1〜5番は保持しています。"
+                            }
+                        },
+                        enabled = preview.urls.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                    ) { Text("6番以降を置換") }
+                }
+                report?.let { current ->
+                    Text(current.summary(), style = MaterialTheme.typography.bodySmall,
+                        color = MatrixTextMuted, modifier = Modifier.padding(top = 8.dp))
+                    if (current.excessCount > 0) {
+                        Text("取り込めなかったURL: " + current.excessUrls.joinToString(" / "),
+                            style = MaterialTheme.typography.bodySmall, color = DangerRed,
+                            modifier = Modifier.padding(top = 4.dp))
+                    }
+                    current.rejected.forEach { rejected ->
+                        Text("除外: ${rejected.raw}（${rejected.reason}）",
+                            style = MaterialTheme.typography.bodySmall, color = DangerRed,
+                            modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+            }
             item { SectionTitle("1〜5番：個別URL指定") }
             for (number in 1..UrlRunnerLimits.INDIVIDUAL_COUNT) {
                 item(key = "individual-url-$number") {
@@ -383,65 +475,9 @@ fun UrlInputScreen(
                     )
                 }
             }
-            item { SectionTitle("6〜200番：URLをまとめて貼り付け") }
-            // 一括貼り付けは6番以降だけ。1〜5番は保持する。
+            item { SectionTitle("登録済みURLの確認・修正（${editState.filledCount()}件入力済み）") }
             item {
-                OutlinedTextField(
-                    value = pasteText,
-                    onValueChange = { value ->
-                        val pasted = value.length > pasteText.length + 1
-                        pasteText = value
-                        if (pasted && jp.aruno.clicker.data.UrlExtractor.extract(value).isNotEmpty()) {
-                            report = editState.applyPaste(value, PasteMode.APPEND)
-                            pasteText = ""
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp),
-                    label = { Text("URL一覧を貼り付け（6番以降へ順番に追加）") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { report = editState.applyPaste(pasteText, PasteMode.APPEND) },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("6番以降に追記") }
-                    OutlinedButton(
-                        onClick = { report = editState.applyPaste(pasteText, PasteMode.REPLACE) },
-                        modifier = Modifier.weight(1f),
-                    ) { Text("6番以降を置換") }
-                }
-                report?.let { current ->
-                    Text(
-                        current.summary(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MatrixTextMuted,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    if (current.excessCount > 0) {
-                        Text(
-                            "取り込めなかったURL: " + current.excessUrls.joinToString(" / "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DangerRed,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    current.rejected.forEach { rejected ->
-                        Text(
-                            "除外: ${rejected.raw}（${rejected.reason}）",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DangerRed,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                }
-            }
-            // 6〜200番は10件単位で確認・個別修正も可能。
-            item { SectionTitle("6〜200番の確認・修正（現在${editState.filledCount()}件入力済み）") }
-            item {
-                Text("URLがない番号は実行時に自動スキップします。1〜5番は上部で個別指定してください。",
+                Text("空欄の番号は実行時にスキップします。6〜200番は10件単位で確認できます。",
                     style = MaterialTheme.typography.bodySmall, color = MatrixTextMuted)
             }
             item {
@@ -450,19 +486,12 @@ fun UrlInputScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             rowRanges.forEach { range ->
                                 val rangeIndex = (range.first - UrlRunnerLimits.INDIVIDUAL_COUNT - 1) / 10
-                                val selected = rangeIndex == selectedRangeIndex
-                                if (selected) {
-                                    Button(
-                                        onClick = { selectedRangeIndex = rangeIndex },
-                                        modifier = Modifier.weight(1f),
-                                    ) {
+                                if (rangeIndex == selectedRangeIndex) {
+                                    Button(onClick = { selectedRangeIndex = rangeIndex }, modifier = Modifier.weight(1f)) {
                                         Text(rangeLabel(range))
                                     }
                                 } else {
-                                    OutlinedButton(
-                                        onClick = { selectedRangeIndex = rangeIndex },
-                                        modifier = Modifier.weight(1f),
-                                    ) {
+                                    OutlinedButton(onClick = { selectedRangeIndex = rangeIndex }, modifier = Modifier.weight(1f)) {
                                         Text(rangeLabel(range))
                                     }
                                 }
@@ -471,7 +500,6 @@ fun UrlInputScreen(
                     }
                 }
             }
-            // 選択範囲の番号付き入力欄10件。編集はホルダーへ即時保存され、範囲切替でも保持される。
             val range = URL_RUNNER_RANGES[selectedRangeIndex]
             for (number in range) {
                 item(key = "url-slot-$number") {
@@ -488,6 +516,5 @@ fun UrlInputScreen(
         }
     }
 }
-
 private fun rangeLabel(range: IntRange): String =
     "${range.first.toString().padStart(3, '0')}–${range.last.toString().padStart(3, '0')}"
