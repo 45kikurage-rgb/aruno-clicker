@@ -130,6 +130,40 @@ class UrlSequenceRunnerTest {
     }
 
     @Test
+    fun blankPositionsAreSkippedWithoutDelayAndOriginalNumbersAreRetained() {
+        val h = Harness()
+        val config = UrlRunnerConfig(
+            urls = listOf(
+                "", "https://lite.tiktok.com/t/second/", "", 
+                "https://lite.tiktok.com/t/fourth/", "",
+            ),
+            individualSeconds = listOf(1, 1, 1, 1, 1),
+        )
+        assertEquals(UrlRunnerStartResult.Started, h.runner.start(config))
+        assertEquals(listOf(config.urls[1]), h.opened)
+        assertTrue(h.statuses.any { it.index == 0 && it.message.contains("スキップ") })
+        h.scheduler.advanceBy(1_000)
+        assertEquals(listOf(config.urls[1], config.urls[3]), h.opened)
+        assertTrue(h.statuses.any { it.index == 2 && it.message.contains("スキップ") })
+        h.scheduler.advanceBy(1_000)
+        assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+        assertEquals(2, h.opened.size)
+        assertTrue(h.statuses.any { it.index == 4 && it.message.contains("スキップ") })
+    }
+
+    @Test
+    fun startOnBlankAtEndStopsWithoutOpeningAnInvalidUrl() {
+        val h = Harness()
+        val config = UrlRunnerConfig(
+            urls = listOf("https://lite.tiktok.com/t/first/", "", ""),
+            startIndex = 1,
+        )
+        assertEquals(UrlRunnerStartResult.Started, h.runner.start(config))
+        assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+        assertTrue(h.opened.isEmpty())
+    }
+
+    @Test
     fun doubleStartIsRejected() {
         val harness = Harness()
         harness.runner.start(config(3))
