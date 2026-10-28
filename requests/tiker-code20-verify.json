@@ -6,5 +6,7 @@
   "action": "verify-and-sign-only",
   "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
   "productionChange": false,
-  "notes": "No DB schema or remote URL changes; skip delay and all-failures loop guard have tests."
+  "notes": "No DB schema or remote URL changes; skip delay and all-failures loop guard have tests.",
+  "attempt": 2,
+  "reason": "Added TikTok Lite splash/home relaunch before next URL, guarded by manual stop/locked-device tests; updated old summary wording assertion"
 }
