@@ -185,16 +185,29 @@ test("PUT with a disallowed host is rejected with its position (400)", async () 
   assert.equal(env.DB.urlRunner, null);
 });
 
-test("PUT with 121 URLs is rejected, 120 are accepted", async () => {
+test("PUT with 201 URLs is rejected, 200 are accepted", async () => {
   const env = makeEnv();
-  const tooMany = Array.from({ length: 121 }, (_, i) => `https://lite.tiktok.com/t/${i}/`);
+  const tooMany = Array.from({ length: 201 }, (_, i) => `https://lite.tiktok.com/t/${i}/`);
   const response = await put(env, validPayload({ urls: tooMany, expectedConfigVersion: 0 }));
   assert.equal(response.status, 400);
-  assert.match((await readJson(response)).error.message, /121/);
+  assert.match((await readJson(response)).error.message, /201/);
 
-  const exactlyMax = tooMany.slice(0, 120);
+  const exactlyMax = tooMany.slice(0, 200);
   const ok = await put(env, validPayload({ urls: exactlyMax, expectedConfigVersion: 0 }));
   assert.equal(ok.status, 200);
+  const got = await readJson(await worker.fetch(new Request("https://worker.example/v1/url-runner"), env));
+  assert.equal(got.urls.length, 200);
+});
+
+test("PUT persists empty numbered positions for skip, but rejects an all-blank list", async () => {
+  const env = makeEnv();
+  const sparse = ["", "", "", "", "", "https://lite.tiktok.com/t/valid/", "", "https://lite.tiktok.com/t/next/"];
+  assert.equal((await put(env, validPayload({ urls: sparse }))).status, 200);
+  const got = await readJson(await worker.fetch(new Request("https://worker.example/v1/url-runner"), env));
+  assert.deepEqual(got.urls, sparse);
+  const invalid = await put(env, validPayload({ urls: ["", "", ""] }));
+  assert.equal(invalid.status, 400);
+  assert.match((await readJson(invalid)).error.message, /non-empty URL/);
 });
 
 test("PUT rejects invalid seconds without storing anything", async () => {

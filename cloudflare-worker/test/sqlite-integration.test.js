@@ -33,7 +33,7 @@ test('real SQLite: explicit migrations, GET/PUT, exact URLs, optimistic lock, hi
   const env={DB:new D1(),ADMIN_TOKEN:'test-admin-token'};
   const legacyBefore=await (await worker.fetch(new Request('https://worker.example/v1/config'),env)).json();
   assert.equal((await put(env,payload(120),{})).status,401);
-  assert.equal((await put(env,payload(121))).status,400);
+  assert.equal((await put(env,payload(201))).status,400);
   const first=await put(env,{...payload(120),expectedConfigVersion:0});
   assert.equal(first.status,200);
   assert.deepEqual((await first.json()).urls,payload(120).urls);

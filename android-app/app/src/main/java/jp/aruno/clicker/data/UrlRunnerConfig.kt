@@ -23,7 +23,7 @@ enum class LoopMode {
 /** URLランナーに関する制限値・初期値の集約場所。秒数の初期値と上限もここだけを変える。 */
 object UrlRunnerLimits {
     /** URL一覧の最大件数。 */
-    const val MAX_URLS = 120
+    const val MAX_URLS = 200
 
     /** 1件のURLの最大文字数（既存 RemoteConfigClient / Worker と同じ）。 */
     const val MAX_URL_LENGTH = 2048
@@ -113,7 +113,7 @@ data class UrlRunnerConfig(
     /** 開始・送信・保存の前に必ず通す検証。問題を全件返す（最初の1件で止めない）。 */
     fun validate(): List<UrlRunnerIssue> {
         val issues = mutableListOf<UrlRunnerIssue>()
-        if (urls.isEmpty()) {
+        if (urls.none { it.isNotBlank() }) {
             issues += UrlRunnerIssue(
                 UrlRunnerIssue.URLS_EMPTY,
                 "URLが1件も登録されていません",
@@ -129,7 +129,8 @@ data class UrlRunnerConfig(
             issues += UrlRunnerIssue("START_INDEX", "開始番号は1〜${urls.size.coerceAtLeast(1)}で指定してください")
         }
         urls.forEachIndexed { index, url ->
-            validateUrl(url, index)?.let(issues::add)
+            // A blank position is an intentional skip; retain its index for synchronization.
+            if (url.isNotBlank()) validateUrl(url, index)?.let(issues::add)
         }
         if (individualSeconds.size != UrlRunnerLimits.INDIVIDUAL_COUNT) {
             issues += UrlRunnerIssue(

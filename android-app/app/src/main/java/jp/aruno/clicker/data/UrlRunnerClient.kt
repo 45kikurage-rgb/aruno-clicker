@@ -211,7 +211,7 @@ class UrlRunnerClient(
         private const val CONNECT_TIMEOUT_MS = 3_000
         private const val READ_TIMEOUT_MS = 10_000
 
-        /** 120件×2048文字の最悪ケース（約246KB）＋JSON構造分の余裕。 */
+        /** 200件×2048文字（約410KB）＋JSON構造分の余裕。 */
         private const val MAX_RESPONSE_CHARS = 512 * 1024
         private val ADMIN_KEY_PATTERN = Regex("^[A-Za-z0-9]{8}$")
     }
