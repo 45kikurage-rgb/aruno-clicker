@@ -480,14 +480,26 @@ class ArunoAccessibilityService : AccessibilityService() {
         automationGeneration += 1L
         val scheduler = UrlRunnerHandlerScheduler()
         urlSequenceScheduler = scheduler
+        var successfullyOpenedUrls = 0
         val runner = UrlSequenceRunnerCore(
-            opener = UrlOpener { url -> urlRunnerDeviceReady() && openTargetUrl(url) },
+            opener = UrlOpener { url ->
+                if (!urlRunnerDeviceReady()) false
+                else {
+                    // CLEAR_TOP could reuse an existing TikTok Lite Activity and
+                    // ignore the next deep link even while staying foreground.
+                    // Freshly recreate the Activity task from URL #2 onward.
+                    // Android task clearing never clears TikTok Lite app data.
+                    val opened = openTargetUrl(url, resetTask = successfullyOpenedUrls > 0)
+                    if (opened) successfullyOpenedUrls += 1
+                    opened
+                }
+            },
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,
             clock = UrlRunnerClock { android.os.SystemClock.elapsedRealtime() },
             statusSink = UrlRunnerStatusSink { status ->
-                AutomationRuntime.markWaiting(this, status.message)
+                AutomationRuntime.markUrlRunnerStatus(this, status)
                 if (
                     status.phase == UrlRunnerPhase.FINISHED ||
                     status.phase == UrlRunnerPhase.STOPPED ||
@@ -1355,13 +1367,21 @@ class ArunoAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun openTargetUrl(url: String): Boolean {
+    private fun openTargetUrl(url: String, resetTask: Boolean = false): Boolean {
         val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
         val candidates = listOf(activeConfig.targetPackage) + AutomationConfig.TARGET_PACKAGES
         candidates.distinct().forEach { packageName ->
+            // For successive URL-runner entries, do not reuse the already-open
+            // Activity with CLEAR_TOP: TikTok Lite may leave the previous video
+            // in place even though startActivity() succeeds.
+            val flags = Intent.FLAG_ACTIVITY_NEW_TASK or if (resetTask) {
+                Intent.FLAG_ACTIVITY_CLEAR_TASK
+            } else {
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
             val intent = Intent(Intent.ACTION_VIEW, uri)
                 .setPackage(packageName)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .addFlags(flags)
             if (packageManager.resolveActivity(intent, 0) != null) {
                 return runCatching { startActivity(intent); true }.getOrDefault(false)
             }
