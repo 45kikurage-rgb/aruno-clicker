@@ -67,14 +67,22 @@ class UrlSequenceRunnerTest {
         val scheduler = FakeScheduler(clock)
         val foreground = FakeForeground(foregroundResult)
         val statuses = mutableListOf<UrlRunnerStatus>()
+        val splashCalls = mutableListOf<String>()
+        val order = mutableListOf<String>()
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
                 if (url in failUrls) {
                     false
                 } else {
                     opened += url
+                    order += "url:$url"
                     true
                 }
+            },
+            splashLauncher = UrlRunnerSplashLauncher {
+                splashCalls += "splash"
+                order += "splash"
+                true
             },
             foregroundChecker = foreground,
             scheduler = scheduler,
@@ -239,7 +247,14 @@ class UrlSequenceRunnerTest {
         harness.scheduler.advanceBy(649)
         assertTrue(harness.opened.isEmpty())
         harness.scheduler.advanceBy(1)
+        assertEquals(listOf("splash"), harness.splashCalls)
+        assertTrue(harness.opened.isEmpty())
+        assertEquals(UrlRunnerPhase.RECOVERING, harness.runner.phase)
+        harness.scheduler.advanceBy(1_799)
+        assertTrue(harness.opened.isEmpty())
+        harness.scheduler.advanceBy(1)
         assertEquals(listOf(config.urls[1]), harness.opened)
+        assertEquals("splash", harness.order.first())
         assertEquals(UrlRunnerPhase.HOLDING, harness.runner.phase)
         harness.scheduler.advanceBy(6_000)
         assertEquals(listOf(config.urls[1], config.urls[2]), harness.opened)
@@ -256,10 +271,15 @@ class UrlSequenceRunnerTest {
         assertEquals(UrlRunnerPhase.SKIPPED, harness.runner.phase)
         assertEquals(1, harness.opened.size)
         harness.scheduler.advanceBy(650)
+        assertEquals(listOf("splash"), harness.splashCalls)
+        assertEquals(UrlRunnerPhase.RECOVERING, harness.runner.phase)
+        harness.scheduler.advanceBy(1_800)
         assertEquals(2, harness.opened.size)
         assertEquals(UrlRunnerPhase.SKIPPED, harness.runner.phase)
-        harness.scheduler.advanceBy(650)
+        // The failed final URL has no successor: do not launch again.
+        harness.scheduler.advanceBy(10_000)
         assertEquals(UrlRunnerPhase.FINISHED, harness.runner.phase)
+        assertEquals(1, harness.splashCalls.size)
         assertEquals(2, harness.opened.size)
         assertTrue(harness.statuses.last().message.contains("失敗2件"))
     }
@@ -292,7 +312,7 @@ class UrlSequenceRunnerTest {
         val config = config(3)
         val h = Harness(failUrls = config.urls.toSet(), loopMode = LoopMode.LOOP)
         h.runner.start(config)
-        h.scheduler.advanceBy(5_000)
+        h.scheduler.advanceBy(10_000)
         assertTrue(h.opened.isEmpty())
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
         assertEquals(3, h.statuses.count { it.phase == UrlRunnerPhase.SKIPPED })
@@ -307,10 +327,48 @@ class UrlSequenceRunnerTest {
         )
         val h = Harness(failUrls = setOf(c.urls[0]))
         h.runner.start(c)
-        h.scheduler.advanceBy(650)
+        h.scheduler.advanceBy(2_450)
+        assertEquals(listOf("splash"), h.splashCalls)
         assertEquals(listOf(c.urls[2]), h.opened)
         assertTrue(h.statuses.any { it.index == 1 && it.message.contains("空欄") })
         assertEquals(2, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.index)
+    }
+
+    @Test
+    fun explicitStopAfterSplashPreventsOpeningNextVideo() {
+        val config = config(3)
+        val h = Harness(failUrls = setOf(config.urls[0]))
+        h.runner.start(config)
+        h.scheduler.advanceBy(650)
+        assertEquals(listOf("splash"), h.splashCalls)
+        assertTrue(h.opened.isEmpty())
+        h.runner.stop()
+        h.scheduler.advanceBy(20_000)
+        assertTrue(h.opened.isEmpty())
+        assertEquals(UrlRunnerPhase.STOPPED, h.runner.phase)
+    }
+
+    @Test
+    fun lockedDuringSplashDelayDoesNotOpenTheNextVideo() {
+        val config = config(2)
+        val h = Harness(failUrls = setOf(config.urls[0]))
+        h.runner.start(config)
+        h.scheduler.advanceBy(650)
+        assertEquals(1, h.splashCalls.size)
+        h.allowed = false
+        h.scheduler.advanceBy(1_800)
+        assertTrue(h.opened.isEmpty())
+        assertEquals(UrlRunnerPhase.FAILED, h.runner.phase)
+    }
+
+    @Test
+    fun failureOnLastUrlFinishesWithoutUnneededSplash() {
+        val config = config(2).copy(startIndex = 1)
+        val h = Harness(failUrls = setOf(config.urls[1]))
+        h.runner.start(config)
+        assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+        assertTrue(h.splashCalls.isEmpty())
+        assertTrue(h.statuses.last().message.contains("失敗1件"))
     }
 
     @Test
@@ -362,7 +420,7 @@ class UrlSequenceRunnerTest {
         harness.runner.start(config(1, individual = listOf(1, 1, 1, 1, 1)))
         harness.scheduler.advanceBy(1_000)
         assertEquals(UrlRunnerPhase.FINISHED, harness.runner.phase)
-        assertTrue(harness.statuses.last().message.contains("開きました"))
+        assertTrue(harness.statuses.last().message.contains("処理を完了"))
         assertTrue(harness.statuses.last().message.contains("再生は未確認"))
     }
     @Test fun lockedDuringHoldStopsWithoutNextOpen() {
