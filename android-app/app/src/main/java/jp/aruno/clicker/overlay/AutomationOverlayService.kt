@@ -29,6 +29,7 @@ import jp.aruno.clicker.automation.ArunoAccessibilityService
 import jp.aruno.clicker.automation.AutomationConfigStore
 import jp.aruno.clicker.automation.AutomationContract
 import jp.aruno.clicker.automation.AutomationRuntime
+import jp.aruno.clicker.automation.UrlRunnerOverlayCountdown
 import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.R
 import java.util.Locale
@@ -367,7 +368,10 @@ open class AutomationOverlayService : Service() {
         }
         timeText?.text = if (state.requested) {
             val remaining = if (state.endsAtElapsed == Long.MAX_VALUE) "停止まで" else formatDuration(state.remainingMs)
-            "経過 ${formatDuration(state.elapsedMs)}  /  残り $remaining"
+            UrlRunnerOverlayCountdown.render(
+                state.urlRunnerActive, formatDuration(state.elapsedMs), remaining,
+                state.urlRunnerSecondsToNext, state.urlRunnerHasNext,
+            )
         } else {
             "経過 --:--:--  /  残り --:--:--"
         }

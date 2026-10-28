@@ -1,0 +1,9 @@
+{
+  "verifyRun": 40653784345,
+  "sourceCommit": "2cc18c216da3fe98f9507a785a685974d4b13b84",
+  "apkSha256": "fa8f56e3d828af1c4d839306c30005fba02d1812612cd5c968edebac1d4c1826",
+  "authorizedBy": "2026-10-28 user requested code19 video switching and countdown",
+  "versionCode": 19,
+  "expectedCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "intent": "private R2 stage only; preserve all public aliases"
+}

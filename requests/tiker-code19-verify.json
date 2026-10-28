@@ -1,0 +1,9 @@
+{
+  "release": "Aru-Tiker 0.6.2/code19",
+  "purpose": "Recreate TikTok Lite Activity task for successive deep links; float next-video countdown",
+  "versionCode": 19,
+  "authorizedBy": "2026-10-28 user: 3番目のURLまでしか開かない。アプリ側の改修確認して フロートの画面の残りの表示を次の動画まで何秒ってして",
+  "action": "verify-and-sign-only",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "productionChange": false
+}
