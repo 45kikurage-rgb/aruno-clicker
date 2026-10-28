@@ -141,6 +141,23 @@ class UrlSequenceRunnerCore(
     private fun openCurrent(gen: Long) {
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
+        // Preserve numbered positions while skipping blank URLs without a delay.
+        while (index < config.urls.size && config.urls[index].isBlank()) {
+            report(UrlRunnerPhase.OPENING, index, 0, 0, "${index + 1}番は空欄のためスキップ")
+            index += 1
+        }
+        if (index >= config.urls.size) {
+            if ((loopMode ?: config.loopMode) == LoopMode.LOOP) {
+                index = 0
+                openCurrent(gen) // validate() guarantees at least one nonblank URL.
+            } else {
+                active = false
+                phase = UrlRunnerPhase.FINISHED
+                report(phase, config.urls.size - 1, 0, 0,
+                    "全${config.urls.size}枠の処理を完了しました（空欄はスキップ・動画の再生は未確認）")
+            }
+            return
+        }
         val url = config.urls[index]
         phase = UrlRunnerPhase.OPENING
         report(
@@ -207,22 +224,7 @@ class UrlSequenceRunnerCore(
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
         index += 1
-        if (index < config.urls.size) {
-            openCurrent(gen)
-            return
-        }
-        if ((loopMode ?: config.loopMode) == LoopMode.LOOP) {
-            index = 0
-            openCurrent(gen)
-            return
-        }
-        active = false
-        phase = UrlRunnerPhase.FINISHED
-        report(
-            phase, config.urls.size - 1,
-            waitTotalSeconds = 0, waitElapsedSeconds = 0,
-            message = "全${config.urls.size}件のURLを開きました（動画の再生は未確認）",
-        )
+        openCurrent(gen)
     }
 
     private fun fail(gen: Long, reason: String) {
