@@ -90,7 +90,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     if (BuildConfig.USE_ACCESSIBILITY_OVERLAY && configStore.load().floatingController) {
                         showAccessibilityOverlay()
                     }
-                    startUrlRunnerSequence()
+                    startUrlRunnerSequence(intent.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false))
                 }
                 AutomationContract.ACTION_STOP_AUTOMATION -> stopAutomation("停止しました")
             }
@@ -200,6 +200,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     )
                 },
                 onStop = { stopAutomation("停止しました") },
+                onStartFromSixth = { startUrlRunnerSequence(true) },
                 onClose = {
                     stopService(Intent(this, AutomationService::class.java))
                 },
@@ -337,7 +338,8 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     /** Every manual, overlay and scheduled start synchronizes shared URLs before choosing its mode. */
-    private fun startWithLatestRemoteConfig(intent: Intent) = startUrlRunnerSequence()
+    private fun startWithLatestRemoteConfig(intent: Intent) =
+        startUrlRunnerSequence(intent.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false))
 
     @Suppress("unused")
     private fun startLegacyWithLatestRemoteConfig(intent: Intent) {
@@ -456,7 +458,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         }
     }
 
-    fun startUrlRunnerSequence() {
+    fun startUrlRunnerSequence(fromSixth: Boolean = false) {
         // Check the existing instance BEFORE stopping/replacing it.
         if (urlSequenceRunner?.isRunning() == true) return
         // 従来経路が動いていれば止めてから開始する（世代加算とコールバック全除去を含む）。
@@ -470,6 +472,12 @@ class ArunoAccessibilityService : AccessibilityService() {
             )
             return
         }
+        val issue = jp.aruno.clicker.data.UrlRunnerStartSelection.issue(saved, fromSixth)
+        if (issue != null) {
+            AutomationRuntime.stop(this, "開始できません: $issue")
+            return
+        }
+        val selected = jp.aruno.clicker.data.UrlRunnerStartSelection.snapshot(saved, fromSixth)
         val power = getSystemService(PowerManager::class.java)
         val keyguard = getSystemService(android.app.KeyguardManager::class.java)
         if (!power.isInteractive || keyguard.isKeyguardLocked) {
@@ -527,7 +535,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         AutomationRuntime.requestStart(this, 0L, AutomationContract.START_MODE_URL_RUNNER)
         AutomationRuntime.markSessionActive(this)
         if (activeConfig.keepScreenAwake) acquireWakeLock(0L)
-        when (val result = runner.start(saved)) {
+        when (val result = runner.start(selected)) {
             is UrlRunnerStartResult.Invalid -> {
                 urlSequenceRunner = null
                 urlSequenceScheduler = null

@@ -47,8 +47,8 @@ import jp.aruno.clicker.data.UrlRunnerLimits
  * URLランナーの画面群。
  *
  * 起動画面のボタン構成は管理端末モード（remoteAdminMode）で決まる:
- * - サブ端末（管理モードOFF）: 「動画スタート」「データダウンロード」の2つだけ。
- * - メイン端末（管理モードON）: 上記＋「設定」の3つ。
+ * - 全端末: ユーザー補助設定、通常スタート、6番目からスタート、データダウンロード。
+ * - メイン端末（管理モードON）: 上記＋「設定」。
  * flavor（通常版/ver.S/シェア版）では出し分けしない。
  * 実行中の停止は既存どおりフロート／通知／この画面の「停止する」から行う。
  */
@@ -71,6 +71,7 @@ fun UrlRunnerHomeScreen(
     accessibilityGranted: Boolean,
     openAccessibilitySettings: () -> Unit,
     onStartVideo: () -> Unit,
+    onStartFromSixth: () -> Unit,
     onStop: () -> Unit,
     onDownload: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -127,22 +128,22 @@ fun UrlRunnerHomeScreen(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            if (!accessibilityGranted) {
-                item {
-                    MatrixCard {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("ユーザー補助がOFFです", fontWeight = FontWeight.Bold)
+            item {
+                MatrixCard {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(if (accessibilityGranted) "ユーザー補助：ON" else "ユーザー補助：OFF", fontWeight = FontWeight.Bold)
+                        if (!accessibilityGranted) {
                             Text(
-                                "動画スタートにはユーザー補助（アクセシビリティ）の有効化が必要です。",
+                                "設定でAru-Tikerを選び、ONにして許可してください。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MatrixTextMuted,
                                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                             )
-                            OutlinedButton(
-                                onClick = openAccessibilitySettings,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text("設定を開く") }
                         }
+                        OutlinedButton(
+                            onClick = openAccessibilitySettings,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("ユーザー補助設定") }
                     }
                 }
             }
@@ -164,6 +165,14 @@ fun UrlRunnerHomeScreen(
                         fontWeight = FontWeight.Bold,
                     )
                 }
+            }
+            item {
+                OutlinedButton(
+                    onClick = onStartFromSixth,
+                    enabled = !isRunning,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    shape = RoundedCornerShape(17.dp),
+                ) { Text("6番目からスタート", fontWeight = FontWeight.Bold) }
             }
             item {
                 OutlinedButton(
