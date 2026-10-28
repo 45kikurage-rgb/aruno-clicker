@@ -169,7 +169,7 @@ class UrlSequenceRunnerCore(
                 index = 0
                 openCurrent(gen) // validate() guarantees at least one nonblank URL.
             } else {
-                finish("全${config.urls.size}枠のURLを開きました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
+                finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             }
             return
         }
@@ -278,7 +278,7 @@ class UrlSequenceRunnerCore(
             return
         }
         if (!hasNextUrl) {
-            finish("全${config.urls.size}枠のURLを開きました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
+            finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             return
         }
 
