@@ -52,12 +52,21 @@ fun interface UrlRunnerClock {
     fun nowMs(): Long
 }
 
+/**
+ * Launch TikTok Lite from its normal home entrypoint before recovering a
+ * failed URL. This is an Activity-task reset only, not app-data deletion.
+ */
+fun interface UrlRunnerSplashLauncher {
+    fun launch(): Boolean
+}
+
 enum class UrlRunnerPhase {
     IDLE,
     OPENING,
     WAITING_FOREGROUND,
     HOLDING,
     SKIPPED,
+    RECOVERING,
     FINISHED,
     STOPPED,
     FAILED,
@@ -96,6 +105,7 @@ class UrlSequenceRunnerCore(
     private val scheduler: DelayScheduler,
     private val clock: UrlRunnerClock,
     private val statusSink: UrlRunnerStatusSink,
+    private val splashLauncher: UrlRunnerSplashLauncher = UrlRunnerSplashLauncher { false },
     private val loopMode: LoopMode? = null,
     private val canContinue: () -> Boolean = { true },
 ) {
@@ -159,7 +169,7 @@ class UrlSequenceRunnerCore(
                 index = 0
                 openCurrent(gen) // validate() guarantees at least one nonblank URL.
             } else {
-                finish("全${config.urls.size}枠を確認しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
+                finish("全${config.urls.size}枠のURLを開きました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             }
             return
         }
@@ -234,13 +244,11 @@ class UrlSequenceRunnerCore(
     }
 
     /**
-     * The app can remain open on a popup or a previous video even when a link fails.
-     * Record the failure, then continue on the *next* numbered URL instead of
-     * reporting a fake success or stopping the entire run.
-     *
-     * A bounded delay avoids recursively opening hundreds of broken URLs.
-     * In LOOP mode stop after an entire unsuccessful cycle to avoid an endless
-     * link-opening loop. Explicit/device safety stops always take priority.
+     * URL opening/foreground failures are not evidence of video playback.
+     * Record and skip the failed link rather than terminating all 200 slots.
+     * Before the *next* nonblank URL, launch TikTok Lite's ordinary app entry
+     * (splash/home) and give it time to settle. No app data is cleared.
+     * User-stop, screen-off, lock and accessibility disconnect still stop.
      */
     private fun skipFailedUrl(gen: Long, reason: String) {
         if (!checkCanContinue(gen)) return
@@ -251,21 +259,49 @@ class UrlSequenceRunnerCore(
         val nonBlankCount = config.urls.count { it.isNotBlank() }
         val noMoreInCycle = (loopMode ?: config.loopMode) == LoopMode.LOOP &&
             consecutiveFailures >= nonBlankCount
+        val hasNextUrl = ((index + 1) until config.urls.size)
+            .any { config.urls[it].isNotBlank() } ||
+            (loopMode ?: config.loopMode) == LoopMode.LOOP
+
         report(
             UrlRunnerPhase.SKIPPED, index, 0, 0,
             "${index + 1}番：$reason。失敗として記録" +
-                if (noMoreInCycle) "（全リンク失敗、連続再試行は中止）"
-                else "、次のURLへ進みます",
+                when {
+                    noMoreInCycle -> "（全リンク失敗、連続再試行は中止）"
+                    hasNextUrl -> "、TikTok Liteを起動し直して次へ"
+                    else -> "、次のURLなし",
+                },
         )
         if (!isCurrent(gen)) return
         if (noMoreInCycle) {
             finish("全${nonBlankCount}件のリンクで表示確認できませんでした（失敗${skippedFailureCount}件・安全停止）")
             return
         }
+        if (!hasNextUrl) {
+            finish("全${config.urls.size}枠のURLを開きました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
+            return
+        }
+
+        // Keep a short minimum gap before attempting to start a new Activity.
+        // The continuation is cancelled by stop() or any safety condition.
         scheduler.schedule(FAILED_LINK_SKIP_DELAY_MS) {
             if (!checkCanContinue(gen)) return@schedule
-            index += 1
-            openCurrent(gen)
+            val splashStarted = runCatching { splashLauncher.launch() }.getOrDefault(false)
+            if (!checkCanContinue(gen)) return@schedule
+            phase = UrlRunnerPhase.RECOVERING
+            report(
+                phase, index, 0, 0,
+                if (splashStarted) {
+                    "TikTok Liteを通常起動しました。次のURLを準備しています"
+                } else {
+                    "TikTok Liteの通常起動に失敗。次のURLを試します"
+                },
+            )
+            scheduler.schedule(SPLASH_SETTLE_DELAY_MS) next@{
+                if (!checkCanContinue(gen)) return@next
+                index += 1
+                openCurrent(gen)
+            }
         }
     }
 
@@ -327,5 +363,8 @@ class UrlSequenceRunnerCore(
         /** 待機中の状態更新間隔（既存 holdUrlWithCountdown の1秒刻み表示に合わせる）。 */
         const val TICK_MS = 200L
         const val FAILED_LINK_SKIP_DELAY_MS = 650L
+        // Allow the app's normal launch/splash screen to settle before the
+        // next deep link, without waiting indefinitely for a visual logo.
+        const val SPLASH_SETTLE_DELAY_MS = 1_800L
     }
 }
