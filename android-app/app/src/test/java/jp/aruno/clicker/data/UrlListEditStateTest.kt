@@ -17,50 +17,57 @@ class UrlListEditStateTest {
         assertEquals(10, report10.appliedCount)
         assertEquals(0, report10.excessCount)
         assertEquals(10, state.filledCount())
-        assertEquals("https://lite.tiktok.com/t/P10/", state.slotAt(9))
-        assertEquals("", state.slotAt(10))
+        assertEquals("https://lite.tiktok.com/t/P10/", state.slotAt(14))
+        assertEquals("", state.slotAt(15))
 
         val report11 = state.applyPaste(pasteText(11), PasteMode.REPLACE)
         assertEquals(11, report11.appliedCount)
-        // 11件目は次の範囲（011-020）の先頭スロットに入る。
-        assertEquals("https://lite.tiktok.com/t/P11/", state.slotAt(10))
+        // 11件目は16番へ入る。
+        assertEquals("https://lite.tiktok.com/t/P11/", state.slotAt(15))
     }
 
     @Test
     fun pasteBoundaries20And21() {
         val state = UrlListEditState()
         state.applyPaste(pasteText(21), PasteMode.REPLACE)
-        assertEquals("https://lite.tiktok.com/t/P20/", state.slotAt(19))
-        assertEquals("https://lite.tiktok.com/t/P21/", state.slotAt(20))
+        assertEquals("https://lite.tiktok.com/t/P20/", state.slotAt(24))
+        assertEquals("https://lite.tiktok.com/t/P21/", state.slotAt(25))
         assertEquals(21, state.filledCount())
     }
 
     @Test
-    fun paste120FillsExactlyAnd121ReportsExcess() {
+    fun paste195FillsSlots6To200And196ReportsExcess() {
         val state = UrlListEditState()
-        val report120 = state.applyPaste(pasteText(120), PasteMode.REPLACE)
-        assertEquals(120, report120.appliedCount)
-        assertEquals(0, report120.excessCount)
+        repeat(5) { state.setSlot(it, "https://lite.tiktok.com/t/FIXED${it + 1}/") }
+        val report195 = state.applyPaste(pasteText(195), PasteMode.REPLACE)
+        assertEquals(195, report195.appliedCount)
+        assertEquals(0, report195.excessCount)
+        assertEquals("https://lite.tiktok.com/t/FIXED1/", state.slotAt(0))
+        assertEquals("https://lite.tiktok.com/t/P195/", state.slotAt(199))
+        assertEquals(200, state.filledCount())
 
-        val report121 = state.applyPaste(pasteText(121), PasteMode.REPLACE)
-        assertEquals(120, report121.appliedCount)
-        assertEquals(1, report121.excessCount)
-        assertEquals(listOf("https://lite.tiktok.com/t/P121/"), report121.excessUrls)
-        assertNotNull(report121.excessReason)
+        val report196 = state.applyPaste(pasteText(196), PasteMode.REPLACE)
+        assertEquals(195, report196.appliedCount)
+        assertEquals(1, report196.excessCount)
+        assertEquals(listOf("https://lite.tiktok.com/t/P196/"), report196.excessUrls)
+        assertNotNull(report196.excessReason)
     }
 
     @Test
     fun appendKeepsExistingAndReplaceClears() {
         val state = UrlListEditState()
+        state.setSlot(0, "https://lite.tiktok.com/t/FIXED/")
         state.applyPaste(pasteText(3), PasteMode.REPLACE)
         val appendReport = state.applyPaste("https://lite.tiktok.com/t/ADD/", PasteMode.APPEND)
         assertEquals(1, appendReport.appliedCount)
-        assertEquals("https://lite.tiktok.com/t/ADD/", state.slotAt(3))
-        assertEquals(4, state.filledCount())
+        assertEquals("https://lite.tiktok.com/t/ADD/", state.slotAt(8))
+        assertEquals(5, state.filledCount())
 
         state.applyPaste("https://lite.tiktok.com/t/NEW/", PasteMode.REPLACE)
-        assertEquals(1, state.filledCount())
-        assertEquals("https://lite.tiktok.com/t/NEW/", state.slotAt(0))
+        assertEquals(2, state.filledCount())
+        assertEquals("https://lite.tiktok.com/t/FIXED/", state.slotAt(0))
+        assertEquals("https://lite.tiktok.com/t/NEW/", state.slotAt(5))
+        assertEquals("", state.slotAt(6))
     }
 
     @Test
@@ -79,7 +86,7 @@ class UrlListEditStateTest {
     }
 
     @Test
-    fun middleBlankIsKeptAndFailsBuild() {
+    fun middleBlankIsKeptAndAcceptedForSkipping() {
         val state = UrlListEditState()
         state.setSlot(0, "https://lite.tiktok.com/t/A/")
         state.setSlot(2, "https://lite.tiktok.com/t/C/")
@@ -88,8 +95,10 @@ class UrlListEditStateTest {
             state.effectiveUrls(),
         )
         val issues = mutableListOf<String>()
-        assertNull(state.buildConfig(issues = issues))
-        assertTrue(issues.any { it.contains("2番") })
+        val config = state.buildConfig(issues = issues)
+        assertNotNull(config)
+        assertTrue(issues.isEmpty())
+        assertEquals("", config!!.urls[1])
     }
 
     @Test
@@ -113,7 +122,7 @@ class UrlListEditStateTest {
         val config = state.buildConfig(issues = issues)
         assertNotNull(config)
         assertTrue(issues.isEmpty())
-        assertEquals(7, config!!.urls.size)
+        assertEquals(12, config!!.urls.size)
         assertEquals(3, config.secondsFor(0))
         assertEquals(44, config.secondsFor(6))
     }
