@@ -1,0 +1,9 @@
+{
+  "release": "Aru-Tiker v0.6.1/code18",
+  "purpose": "URL1-5 individual, 6-200 bulk, skip blanks",
+  "versionCode": 18,
+  "authorizedBy": "2026-10-28 user: 本番まであげて",
+  "action": "verify-and-sign-only",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "productionChange": false
+}
