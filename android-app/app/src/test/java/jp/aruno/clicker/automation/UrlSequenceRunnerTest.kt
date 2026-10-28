@@ -163,6 +163,38 @@ class UrlSequenceRunnerTest {
         assertTrue(h.opened.isEmpty())
     }
 
+
+    @Test
+    fun nextUrlIndexSkipsBlankSlotsAndLastSlotHasNoNext() {
+        val h = Harness()
+        val config = UrlRunnerConfig(
+            urls = listOf(
+                "https://lite.tiktok.com/t/first/", "", "",
+                "https://lite.tiktok.com/t/fourth/",
+            ),
+            individualSeconds = listOf(1, 1, 1, 1, 1),
+        )
+        h.runner.start(config)
+        assertEquals(3, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.nextIndex)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(UrlRunnerPhase.HOLDING, h.runner.phase)
+        assertEquals(null, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.nextIndex)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+    }
+
+    @Test
+    fun loopingLastUrlCountsDownToFirstNonblank() {
+        val h = Harness(loopMode = LoopMode.LOOP)
+        val config = UrlRunnerConfig(
+            urls = listOf("", "https://lite.tiktok.com/t/only/", ""),
+            individualSeconds = listOf(1, 1, 1, 1, 1),
+        )
+        h.runner.start(config)
+        assertEquals(1, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.nextIndex)
+        h.runner.stop()
+    }
+
     @Test
     fun doubleStartIsRejected() {
         val harness = Harness()
