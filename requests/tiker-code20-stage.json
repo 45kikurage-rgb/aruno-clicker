@@ -1,0 +1,9 @@
+{
+  "verifyRun": 40672240397,
+  "sourceCommit": "bf364b3cce6f7c2db2fb057991cc22e90ec0561f",
+  "apkSha256": "8ee5e208cc3e693629f319092067477e86502c845c51dbef8e10cdcee645cfe7",
+  "authorizedBy": "2026-10-28 user: restart TikTok Lite from splash after URL failure and advance to next video",
+  "versionCode": 20,
+  "expectedCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "intent": "Stage immutable code20 APK privately, do not touch live code19 or ARUNOMATIC distribution"
+}
