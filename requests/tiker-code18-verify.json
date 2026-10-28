@@ -6,6 +6,6 @@
   "action": "verify-and-sign-only",
   "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
   "productionChange": false,
-  "attempt": 2,
-  "reason": "Fixed obsolete SQLite 121-item rejection; 200-item implementation remains unchanged"
+  "attempt": 3,
+  "reason": "Fixed existing test expectation for completion status; JS 20/20 passed, Android 79/80 passed previously"
 }
