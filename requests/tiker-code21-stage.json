@@ -1,0 +1,7 @@
+{
+  "verifyRun": 40675122979,
+  "sourceCommit": "933031a643728cf144f423119c62b79f1bb3715e",
+  "apkSha256": "76df6c3fd1af652b2bd6edb14efd0dafa8d8b5d8e09985a7ddb532bc8f399f5d",
+  "operation": "immutable-stage-only",
+  "publicAliasesChanged": false
+}
