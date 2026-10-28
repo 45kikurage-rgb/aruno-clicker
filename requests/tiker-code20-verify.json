@@ -7,6 +7,6 @@
   "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
   "productionChange": false,
   "notes": "No DB schema or remote URL changes; skip delay and all-failures loop guard have tests.",
-  "attempt": 3,
-  "reason": "Fixed Kotlin when-expression syntax after adding TikTok Lite normal relaunch before continuing to next URL; rerun Android/Worker tests and existing signing certificate checks"
+  "attempt": 4,
+  "reason": "Final failure was test expectation for immediate safe finish on a failed last URL. Corrected test; no runtime changes. Verify all Android tests and sign only with existing cert."
 }
