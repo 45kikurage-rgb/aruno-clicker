@@ -1,0 +1,9 @@
+{
+  "verifyRun": 40635963043,
+  "sourceCommit": "7e215b8ac555d210348467e7d4757ffb483f8ffe",
+  "apkSha256": "1036db0d553da1bb2e375cd55fb482bad22216deda5a2e1b85e003fcd53cbba7",
+  "authorizedBy": "2026-10-28 user 本番まであげて",
+  "versionCode": 18,
+  "expectedCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "intent": "private stage only, do not change public aliases"
+}
