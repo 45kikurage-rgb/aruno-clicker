@@ -22,7 +22,8 @@ import jp.aruno.clicker.data.UrlRunnerLimits
  * 成功の区別:
  * - 成功扱いにするのは「URLを開き、対象アプリの前面表示を確認した」まで。
  * - 動画が再生されたかどうかは確認しない（状態表示でも未確認と明記する）。
- * - 起動失敗・前面未確認は失敗として終了し、成功扱いにしない。
+ * - 起動失敗・前面未確認はスキップとして記録し、後続URLへ進む。成功とは扱わない。
+ * - 画面OFF/ロック/ユーザー停止/サービス切断は従来どおり即時停止する。
  */
 
 /** URLを開く処理。開く要求が受理されたら true、起動失敗は false。 */
@@ -51,11 +52,21 @@ fun interface UrlRunnerClock {
     fun nowMs(): Long
 }
 
+/**
+ * Launch TikTok Lite from its normal home entrypoint before recovering a
+ * failed URL. This is an Activity-task reset only, not app-data deletion.
+ */
+fun interface UrlRunnerSplashLauncher {
+    fun launch(): Boolean
+}
+
 enum class UrlRunnerPhase {
     IDLE,
     OPENING,
     WAITING_FOREGROUND,
     HOLDING,
+    SKIPPED,
+    RECOVERING,
     FINISHED,
     STOPPED,
     FAILED,
@@ -94,6 +105,7 @@ class UrlSequenceRunnerCore(
     private val scheduler: DelayScheduler,
     private val clock: UrlRunnerClock,
     private val statusSink: UrlRunnerStatusSink,
+    private val splashLauncher: UrlRunnerSplashLauncher = UrlRunnerSplashLauncher { false },
     private val loopMode: LoopMode? = null,
     private val canContinue: () -> Boolean = { true },
 ) {
@@ -109,6 +121,8 @@ class UrlSequenceRunnerCore(
     private var index: Int = -1
     private var active: Boolean = false
     private var openRequestedAtMs = 0L
+    private var skippedFailureCount = 0
+    private var consecutiveFailures = 0
 
     fun isRunning(): Boolean = active
 
@@ -125,6 +139,8 @@ class UrlSequenceRunnerCore(
         snapshot = config.snapshot()
         index = config.startIndex
         active = true
+        skippedFailureCount = 0
+        consecutiveFailures = 0
         generation += 1L
         openCurrent(generation)
         return UrlRunnerStartResult.Started
@@ -153,10 +169,7 @@ class UrlSequenceRunnerCore(
                 index = 0
                 openCurrent(gen) // validate() guarantees at least one nonblank URL.
             } else {
-                active = false
-                phase = UrlRunnerPhase.FINISHED
-                report(phase, config.urls.size - 1, 0, 0,
-                    "全${config.urls.size}枠を確認し、登録済みURLを開きました（空欄はスキップ・動画の再生は未確認）")
+                finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             }
             return
         }
@@ -171,7 +184,7 @@ class UrlSequenceRunnerCore(
         val opened = runCatching { opener.open(url) }.getOrDefault(false)
         if (!isCurrent(gen)) return
         if (!opened) {
-            fail(gen, "${index + 1}番目のURLを開けませんでした（起動失敗）")
+            skipFailedUrl(gen, "起動失敗")
             return
         }
         phase = UrlRunnerPhase.WAITING_FOREGROUND
@@ -183,7 +196,7 @@ class UrlSequenceRunnerCore(
         foregroundChecker.awaitForeground(gen) { ready ->
             if (!isCurrent(gen)) return@awaitForeground
             if (!ready) {
-                fail(gen, "${index + 1}番目のURLの表示を確認できませんでした")
+                skipFailedUrl(gen, "10秒以内に画面を確認できませんでした")
                 return@awaitForeground
             }
             beginHold(gen)
@@ -199,6 +212,7 @@ class UrlSequenceRunnerCore(
         val config = snapshot ?: return
         val totalSeconds = config.secondsFor(index)
         val startedAtMs = if (config.waitFromForeground) clock.nowMs() else openRequestedAtMs
+        consecutiveFailures = 0
         phase = UrlRunnerPhase.HOLDING
         reportHold(gen, startedAtMs, totalSeconds)
     }
@@ -227,6 +241,74 @@ class UrlSequenceRunnerCore(
         val config = snapshot ?: return
         index += 1
         openCurrent(gen)
+    }
+
+    /**
+     * URL opening/foreground failures are not evidence of video playback.
+     * Record and skip the failed link rather than terminating all 200 slots.
+     * Before the *next* nonblank URL, launch TikTok Lite's ordinary app entry
+     * (splash/home) and give it time to settle. No app data is cleared.
+     * User-stop, screen-off, lock and accessibility disconnect still stop.
+     */
+    private fun skipFailedUrl(gen: Long, reason: String) {
+        if (!checkCanContinue(gen)) return
+        val config = snapshot ?: return
+        skippedFailureCount += 1
+        consecutiveFailures += 1
+        phase = UrlRunnerPhase.SKIPPED
+        val nonBlankCount = config.urls.count { it.isNotBlank() }
+        val noMoreInCycle = (loopMode ?: config.loopMode) == LoopMode.LOOP &&
+            consecutiveFailures >= nonBlankCount
+        val hasNextUrl = ((index + 1) until config.urls.size)
+            .any { config.urls[it].isNotBlank() } ||
+            (loopMode ?: config.loopMode) == LoopMode.LOOP
+
+        report(
+            UrlRunnerPhase.SKIPPED, index, 0, 0,
+            "${index + 1}番：$reason。失敗として記録" +
+                when {
+                    noMoreInCycle -> "（全リンク失敗、連続再試行は中止）"
+                    hasNextUrl -> "、TikTok Liteを起動し直して次へ"
+                    else -> "、次のURLなし"
+                },
+        )
+        if (!isCurrent(gen)) return
+        if (noMoreInCycle) {
+            finish("全${nonBlankCount}件のリンクで表示確認できませんでした（失敗${skippedFailureCount}件・安全停止）")
+            return
+        }
+        if (!hasNextUrl) {
+            finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
+            return
+        }
+
+        // Keep a short minimum gap before attempting to start a new Activity.
+        // The continuation is cancelled by stop() or any safety condition.
+        scheduler.schedule(FAILED_LINK_SKIP_DELAY_MS) {
+            if (!checkCanContinue(gen)) return@schedule
+            val splashStarted = runCatching { splashLauncher.launch() }.getOrDefault(false)
+            if (!checkCanContinue(gen)) return@schedule
+            phase = UrlRunnerPhase.RECOVERING
+            report(
+                phase, index, 0, 0,
+                if (splashStarted) {
+                    "TikTok Liteを通常起動しました。次のURLを準備しています"
+                } else {
+                    "TikTok Liteの通常起動に失敗。次のURLを試します"
+                },
+            )
+            scheduler.schedule(SPLASH_SETTLE_DELAY_MS) next@{
+                if (!checkCanContinue(gen)) return@next
+                index += 1
+                openCurrent(gen)
+            }
+        }
+    }
+
+    private fun finish(message: String) {
+        active = false
+        phase = UrlRunnerPhase.FINISHED
+        report(phase, (snapshot?.urls?.size ?: 1) - 1, 0, 0, message)
     }
 
     private fun fail(gen: Long, reason: String) {
@@ -280,5 +362,9 @@ class UrlSequenceRunnerCore(
     companion object {
         /** 待機中の状態更新間隔（既存 holdUrlWithCountdown の1秒刻み表示に合わせる）。 */
         const val TICK_MS = 200L
+        const val FAILED_LINK_SKIP_DELAY_MS = 650L
+        // Allow the app's normal launch/splash screen to settle before the
+        // next deep link, without waiting indefinitely for a visual logo.
+        const val SPLASH_SETTLE_DELAY_MS = 1_800L
     }
 }

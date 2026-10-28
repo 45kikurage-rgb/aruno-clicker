@@ -1,0 +1,12 @@
+{
+  "release": "Aru-Tiker 0.6.3/code20",
+  "purpose": "Skip failed URL opening/foreground checks and continue to next; preserve manual/device safety stops",
+  "versionCode": 20,
+  "authorizedBy": "2026-10-28 user: 自動停止となる場合は次の動画リンクを開く",
+  "action": "verify-and-sign-only",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "productionChange": false,
+  "notes": "No DB schema or remote URL changes; skip delay and all-failures loop guard have tests.",
+  "attempt": 4,
+  "reason": "Final failure was test expectation for immediate safe finish on a failed last URL. Corrected test; no runtime changes. Verify all Android tests and sign only with existing cert."
+}

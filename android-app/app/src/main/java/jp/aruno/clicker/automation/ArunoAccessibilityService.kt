@@ -481,18 +481,28 @@ class ArunoAccessibilityService : AccessibilityService() {
         val scheduler = UrlRunnerHandlerScheduler()
         urlSequenceScheduler = scheduler
         var successfullyOpenedUrls = 0
+        var splashReadyForNextUrl = false
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
                 if (!urlRunnerDeviceReady()) false
                 else {
-                    // CLEAR_TOP could reuse an existing TikTok Lite Activity and
-                    // ignore the next deep link even while staying foreground.
-                    // Freshly recreate the Activity task from URL #2 onward.
-                    // Android task clearing never clears TikTok Lite app data.
-                    val opened = openTargetUrl(url, resetTask = successfullyOpenedUrls > 0)
+                    // Code19 normally recreates the TikTok Lite Activity task
+                    // for subsequent links. After a recovery splash already
+                    // recreated the task, deliver the next link to that fresh
+                    // instance instead of immediately clearing it again.
+                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl
+                    val opened = openTargetUrl(url, resetTask = resetTask)
+                    splashReadyForNextUrl = false
                     if (opened) successfullyOpenedUrls += 1
                     opened
                 }
+            },
+            splashLauncher = UrlRunnerSplashLauncher {
+                // Only invoked after a recoverable per-URL failure. Never
+                // invoked on manual stop, screen OFF or locked device.
+                if (!urlRunnerDeviceReady()) false
+                else launchTargetApp(activeConfig.targetPackage, resetTask = true)
+                    .also { splashReadyForNextUrl = it }
             },
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
