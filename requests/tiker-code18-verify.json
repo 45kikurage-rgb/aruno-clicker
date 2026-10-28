@@ -5,5 +5,7 @@
   "authorizedBy": "2026-10-28 user: 本番まであげて",
   "action": "verify-and-sign-only",
   "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
-  "productionChange": false
+  "productionChange": false,
+  "attempt": 2,
+  "reason": "Fixed obsolete SQLite 121-item rejection; 200-item implementation remains unchanged"
 }
