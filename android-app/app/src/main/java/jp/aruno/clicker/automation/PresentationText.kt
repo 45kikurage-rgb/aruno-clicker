@@ -16,3 +16,24 @@ object PresentationText {
         }
     }
 }
+
+/** Shared concise countdown for either floating controller. */
+object UrlRunnerOverlayCountdown {
+    fun render(
+        isRunner: Boolean,
+        elapsed: String,
+        sessionRemaining: String,
+        secondsToNext: Int?,
+        hasNext: Boolean,
+    ): String = if (!isRunner) {
+        "経過 $elapsed  /  残り $sessionRemaining"
+    } else if (secondsToNext != null) {
+        "経過 $elapsed\n" + if (hasNext) {
+            "次の動画まであと${secondsToNext.coerceAtLeast(0)}秒"
+        } else {
+            "終了まであと${secondsToNext.coerceAtLeast(0)}秒"
+        }
+    } else {
+        "経過 $elapsed\n次の動画を開いています"
+    }
+}
