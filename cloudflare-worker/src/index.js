@@ -5,14 +5,12 @@ const SCHEMA_VERSION = 2;
 
 // ---- URL runner (/v1/url-runner, schemaVersion 3) ----
 // Added without changing the legacy /v1/config contract (schemaVersion 2).
-// Body limit rationale: a valid body holds at most 120 URLs of up to 2048
-// characters each (120 * 2048 = 245,760 bytes) plus per-URL JSON syntax
-// (quotes/comma, ~3 bytes each), five individual seconds, one common
-// seconds value and expectedConfigVersion. The worst valid case is about
-// 246 KB, so the limit is set to 512 KiB (about 2.1x headroom).
+// Body limit rationale: 200 URLs of up to 2048 ASCII characters need
+// about 410 KiB plus JSON structure. 512 KiB covers the valid URL list.
+// Existing schemaVersion 3 and storage tables remain unchanged.
 const URL_RUNNER_SCHEMA_VERSION = 3;
 const MAX_URL_RUNNER_BODY_BYTES = 512 * 1024;
-const MAX_URL_RUNNER_URLS = 120;
+const MAX_URL_RUNNER_URLS = 200;
 const URL_RUNNER_INDIVIDUAL_COUNT = 5;
 const MIN_RUNNER_SECONDS = 1;
 const MAX_RUNNER_SECONDS = 3600;
@@ -286,10 +284,18 @@ function validateUrlRunnerPayload(body) {
   } else {
     urls = [];
     body.urls.forEach((value, index) => {
+      if (typeof value === "string" && value.trim() === "") {
+        // Empty numbered positions are stored so clients can skip them.
+        urls.push("");
+        return;
+      }
       const result = validateStartupUrl(value, `urls[${index}]`);
       if (!result.ok) errors.push(result.message);
       else urls.push(result.value);
     });
+    if (urls.every((value) => value === "")) {
+      errors.push("urls must contain at least one non-empty URL");
+    }
     if (errors.length > 0) urls = null;
   }
 
