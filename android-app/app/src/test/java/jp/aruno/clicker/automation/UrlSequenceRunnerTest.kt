@@ -275,7 +275,8 @@ class UrlSequenceRunnerTest {
         assertEquals(UrlRunnerPhase.RECOVERING, harness.runner.phase)
         harness.scheduler.advanceBy(1_800)
         assertEquals(2, harness.opened.size)
-        assertEquals(UrlRunnerPhase.SKIPPED, harness.runner.phase)
+        // The last URL has no successor, so its failure finishes immediately.
+        assertEquals(UrlRunnerPhase.FINISHED, harness.runner.phase)
         // The failed final URL has no successor: do not launch again.
         harness.scheduler.advanceBy(10_000)
         assertEquals(UrlRunnerPhase.FINISHED, harness.runner.phase)
