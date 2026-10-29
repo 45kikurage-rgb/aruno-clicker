@@ -53,7 +53,9 @@ class MainActivity : ComponentActivity() {
                     startFirstAutomation = { ControlContract.startFirst(this) },
                     startRepeatAutomation = { ControlContract.startRepeat(this) },
                     startAutomaticAutomation = { ControlContract.startAutomatic(this) },
-                    startUrlRunnerAutomation = { fromSixth -> ControlContract.startUrlRunner(this, fromSixth) },
+                    startUrlRunnerAutomation = { fromSixth, withSplash ->
+                        ControlContract.startUrlRunner(this, fromSixth, withSplash)
+                    },
                     stopAutomation = { ControlContract.stop(this) },
                 )
             }
