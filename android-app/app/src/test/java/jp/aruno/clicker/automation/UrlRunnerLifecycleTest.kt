@@ -161,7 +161,7 @@ class UrlRunnerLifecycleTest {
         assertTrue(during.urlRunnerHasNext)
         assertNotNull(during.urlRunnerSecondsToNext)
         assertTrue(during.urlRunnerSecondsToNext!! in 0..1)
-        service.onInterrupt()
+        service.stopAutomation("停止しました")
         val stopped = AutomationRuntime.snapshot()
         assertFalse(stopped.urlRunnerActive)
         assertNull(stopped.urlRunnerSecondsToNext)
