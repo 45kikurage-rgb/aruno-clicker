@@ -21,7 +21,10 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.Spinner
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -30,6 +33,7 @@ import jp.aruno.clicker.automation.AutomationConfigStore
 import jp.aruno.clicker.automation.AutomationContract
 import jp.aruno.clicker.automation.AutomationRuntime
 import jp.aruno.clicker.automation.UrlRunnerOverlayCountdown
+import jp.aruno.clicker.data.SplashFrequencyStore
 import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.R
 import java.util.Locale
@@ -46,6 +50,9 @@ open class AutomationOverlayService : Service() {
     private var countText: TextView? = null
     private var startButton: Button? = null
     private var startSixthButton: Button? = null
+    private var splashToggleButton: Button? = null
+    private var splashFrequencyPicker: Spinner? = null
+    private lateinit var splashPreferences: SplashFrequencyStore
     private var sizeButton: Button? = null
     private var compactOverlay = true
     private val handler = Handler(Looper.getMainLooper())
@@ -62,6 +69,7 @@ open class AutomationOverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(WindowManager::class.java)
         configStore = AutomationConfigStore(this)
+        splashPreferences = SplashFrequencyStore(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         handler.post(ticker)
@@ -91,6 +99,7 @@ open class AutomationOverlayService : Service() {
                         ?: AutomationContract.SOURCE_MANUAL,
                     startMode = AutomationContract.START_MODE_URL_RUNNER,
                     fromSixth = intent?.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false) == true,
+                    splashBetweenUrls = intent?.getBooleanExtra(AutomationContract.EXTRA_SPLASH_BETWEEN_URLS, false) == true,
                 )
             }
         }
@@ -117,6 +126,7 @@ open class AutomationOverlayService : Service() {
         source: String,
         startMode: String = AutomationContract.START_MODE_REPEAT,
         fromSixth: Boolean = false,
+        splashBetweenUrls: Boolean = false,
     ) {
         if (AutomationRuntime.snapshot().requested) return
         val service = ArunoAccessibilityService.instance
@@ -125,7 +135,7 @@ open class AutomationOverlayService : Service() {
             AutomationRuntime.stop(this, "ユーザー補助をONにしてから動画スタートを押してください")
             Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
         } else if (source != AutomationContract.SOURCE_SCHEDULE) {
-            service.startUrlRunnerSequence(fromSixth)
+            service.startUrlRunnerSequence(fromSixth, fromSixth && splashBetweenUrls)
         }
         refreshOverlay()
     }
@@ -242,11 +252,56 @@ open class AutomationOverlayService : Service() {
             }
         }
         val buttonHeight = dp(if (compactOverlay) 40 else 56)
-        val sixthButton = compactButton("6番目からスタート", Color.rgb(15, 116, 54)).apply {
+        val splashToggle = compactButton("スプラッシュ ON", Color.rgb(25, 111, 83)).apply {
             textSize = if (compactOverlay) 12f else 16f
-            setOnClickListener { requestStart(source = AutomationContract.SOURCE_MANUAL, fromSixth = true) }
+            setOnClickListener {
+                if (!AutomationRuntime.snapshot().requested) {
+                    splashPreferences.setEnabled(!splashPreferences.isEnabled())
+                    refreshOverlay()
+                }
+            }
+        }
+        splashToggleButton = splashToggle
+        val sixthButton = compactButton("6番目以降再生", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 12f else 16f
+            setOnClickListener {
+                requestStart(
+                    source = AutomationContract.SOURCE_MANUAL,
+                    fromSixth = true,
+                    splashBetweenUrls = splashPreferences.isEnabled(),
+                )
+            }
         }
         startSixthButton = sixthButton
+        val frequencyRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val frequencyText = label(if (compactOverlay) 10f else 14f, Color.WHITE).apply {
+            text = "頻度"
+        }
+        val frequencyPicker = Spinner(this).apply {
+            contentDescription = "スプラッシュ頻度 1から5件ごと"
+            minimumHeight = dp(44)
+        }
+        val adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_item,
+            (1..5).map { "${it}件ごと" },
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        frequencyPicker.adapter = adapter
+        frequencyPicker.setSelection(splashPreferences.interval() - 1, false)
+        frequencyPicker.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (!AutomationRuntime.snapshot().requested) {
+                    splashPreferences.setInterval(position + 1)
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        splashFrequencyPicker = frequencyPicker
+        frequencyRow.addView(frequencyText, LinearLayout.LayoutParams(0, dp(44), 1f))
+        frequencyRow.addView(frequencyPicker, LinearLayout.LayoutParams(0, dp(44), 2f))
         val buttonGap = dp(if (compactOverlay) 3 else 6)
         actionButton.textSize = if (compactOverlay) 13f else 17f
         closeButton.textSize = if (compactOverlay) 13f else 17f
@@ -256,8 +311,14 @@ open class AutomationOverlayService : Service() {
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)
         root.addView(countText)
-        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+        root.addView(splashToggle, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
             topMargin = dp(if (compactOverlay) 5 else 9)
+        })
+        root.addView(frequencyRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
+            topMargin = dp(if (compactOverlay) 2 else 6)
+        })
+        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+            topMargin = dp(if (compactOverlay) 4 else 7)
         })
         root.addView(buttons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(if (compactOverlay) 5 else 9)
@@ -329,6 +390,8 @@ open class AutomationOverlayService : Service() {
         countText = null
         startButton = null
         startSixthButton = null
+        splashToggleButton = null
+        splashFrequencyPicker = null
         sizeButton = null
     }
 
@@ -365,6 +428,15 @@ open class AutomationOverlayService : Service() {
     private fun refreshOverlay() {
         val state = AutomationRuntime.snapshot()
         startSixthButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
+        splashToggleButton?.apply {
+            isEnabled = !state.requested
+            alpha = if (isEnabled) 1f else 0.4f
+            text = if (splashPreferences.isEnabled()) "スプラッシュ ON" else "スプラッシュ OFF"
+        }
+        splashFrequencyPicker?.apply {
+            isEnabled = !state.requested && splashPreferences.isEnabled()
+            alpha = if (isEnabled) 1f else 0.45f
+        }
         val (statusTitle, statusDetail) = splitStatus(state.message)
         statusTitleText?.apply {
             text = statusTitle

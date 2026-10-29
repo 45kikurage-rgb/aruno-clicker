@@ -90,7 +90,10 @@ class ArunoAccessibilityService : AccessibilityService() {
                     if (BuildConfig.USE_ACCESSIBILITY_OVERLAY && configStore.load().floatingController) {
                         showAccessibilityOverlay()
                     }
-                    startUrlRunnerSequence(intent.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false))
+                    startUrlRunnerSequence(
+                        fromSixth = intent.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false),
+                        splashBetweenUrls = intent.getBooleanExtra(AutomationContract.EXTRA_SPLASH_BETWEEN_URLS, false),
+                    )
                 }
                 AutomationContract.ACTION_STOP_AUTOMATION -> stopAutomation("停止しました")
             }
@@ -200,7 +203,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     )
                 },
                 onStop = { stopAutomation("停止しました") },
-                onStartFromSixth = { startUrlRunnerSequence(true) },
+                onStartFromSixth = { enabled -> startUrlRunnerSequence(true, enabled) },
                 onClose = {
                     stopService(Intent(this, AutomationService::class.java))
                 },
@@ -339,7 +342,10 @@ class ArunoAccessibilityService : AccessibilityService() {
 
     /** Every manual, overlay and scheduled start synchronizes shared URLs before choosing its mode. */
     private fun startWithLatestRemoteConfig(intent: Intent) =
-        startUrlRunnerSequence(intent.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false))
+        startUrlRunnerSequence(
+            intent.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false),
+            intent.getBooleanExtra(AutomationContract.EXTRA_SPLASH_BETWEEN_URLS, false),
+        )
 
     @Suppress("unused")
     private fun startLegacyWithLatestRemoteConfig(intent: Intent) {
@@ -458,7 +464,10 @@ class ArunoAccessibilityService : AccessibilityService() {
         }
     }
 
-    fun startUrlRunnerSequence(fromSixth: Boolean = false) {
+    fun startUrlRunnerSequence(
+        fromSixth: Boolean = false,
+        splashBetweenUrls: Boolean = false,
+    ) {
         // Check the existing instance BEFORE stopping/replacing it.
         if (urlSequenceRunner?.isRunning() == true) return
         // 従来経路が動いていれば止めてから開始する（世代加算とコールバック全除去を含む）。
@@ -506,12 +515,14 @@ class ArunoAccessibilityService : AccessibilityService() {
                 }
             },
             splashLauncher = UrlRunnerSplashLauncher {
-                // Only invoked after a recoverable per-URL failure. Never
-                // invoked on manual stop, screen OFF or locked device.
+                // Called either after a recoverable URL failure or by the
+                // explicit per-video splash mode, never on manual stop, screen
+                // OFF or a locked device.
                 if (!urlRunnerDeviceReady()) false
                 else launchTargetApp(activeConfig.targetPackage, resetTask = true)
                     .also { splashReadyForNextUrl = it }
             },
+            splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,

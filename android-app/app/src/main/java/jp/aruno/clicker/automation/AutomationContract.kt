@@ -16,6 +16,7 @@ object AutomationContract {
     const val EXTRA_MESSAGE = "message"
     const val EXTRA_START_MODE = "start_mode"
     const val EXTRA_START_FROM_SIXTH = "url_start_from_sixth"
+    const val EXTRA_SPLASH_BETWEEN_URLS = "url_splash_between_urls"
 
     const val SOURCE_MANUAL = "manual"
     const val SOURCE_SCHEDULE = "schedule"

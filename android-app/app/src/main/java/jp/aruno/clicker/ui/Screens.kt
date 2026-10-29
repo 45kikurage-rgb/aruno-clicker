@@ -106,7 +106,7 @@ fun ArunoClickerApp(
     startFirstAutomation: () -> Unit,
     startRepeatAutomation: () -> Unit,
     startAutomaticAutomation: () -> Unit,
-    startUrlRunnerAutomation: (Boolean) -> Unit,
+    startUrlRunnerAutomation: (Boolean, Boolean) -> Unit,
     stopAutomation: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -147,7 +147,7 @@ fun ArunoClickerApp(
             enabled.contains("ArunoAccessibilityService", ignoreCase = true)
     }
 
-    fun requestUrlStart(fromSixth: Boolean) {
+    fun requestUrlStart(fromSixth: Boolean, withSplash: Boolean = false) {
         val saved = urlRunnerState.savedConfig
         val issue = saved?.let { jp.aruno.clicker.data.UrlRunnerStartSelection.issue(it, fromSixth) }
         when {
@@ -157,7 +157,7 @@ fun ArunoClickerApp(
             !accessibilityGranted -> homeNotice = "ユーザー補助設定を開き、Aru-TikerをONにしてください"
             else -> {
                 homeNotice = null
-                startUrlRunnerAutomation(fromSixth)
+                startUrlRunnerAutomation(fromSixth, fromSixth && withSplash)
             }
         }
     }
@@ -172,7 +172,8 @@ fun ArunoClickerApp(
             accessibilityGranted = accessibilityGranted,
             openAccessibilitySettings = openAccessibilitySettings,
             onStartVideo = { requestUrlStart(false) },
-            onStartFromSixth = { requestUrlStart(true) },
+            onStartFromSixthWithSplash = { requestUrlStart(true, true) },
+            onStartFromSixthWithoutSplash = { requestUrlStart(true, false) },
             onStop = { stopAutomation() },
             onDownload = {
                 homeNotice = null

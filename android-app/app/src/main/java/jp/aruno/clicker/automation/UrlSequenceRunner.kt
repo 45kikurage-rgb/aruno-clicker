@@ -106,6 +106,8 @@ class UrlSequenceRunnerCore(
     private val clock: UrlRunnerClock,
     private val statusSink: UrlRunnerStatusSink,
     private val splashLauncher: UrlRunnerSplashLauncher = UrlRunnerSplashLauncher { false },
+    /** 0=off, 1=every URL, 2..5=every N completed URL positions. Fixed per run. */
+    private val splashEveryLinks: Int = 0,
     private val loopMode: LoopMode? = null,
     private val canContinue: () -> Boolean = { true },
 ) {
@@ -123,6 +125,7 @@ class UrlSequenceRunnerCore(
     private var openRequestedAtMs = 0L
     private var skippedFailureCount = 0
     private var consecutiveFailures = 0
+    private var completedLinksSinceSplash = 0
 
     fun isRunning(): Boolean = active
 
@@ -141,6 +144,7 @@ class UrlSequenceRunnerCore(
         active = true
         skippedFailureCount = 0
         consecutiveFailures = 0
+        completedLinksSinceSplash = 0
         generation += 1L
         openCurrent(generation)
         return UrlRunnerStartResult.Started
@@ -239,8 +243,38 @@ class UrlSequenceRunnerCore(
     private fun advance(gen: Long) {
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
-        index += 1
-        openCurrent(gen)
+        completedLinksSinceSplash += 1
+        if (splashEveryLinks !in 1..5 || completedLinksSinceSplash < splashEveryLinks) {
+            index += 1
+            openCurrent(gen)
+            return
+        }
+        // First populated slot (normally #6) opens directly. Following slots
+        // need a fresh normal TikTok Lite launch before their deep links.
+        // Do not splash for an empty slot or after the final STOP-mode URL.
+        val next = ((index + 1) until config.urls.size)
+            .firstOrNull { config.urls[it].isNotBlank() }
+            ?: if ((loopMode ?: config.loopMode) == LoopMode.LOOP) {
+                config.urls.indexOfFirst { it.isNotBlank() }.takeIf { it >= 0 }
+            } else null
+        if (next == null) {
+            index += 1
+            openCurrent(gen)
+            return
+        }
+        completedLinksSinceSplash = 0
+        phase = UrlRunnerPhase.RECOVERING
+        report(phase, index, 0, 0, "${next + 1}番のURL前にTikTok Liteを起動し直しています（${splashEveryLinks}件ごと）")
+        val launched = runCatching { splashLauncher.launch() }.getOrDefault(false)
+        if (!checkCanContinue(gen)) return
+        if (!launched) {
+            report(phase, index, 0, 0, "通常起動に失敗しました。次のURLを試します")
+        }
+        scheduler.schedule(SPLASH_SETTLE_DELAY_MS) nextUrl@{
+            if (!checkCanContinue(gen)) return@nextUrl
+            index += 1
+            openCurrent(gen)
+        }
     }
 
     /**
@@ -281,6 +315,10 @@ class UrlSequenceRunnerCore(
             finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             return
         }
+
+        // Failure already requires splash recovery. Restart the normal
+        // frequency counter so the next URL doesn't get two splash launches.
+        completedLinksSinceSplash = 0
 
         // Keep a short minimum gap before attempting to start a new Activity.
         // The continuation is cancelled by stop() or any safety condition.

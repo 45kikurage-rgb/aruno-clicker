@@ -20,6 +20,28 @@ class ControlContractTest {
         assertEquals(ControlContract.AUTOMATION_SERVICE, intent.component!!.className)
         assertTrue(intent.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, false))
     }
+    @Test fun explicitSixthSplashChoicesAreDistinctOneRunCommands() {
+        val app = RuntimeEnvironment.getApplication()
+        ControlContract.startUrlRunner(app, fromSixth = true, splashBetweenUrls = true)
+        val withSplash = shadowOf(app).nextStartedService
+        assertTrue(withSplash.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, false))
+        assertTrue(withSplash.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, false))
+        ControlContract.startUrlRunner(app, fromSixth = true, splashBetweenUrls = false)
+        val withoutSplash = shadowOf(app).nextStartedService
+        assertTrue(withoutSplash.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, false))
+        assertFalse(withoutSplash.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, true))
+    }
+
+    @Test fun normalStartCannotAccidentallyInheritSixthSplashFlag() {
+        val app = RuntimeEnvironment.getApplication()
+        ControlContract.startUrlRunner(app, fromSixth = true, splashBetweenUrls = true)
+        shadowOf(app).nextStartedService
+        ControlContract.startUrlRunner(app, fromSixth = false, splashBetweenUrls = true)
+        val normal = shadowOf(app).nextStartedService
+        assertFalse(normal.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
+        assertFalse(normal.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, true))
+    }
+
     @Test fun normalStartDoesNotInheritSixthSelection() {
         val app = RuntimeEnvironment.getApplication()
         ControlContract.startUrlRunner(app, true)
