@@ -1,0 +1,15 @@
+# Aru-Tiker code26: Gift → in-app Home before the next URL
+
+User evidence: 17524.mp4 / 17525.mp4 and screenshots 17526.png / 17527.png, supplied 2026-10-29. The user reports direct video-to-video links stop the reward gauge, while visiting Gift and returning to the TikTok feed restores it. Videos show the feed, reward page and return to the feed. Automated reward-credit success is not verified.
+
+- Before the second and subsequent nonblank, uncapped URL, visit Gift and confirm the rewards surface, then return to the in-app Home/feed and confirm it twice. The first URL opens directly. Do not navigate after the final URL or when all are capped.
+- Device-local comparison setting: AUTO (default, elements then coordinates), ELEMENTS, COORDINATES, OFF (legacy). Read once per run. Never change central URLs or daily counts for this setting.
+- Gift selector: exact accessible ギフト or the observed package-scoped id/ec6, within the bottom Gift tab. Home selector: exact ホーム within the bottom Home tab. Click a bounded clickable parent when needed. Never click like/share/redeem/receive/ad buttons.
+- Coordinate strategy uses the app's safe bounds and observed bottom-tab center height. Android30+ excludes actual navigation-bar/display-cutout insets. Older devices exclude observed bottom system-navigation windows. This supports 3-button and gesture navigation without hardcoded physical pixels. Landscape and unknown surfaces are not guessed; obscuring the tab with the float is rejected.
+- Full-screen rewards WebViews may not show a Home tab. After a confirmed rewards page, one Android BACK is allowed, followed by feed verification. Android GLOBAL_ACTION_HOME is never used in this route.
+- Gestures alone do not establish navigation success. Bounded polling and one fallback stop on unknown/foreign/failed surfaces, without launching the next URL.
+- The runner's pausable scheduler owns transitions. Pause holds pending navigation/delays; stop, screen lock/off and service disconnection cancel future URL opening. Navigation does not increment daily views. Only the subsequent foreground-confirmed URL does.
+- Keep the prepared TikTok Activity task when delivering the next URL; do not clear that prepared task. Existing optional splash happens earlier, before the Gift/Home route. OFF retains the prior path.
+- Preserve code25 daily 2/3 attempts including interrupted holds, pause/resume, one-line float title and inline splash settings. Candidate jp.aruno.clicker / 0.6.9 / code26. Existing signer remains 14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f.
+
+Tests cover elements, missing/stalled element fallback, coordinate-only navigation, actual tab y above simulated 3-button/gesture boundaries, full-screen rewards/back, unknown/foreign/landscape rejection, cancelled navigation, no-op gestures, route gating, pause, stop/lock, and existing regressions. This is not physical-device proof of gauge movement or points. Signing/distribution remain blocked on unconfirmed existing-key durable preservation and independent restoration. No new key or app-data reset is authorized.

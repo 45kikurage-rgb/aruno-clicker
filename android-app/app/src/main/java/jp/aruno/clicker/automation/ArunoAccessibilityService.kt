@@ -522,6 +522,11 @@ class ArunoAccessibilityService : AccessibilityService() {
         urlSequenceScheduler = scheduler
         var successfullyOpenedUrls = 0
         var splashReadyForNextUrl = false
+        var giftHomeReadyForNextUrl = false
+        val giftHomeMode = jp.aruno.clicker.data.GiftHomeModeStore(this).mode()
+        val giftHomeNavigator = GiftHomeNavigator(AndroidGiftHomePort(this, ::dispatchTap), giftHomeMode) {
+            AutomationRuntime.markWaiting(this, it)
+        }
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
                 if (!urlRunnerDeviceReady()) false
@@ -530,9 +535,10 @@ class ArunoAccessibilityService : AccessibilityService() {
                     // for subsequent links. After a recovery splash already
                     // recreated the task, deliver the next link to that fresh
                     // instance instead of immediately clearing it again.
-                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl
-                    val opened = openTargetUrl(url, resetTask = resetTask)
+                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl && !giftHomeReadyForNextUrl
+                    val opened = openTargetUrl(url, resetTask = resetTask, preserveTask = giftHomeReadyForNextUrl)
                     splashReadyForNextUrl = false
+                    giftHomeReadyForNextUrl = false
                     if (opened) successfullyOpenedUrls += 1
                     opened
                 }
@@ -548,6 +554,12 @@ class ArunoAccessibilityService : AccessibilityService() {
             splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
             dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
+            routePreparer = if (giftHomeMode == jp.aruno.clicker.data.GiftHomeMode.OFF) null else UrlRoutePreparer { queue, active, done ->
+                giftHomeNavigator.prepare(queue, active) { ready ->
+                    giftHomeReadyForNextUrl = ready
+                    done(ready)
+                }
+            },
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,
@@ -1421,14 +1433,16 @@ class ArunoAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun openTargetUrl(url: String, resetTask: Boolean = false): Boolean {
+    private fun openTargetUrl(url: String, resetTask: Boolean = false, preserveTask: Boolean = false): Boolean {
         val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
         val candidates = listOf(activeConfig.targetPackage) + AutomationConfig.TARGET_PACKAGES
         candidates.distinct().forEach { packageName ->
             // For successive URL-runner entries, do not reuse the already-open
             // Activity with CLEAR_TOP: TikTok Lite may leave the previous video
             // in place even though startActivity() succeeds.
-            val flags = Intent.FLAG_ACTIVITY_NEW_TASK or if (resetTask) {
+            val flags = Intent.FLAG_ACTIVITY_NEW_TASK or if (preserveTask) {
+                0 // Gift→Home already prepared this task; deliver the new URL normally.
+            } else if (resetTask) {
                 Intent.FLAG_ACTIVITY_CLEAR_TASK
             } else {
                 Intent.FLAG_ACTIVITY_CLEAR_TOP

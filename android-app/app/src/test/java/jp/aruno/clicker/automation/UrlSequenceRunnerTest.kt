@@ -65,6 +65,7 @@ class UrlSequenceRunnerTest {
         splashEveryLinks: Int = 0,
         dailyViews: DailyVideoViews? = null,
         dailyLimit: Int = 2,
+        routePreparer: UrlRoutePreparer? = null,
     ) {
         var allowed = true
         val clock = FakeClock()
@@ -97,6 +98,7 @@ class UrlSequenceRunnerTest {
             canContinue = { allowed },
             dailyViews = dailyViews,
             dailyLimit = dailyLimit,
+            routePreparer = routePreparer,
         )
     }
 
@@ -237,6 +239,47 @@ class UrlSequenceRunnerTest {
         individualSeconds = individual,
         commonSeconds = common,
     )
+
+    @Test fun routePreparesOnlyBeforeNextEligibleUrlAndFailureNeverOpensIt() {
+        var ready: ((Boolean) -> Unit)? = null
+        var calls = 0
+        val h = Harness(routePreparer = UrlRoutePreparer { _, _, done -> calls++; ready = done })
+        h.runner.start(config(2))
+        assertEquals(0, calls)
+        h.scheduler.advanceBy(3_000)
+        assertEquals(1, calls)
+        assertEquals(1, h.opened.size)
+        ready!!(false)
+        h.scheduler.advanceBy(0)
+        assertEquals(UrlRunnerPhase.FAILED, h.runner.phase)
+        assertEquals(1, h.opened.size)
+    }
+
+    @Test fun routeSuccessDuringPauseWaitsForResumeAndDoesNotChargeBeforeUrlOpens() {
+        var ready: ((Boolean) -> Unit)? = null
+        val history = MemoryViews()
+        val h = Harness(dailyViews = history, routePreparer = UrlRoutePreparer { _, _, done -> ready = done })
+        val c = config(2)
+        h.runner.start(c);h.scheduler.advanceBy(3_000)
+        assertEquals(0, history.count(c.urls[1]))
+        h.runner.togglePause();ready!!(true);h.scheduler.advanceBy(30_000)
+        assertEquals(1, h.opened.size)
+        h.runner.togglePause();h.scheduler.advanceBy(0)
+        assertEquals(2, h.opened.size)
+        assertEquals(1, history.count(c.urls[1]))
+    }
+
+    @Test fun stopOrLockDuringRouteIgnoresLateCompletion() {
+        for (lock in listOf(true, false)) {
+            var ready: ((Boolean) -> Unit)? = null
+            val h = Harness(routePreparer = UrlRoutePreparer { _, _, done -> ready = done })
+            h.runner.start(config(2));h.scheduler.advanceBy(3_000)
+            if (lock) h.allowed = false else h.runner.stop()
+            ready!!(true);h.scheduler.advanceBy(0)
+            assertEquals(1, h.opened.size)
+            assertTrue(h.runner.phase in listOf(UrlRunnerPhase.FAILED, UrlRunnerPhase.STOPPED))
+        }
+    }
 
     @Test fun pauseFreezesNinetySecondHoldAndResumeDoesNotCountAnotherView() {
         val history = MemoryViews()

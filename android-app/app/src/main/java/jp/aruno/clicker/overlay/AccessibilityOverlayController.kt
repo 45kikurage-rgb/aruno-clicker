@@ -316,8 +316,8 @@ class AccessibilityOverlayController(
         val (fallbackTitle, fallbackDetail) = splitStatus(state.message)
         val showUrl = state.requested && state.urlRunnerActive && state.urlRunnerIndex >= 0
         val statusTitle = if (showUrl) "URL NO.${state.urlRunnerIndex + 1} " +
-            (if (state.urlRunnerPaused) "一時停止" else "再生") else fallbackTitle
-        val statusDetail = if (showUrl) "" else fallbackDetail
+            (if (state.urlRunnerPaused) "一時停止" else if (state.urlRunnerPreparing) "準備" else "再生") else fallbackTitle
+        val statusDetail = if (showUrl && !state.urlRunnerPreparing) "" else fallbackDetail
         statusTitleText?.apply {
             text = statusTitle
             maxLines = 1

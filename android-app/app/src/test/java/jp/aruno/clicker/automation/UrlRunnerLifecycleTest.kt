@@ -34,6 +34,9 @@ class UrlRunnerLifecycleTest {
     private val url = "https://lite.tiktok.com/t/AAA/"
 
     @Before fun setup() {
+        // This fixture verifies the legacy Activity lifecycle; route navigation
+        // is tested separately against actual node selectors and navigator ports.
+        jp.aruno.clicker.data.GiftHomeModeStore(app).setMode(jp.aruno.clicker.data.GiftHomeMode.OFF)
         AutomationRuntime.stop(app)
         shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(true)
         shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(false)
@@ -255,3 +258,4 @@ class UrlRunnerLifecycleTest {
         controller.destroy()
     }
 }
+
