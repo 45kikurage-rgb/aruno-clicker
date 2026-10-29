@@ -1,0 +1,11 @@
+{
+  "release": "Aru-Tiker 0.6.6/code23",
+  "versionCode": 23,
+  "purpose": "Selectable 6+ splash ON/OFF with per-device frequency 1–5 in both float controllers, preserving normal URL opening and failure recovery",
+  "action": "verify-and-sign-only",
+  "authorizedBy": "2026-10-29 user: 6番以降毎回スプラッシュ、フロートにスプラッシュボタンと6番目以降再生、頻度1–5可変",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "productionChange": false,
+  "existingDataPreserved": true,
+  "noCloudflareOrD1Changes": true
+}
