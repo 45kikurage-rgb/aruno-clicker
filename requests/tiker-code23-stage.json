@@ -1,0 +1,10 @@
+{
+  "verifyRun": 40796684938,
+  "sourceCommit": "998438e4c55bb222252863f52a5f0abdc444d029",
+  "apkSha256": "d26d51d5dc1ac3c269c81ff66fa07d8e0e0c71946fbb5ffadb7e4b9e4c04b7b3",
+  "versionCode": 23,
+  "authorizedBy": "2026-10-29 user requested 6+ playback with local splash ON/OFF and 1–5 frequency selector",
+  "operation": "immutable-stage-only",
+  "publicAliasesChanged": false,
+  "certificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f"
+}
