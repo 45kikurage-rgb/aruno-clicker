@@ -61,7 +61,7 @@ class UrlSequenceRunnerTest {
         var failUrls: Set<String> = emptySet(),
         foregroundResult: Boolean = true,
         loopMode: LoopMode = LoopMode.STOP,
-        splashBetweenLinks: Boolean = false,
+        splashEveryLinks: Int = 0,
     ) {
         var allowed = true
         val clock = FakeClock()
@@ -89,7 +89,7 @@ class UrlSequenceRunnerTest {
             scheduler = scheduler,
             clock = clock,
             statusSink = UrlRunnerStatusSink { statuses += it },
-            splashBetweenLinks = splashBetweenLinks,
+            splashEveryLinks = splashEveryLinks,
             loopMode = loopMode,
             canContinue = { allowed },
         )
@@ -459,7 +459,7 @@ class UrlSequenceRunnerTest {
 
     @Test
     fun sixthSplashModeOpensSixDirectlyThenSplashBeforeSevenAndEight() {
-        val h = Harness(splashBetweenLinks = true)
+        val h = Harness(splashEveryLinks = 1)
         val config = sixthModeConfig()
         h.runner.start(config)
         assertEquals(listOf(config.urls[5]), h.opened)
@@ -490,7 +490,7 @@ class UrlSequenceRunnerTest {
 
     @Test
     fun sixthNoSplashModeOpensSixSevenEightImmediatelyAfterEachWait() {
-        val h = Harness(splashBetweenLinks = false)
+        val h = Harness(splashEveryLinks = 0)
         val config = sixthModeConfig()
         h.runner.start(config)
         assertEquals(listOf(config.urls[5]), h.opened)
@@ -506,7 +506,7 @@ class UrlSequenceRunnerTest {
     @Test
     fun splashModeSkipsBlankSevenAndSplashesOnlyBeforeEight() {
         val config = sixthModeConfig().copy(urls = sixthModeConfig().urls.toMutableList().apply { this[6] = "" })
-        val h = Harness(splashBetweenLinks = true)
+        val h = Harness(splashEveryLinks = 1)
         h.runner.start(config)
         assertEquals(listOf(config.urls[5]), h.opened)
         h.scheduler.advanceBy(1_000)
@@ -520,7 +520,7 @@ class UrlSequenceRunnerTest {
     @Test
     fun explicitStopDuringNormalSplashPreventsNextUrl() {
         val config = sixthModeConfig()
-        val h = Harness(splashBetweenLinks = true)
+        val h = Harness(splashEveryLinks = 1)
         h.runner.start(config)
         h.scheduler.advanceBy(1_000)
         assertEquals(1, h.splashCalls.size)
@@ -533,7 +533,7 @@ class UrlSequenceRunnerTest {
     @Test
     fun lockDuringNormalSplashPreventsNextUrl() {
         val config = sixthModeConfig()
-        val h = Harness(splashBetweenLinks = true)
+        val h = Harness(splashEveryLinks = 1)
         h.runner.start(config)
         h.scheduler.advanceBy(1_000)
         h.allowed = false
@@ -546,7 +546,7 @@ class UrlSequenceRunnerTest {
     fun intentionalSplashModeDoesNotDoubleSplashAfterFailedUrlRecovery() {
         val config = sixthModeConfig()
         val h = Harness(
-            splashBetweenLinks = true,
+            splashEveryLinks = 1,
             failUrls = setOf(config.urls[5]),
         )
         h.runner.start(config)
@@ -565,7 +565,7 @@ class UrlSequenceRunnerTest {
     @Test
     fun oneRunSplashModeLoopsThroughExistingConfiguredOrder() {
         val config = sixthModeConfig().copy(loopMode = LoopMode.LOOP)
-        val h = Harness(loopMode = LoopMode.LOOP, splashBetweenLinks = true)
+        val h = Harness(loopMode = LoopMode.LOOP, splashEveryLinks = 1)
         h.runner.start(config)
         h.scheduler.advanceBy(1_000 + 1_800)
         h.scheduler.advanceBy(1_000 + 1_800)
@@ -574,6 +574,72 @@ class UrlSequenceRunnerTest {
         h.scheduler.advanceBy(1_800)
         assertEquals(config.urls.first(), h.opened.last())
         h.runner.stop()
+    }
+
+
+    @Test
+    fun splashFrequencyTwoRunsEveryTwoSuccessfulVideosNotBeforeSecond() {
+        val config = sixthModeConfig().copy(urls=(1..10).map { "https://lite.tiktok.com/t/slot$it/" })
+        val h = Harness(splashEveryLinks = 2)
+        h.runner.start(config)
+        assertEquals(listOf(config.urls[5]),h.opened)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(listOf(config.urls[5],config.urls[6]),h.opened)
+        assertTrue(h.splashCalls.isEmpty())
+        h.scheduler.advanceBy(1_000)
+        assertEquals(1,h.splashCalls.size)
+        h.scheduler.advanceBy(1_800)
+        assertEquals(config.urls.slice(5..7),h.opened)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(config.urls.slice(5..8),h.opened)
+        assertEquals(1,h.splashCalls.size)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(2,h.splashCalls.size)
+        h.scheduler.advanceBy(1_800)
+        assertEquals(config.urls.slice(5..9),h.opened)
+    }
+
+    @Test
+    fun splashFrequencyThreeStartsAtSixAndOpensNineAfterSingleSplash() {
+        val config = sixthModeConfig().copy(urls=(1..10).map { "https://lite.tiktok.com/t/slot$it/" })
+        val h = Harness(splashEveryLinks = 3)
+        h.runner.start(config)
+        h.scheduler.advanceBy(3_000)
+        assertEquals(config.urls.slice(5..7),h.opened)
+        assertEquals(listOf("splash"),h.splashCalls)
+        h.scheduler.advanceBy(1_800)
+        assertEquals(config.urls.slice(5..8),h.opened)
+        h.scheduler.advanceBy(2_000)
+        assertEquals(1,h.splashCalls.size)
+    }
+
+    @Test
+    fun splashFrequencyFiveWithOnlyFourVideoSlotsNeverLaunchesSplash() {
+        val config = sixthModeConfig().copy(urls=(1..9).map { "https://lite.tiktok.com/t/slot$it/" })
+        val h = Harness(splashEveryLinks = 5)
+        h.runner.start(config)
+        h.scheduler.advanceBy(4_000)
+        assertEquals(config.urls.slice(5..8),h.opened)
+        assertEquals(UrlRunnerPhase.FINISHED,h.runner.phase)
+        assertTrue(h.splashCalls.isEmpty())
+    }
+
+    @Test
+    fun splashFrequencyTwoResetsCounterAfterFailedLinkRecovery() {
+        val config = sixthModeConfig().copy(urls=(1..10).map { "https://lite.tiktok.com/t/slot$it/" })
+        val h = Harness(splashEveryLinks = 2,failUrls=setOf(config.urls[6]))
+        h.runner.start(config)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(UrlRunnerPhase.SKIPPED,h.runner.phase)
+        h.scheduler.advanceBy(650)
+        assertEquals(1,h.splashCalls.size)
+        h.scheduler.advanceBy(1_800)
+        assertEquals(listOf(config.urls[5],config.urls[7]),h.opened)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(config.urls.slice(7..8).last(),h.opened.last())
+        assertEquals(1,h.splashCalls.size)
+        h.scheduler.advanceBy(1_000)
+        assertEquals(2,h.splashCalls.size)
     }
 
 }
