@@ -106,8 +106,8 @@ class UrlSequenceRunnerCore(
     private val clock: UrlRunnerClock,
     private val statusSink: UrlRunnerStatusSink,
     private val splashLauncher: UrlRunnerSplashLauncher = UrlRunnerSplashLauncher { false },
-    /** Selected once per run: reopen TikTok Lite before each URL after the first. */
-    private val splashBetweenLinks: Boolean = false,
+    /** 0=off, 1=every URL, 2..5=every N completed URL positions. Fixed per run. */
+    private val splashEveryLinks: Int = 0,
     private val loopMode: LoopMode? = null,
     private val canContinue: () -> Boolean = { true },
 ) {
@@ -125,6 +125,7 @@ class UrlSequenceRunnerCore(
     private var openRequestedAtMs = 0L
     private var skippedFailureCount = 0
     private var consecutiveFailures = 0
+    private var completedLinksSinceSplash = 0
 
     fun isRunning(): Boolean = active
 
@@ -143,6 +144,7 @@ class UrlSequenceRunnerCore(
         active = true
         skippedFailureCount = 0
         consecutiveFailures = 0
+        completedLinksSinceSplash = 0
         generation += 1L
         openCurrent(generation)
         return UrlRunnerStartResult.Started
@@ -241,7 +243,8 @@ class UrlSequenceRunnerCore(
     private fun advance(gen: Long) {
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
-        if (!splashBetweenLinks) {
+        completedLinksSinceSplash += 1
+        if (splashEveryLinks !in 1..5 || completedLinksSinceSplash < splashEveryLinks) {
             index += 1
             openCurrent(gen)
             return
@@ -259,8 +262,9 @@ class UrlSequenceRunnerCore(
             openCurrent(gen)
             return
         }
+        completedLinksSinceSplash = 0
         phase = UrlRunnerPhase.RECOVERING
-        report(phase, index, 0, 0, "${next + 1}番のURL前にTikTok Liteを起動し直しています")
+        report(phase, index, 0, 0, "${next + 1}番のURL前にTikTok Liteを起動し直しています（${splashEveryLinks}件ごと）")
         val launched = runCatching { splashLauncher.launch() }.getOrDefault(false)
         if (!checkCanContinue(gen)) return
         if (!launched) {
@@ -311,6 +315,10 @@ class UrlSequenceRunnerCore(
             finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             return
         }
+
+        // Failure already requires splash recovery. Restart the normal
+        // frequency counter so the next URL doesn't get two splash launches.
+        completedLinksSinceSplash = 0
 
         // Keep a short minimum gap before attempting to start a new Activity.
         // The continuation is cancelled by stop() or any safety condition.
