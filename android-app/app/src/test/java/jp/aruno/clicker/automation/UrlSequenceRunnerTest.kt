@@ -1,6 +1,7 @@
 package jp.aruno.clicker.automation
 
 import jp.aruno.clicker.data.LoopMode
+import jp.aruno.clicker.data.DailyVideoViews
 import jp.aruno.clicker.data.UrlRunnerConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -62,6 +63,8 @@ class UrlSequenceRunnerTest {
         foregroundResult: Boolean = true,
         loopMode: LoopMode = LoopMode.STOP,
         splashEveryLinks: Int = 0,
+        dailyViews: DailyVideoViews? = null,
+        dailyLimit: Int = 2,
     ) {
         var allowed = true
         val clock = FakeClock()
@@ -92,7 +95,137 @@ class UrlSequenceRunnerTest {
             splashEveryLinks = splashEveryLinks,
             loopMode = loopMode,
             canContinue = { allowed },
+            dailyViews = dailyViews,
+            dailyLimit = dailyLimit,
         )
+    }
+
+    private class MemoryViews : DailyVideoViews {
+        val counts = mutableMapOf<String, Int>()
+        var writable = true
+        override fun count(url: String) = counts[url] ?: 0
+        override fun recordStart(url: String, limit: Int): Boolean {
+            if (!writable || count(url) >= limit) return false
+            counts[url] = count(url) + 1
+            return true
+        }
+    }
+
+    @Test fun partialHoldCountsImmediatelyAndRestartSkipsCappedVideo() {
+        val c = config(2)
+        val history = MemoryViews()
+        repeat(2) {
+            val h = Harness(dailyViews = history)
+            h.runner.start(c)
+            h.scheduler.advanceBy(400)
+            h.runner.stop()
+            h.scheduler.advanceBy(10_000)
+            assertEquals(listOf(c.urls[0]), h.opened)
+        }
+        assertEquals(2, history.count(c.urls[0]))
+        val restarted = Harness(dailyViews = history)
+        restarted.runner.start(c)
+        assertEquals(listOf(c.urls[1]), restarted.opened)
+        assertTrue(restarted.statuses.any { it.index == 0 && it.message.contains("スキップ") })
+        assertEquals(1, history.count(c.urls[1]))
+    }
+
+    @Test fun loopsStopAfterTwoOrThreeStartsWithoutExtraSplash() {
+        for (limit in listOf(2, 3)) {
+            val c = config(2)
+            val history = MemoryViews()
+            val h = Harness(loopMode = LoopMode.LOOP, splashEveryLinks = 1,
+                dailyViews = history, dailyLimit = limit)
+            h.runner.start(c)
+            h.scheduler.advanceBy(100_000)
+            assertEquals(limit * 2, h.opened.size)
+            c.urls.forEach { assertEquals(limit, history.count(it)) }
+            assertEquals(limit * 2 - 1, h.splashCalls.size)
+            assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+            assertTrue(h.statuses.last().message.contains("上限${limit}回"))
+            assertEquals(null, h.statuses.last().nextIndex)
+        }
+    }
+
+    @Test fun allCappedSparseListFinishesWithoutOpeningOrRecursion() {
+        val history = MemoryViews()
+        val c = config(1).copy(urls = listOf("", config(1).urls[0], ""), startIndex = 2)
+        history.counts[c.urls[1]] = 2
+        val h = Harness(loopMode = LoopMode.LOOP, dailyViews = history)
+        h.runner.start(c)
+        assertTrue(h.opened.isEmpty())
+        assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+        h.scheduler.advanceBy(100_000)
+        assertTrue(h.opened.isEmpty())
+    }
+
+    @Test fun reorderedUrlsShareCountsAndDuplicateSlotsDoNotExceedLimit() {
+        val history = MemoryViews()
+        val c = config(2)
+        history.counts[c.urls[0]] = 2
+        val h = Harness(dailyViews = history)
+        h.runner.start(c.copy(urls = listOf(c.urls[1], c.urls[0], c.urls[1], c.urls[1])))
+        h.scheduler.advanceBy(30_000)
+        assertEquals(listOf(c.urls[1], c.urls[1]), h.opened)
+        assertEquals(2, history.count(c.urls[1]))
+        assertEquals(2, history.count(c.urls[0]))
+    }
+
+    @Test fun failedOpenAndFailedForegroundDoNotCountAndCappedLinksAreNotRetried() {
+        val history = MemoryViews()
+        val c = config(3)
+        history.counts[c.urls[1]] = 2
+        val h = Harness(failUrls = setOf(c.urls[0]), foregroundResult = false,
+            loopMode = LoopMode.LOOP, dailyViews = history)
+        h.runner.start(c)
+        h.scheduler.advanceBy(30_000)
+        assertEquals(0, history.count(c.urls[0]))
+        assertEquals(2, history.count(c.urls[1]))
+        assertEquals(0, history.count(c.urls[2]))
+        assertEquals(listOf(c.urls[2]), h.opened)
+        assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
+    }
+
+    @Test fun duplicateAndLateForegroundCallbacksCannotChargeAnotherAttempt() {
+        val history = MemoryViews()
+        val h = Harness(dailyViews = history)
+        h.foreground.manual = true
+        val c = config(2)
+        h.runner.start(c)
+        val firstCallback = h.foreground.pendingCallback!!
+        assertEquals(0, history.count(c.urls[0]))
+        firstCallback(true)
+        firstCallback(true)
+        assertEquals(1, history.count(c.urls[0]))
+        h.scheduler.advanceBy(3_000)
+        firstCallback(true)
+        assertEquals(0, history.count(c.urls[1]))
+        h.runner.stop()
+        h.foreground.pendingCallback!!(true)
+        assertEquals(0, history.count(c.urls[1]))
+    }
+
+    @Test fun persistenceFailureStopsWithoutHoldingOrOpeningNextUrl() {
+        val history = MemoryViews().also { it.writable = false }
+        val h = Harness(dailyViews = history)
+        h.runner.start(config(2))
+        h.scheduler.advanceBy(30_000)
+        assertEquals(UrlRunnerPhase.FAILED, h.runner.phase)
+        assertEquals(1, h.opened.size)
+        assertTrue(h.statuses.none { it.phase == UrlRunnerPhase.HOLDING })
+    }
+
+    @Test fun dateChangeDuringHoldDoesNotChargeNewDayUntilNextOpening() {
+        val history = MemoryViews()
+        val h = Harness(loopMode = LoopMode.LOOP, dailyViews = history)
+        val c = config(1)
+        h.runner.start(c)
+        assertEquals(1, history.count(c.urls[0]))
+        history.counts.clear() // Japan midnight while the existing hold continues.
+        h.scheduler.advanceBy(2_000)
+        assertEquals(0, history.count(c.urls[0]))
+        h.scheduler.advanceBy(1_000)
+        assertEquals(1, history.count(c.urls[0]))
     }
 
     private fun config(
@@ -643,3 +776,4 @@ class UrlSequenceRunnerTest {
     }
 
 }
+

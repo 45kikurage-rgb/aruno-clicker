@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -47,6 +48,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import jp.aruno.clicker.data.UrlRunnerLimits
+import jp.aruno.clicker.data.DailyVideoViewStore
 
 /**
  * URLランナーの画面群。
@@ -92,6 +94,10 @@ fun UrlRunnerHomeScreen(
     onOpenSettings: () -> Unit,
     onOpenLegacySettings: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val dailyStore = remember(context) { DailyVideoViewStore(context) }
+    var dailyLimit by remember { mutableStateOf(dailyStore.limit()) }
+    var dailyLimitError by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -141,6 +147,27 @@ fun UrlRunnerHomeScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MatrixTextMuted,
                     modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            item {
+                Text("同じ動画の当日上限（この端末）", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(2, 3).forEach { value ->
+                        OutlinedButton(
+                            onClick = {
+                                dailyLimitError = !dailyStore.setLimit(value)
+                                if (!dailyLimitError) dailyLimit = value
+                            },
+                            enabled = !isRunning,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                        ) { Text((if (dailyLimit == value) "選択中：" else "") + "${value}回") }
+                    }
+                }
+                Text(
+                    if (dailyLimitError) "保存できませんでした。もう一度選んでください。"
+                    else "途中停止も1回に含みます。日本時間0時に日付が切り替わります。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (dailyLimitError) DangerRed else MatrixTextMuted,
                 )
             }
             item {
@@ -567,3 +594,4 @@ fun UrlInputScreen(
 
 private fun rangeLabel(range: IntRange): String =
     "${range.first.toString().padStart(3, '0')}–${range.last.toString().padStart(3, '0')}"
+
