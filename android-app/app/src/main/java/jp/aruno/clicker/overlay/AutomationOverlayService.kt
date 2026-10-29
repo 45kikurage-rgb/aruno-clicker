@@ -381,6 +381,7 @@ open class AutomationOverlayService : Service() {
     private fun refreshOverlay() {
         val state = AutomationRuntime.snapshot()
         startSixthButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
+        startSixthSplashButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
         val (statusTitle, statusDetail) = splitStatus(state.message)
         statusTitleText?.apply {
             text = statusTitle
