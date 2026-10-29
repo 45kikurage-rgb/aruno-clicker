@@ -135,7 +135,7 @@ object AutomationRuntime {
             .putBoolean(KEY_REQUESTED, false)
             .putBoolean(KEY_PENDING_START, false)
             .apply()
-        if (wasActive) AccessibilityDiagnostics(context).stopped(message)
+        if (wasActive) runCatching { AccessibilityDiagnostics(context).stopped(message) }
         notifyChanged(context)
     }
 
