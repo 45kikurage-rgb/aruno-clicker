@@ -1,0 +1,1 @@
+{"versionCode":27,"requested":"2026-10-29","scope":"each video slot 6+ opens URL1 then waits 3000ms; slots1-5 unlimited; close popup cross during URL playback; preserve signer and data"}

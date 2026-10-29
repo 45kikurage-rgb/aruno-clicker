@@ -89,6 +89,10 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var popupCheckScheduled = false
     private var lastPopupScanAtMs = 0L
     private var lastPopupDismissAtMs = 0L
+    private var urlPopupGeneration = -1L
+    private var urlPopupAttempts = 0
+    private var urlPopupSignature = ""
+    private var urlPopupLastAttemptAt = 0L
     private var pendingDailyStartCompletion = false
     private var accessibilityOverlayController: AccessibilityOverlayController? = null
 
@@ -184,8 +188,12 @@ class ArunoAccessibilityService : AccessibilityService() {
         popupCheckScheduled = false
         lastPopupScanAtMs = android.os.SystemClock.elapsedRealtime()
         val generation = automationGeneration
+        if (urlSequenceRunner != null) {
+            dismissUrlRunnerPopupIfPresent()
+            return@Runnable
+        }
         if (
-            // URLランナー実行中は×認識等のポップアップ処理を実行しない。
+            // Legacy popup callbacks are used only outside the URL runner.
             urlSequenceRunner == null &&
             isSessionActive(generation) &&
             !restartInProgress &&
@@ -578,11 +586,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         urlSequenceScheduler = scheduler
         var successfullyOpenedUrls = 0
         var splashReadyForNextUrl = false
-        var giftHomeReadyForNextUrl = false
-        val giftHomeMode = jp.aruno.clicker.data.GiftHomeModeStore(this).mode()
-        val giftHomeNavigator = GiftHomeNavigator(AndroidGiftHomePort(this, ::dispatchTap), giftHomeMode) {
-            AutomationRuntime.markWaiting(this, it)
-        }
+        var firstUrlReadyForNextUrl = false
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
                 if (!urlRunnerDeviceReady()) false
@@ -591,10 +595,10 @@ class ArunoAccessibilityService : AccessibilityService() {
                     // for subsequent links. After a recovery splash already
                     // recreated the task, deliver the next link to that fresh
                     // instance instead of immediately clearing it again.
-                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl && !giftHomeReadyForNextUrl
-                    val opened = openTargetUrl(url, resetTask = resetTask, preserveTask = giftHomeReadyForNextUrl)
+                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl && !firstUrlReadyForNextUrl
+                    val opened = openTargetUrl(url, resetTask = resetTask, preserveTask = firstUrlReadyForNextUrl)
                     splashReadyForNextUrl = false
-                    giftHomeReadyForNextUrl = false
+                    firstUrlReadyForNextUrl = false
                     if (opened) successfullyOpenedUrls += 1
                     opened
                 }
@@ -610,11 +614,10 @@ class ArunoAccessibilityService : AccessibilityService() {
             splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
             dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
-            routePreparer = if (giftHomeMode == jp.aruno.clicker.data.GiftHomeMode.OFF) null else UrlRoutePreparer { queue, active, done ->
-                giftHomeNavigator.prepare(queue, active) { ready ->
-                    giftHomeReadyForNextUrl = ready
-                    done(ready)
-                }
+            resetViaFirstUrl = true,
+            preparationOpener = UrlOpener { url ->
+                if (!urlRunnerDeviceReady()) false
+                else openTargetUrl(url, preserveTask = true).also { firstUrlReadyForNextUrl = it }
             },
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
@@ -622,6 +625,7 @@ class ArunoAccessibilityService : AccessibilityService() {
             clock = UrlRunnerClock { android.os.SystemClock.elapsedRealtime() },
             statusSink = UrlRunnerStatusSink { status ->
                 AutomationRuntime.markUrlRunnerStatus(this, status)
+                if (status.phase == UrlRunnerPhase.HOLDING) dismissUrlRunnerPopupIfPresent()
                 if (
                     status.phase == UrlRunnerPhase.FINISHED ||
                     status.phase == UrlRunnerPhase.STOPPED ||
@@ -1633,6 +1637,57 @@ class ArunoAccessibilityService : AccessibilityService() {
         val priority: Int,
         val knownCoinPopup: Boolean = false,
     )
+
+    /** URL playback owns its timers; dismissing × must never start legacy swipes. */
+    private fun dismissUrlRunnerPopupIfPresent() {
+        val runner = urlSequenceRunner ?: return
+        if (!runner.isRunning() || runner.isPaused() ||
+            runner.phase !in setOf(UrlRunnerPhase.HOLDING, UrlRunnerPhase.WAITING_FOREGROUND) ||
+            !urlRunnerDeviceReady() || !isTargetForeground()) return
+        val gen = automationGeneration
+        if (urlPopupGeneration != gen) {
+            urlPopupGeneration = gen
+            urlPopupAttempts = 0
+            urlPopupSignature = ""
+            urlPopupLastAttemptAt = 0L
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - urlPopupLastAttemptAt < POPUP_DISMISS_COOLDOWN_MS) return
+        val candidate = findPopupCloseCandidate()
+        if (candidate == null) {
+            urlPopupAttempts = 0
+            urlPopupSignature = ""
+            return
+        }
+        val screen = currentScreenBounds()
+        val bounds = candidate.bounds
+        if (!screen.contains(bounds) || bounds.width() > screen.width() / 4 ||
+            bounds.height() > screen.height() / 6) return
+        val signature = bounds.toShortString() + candidate.knownCoinPopup
+        if (signature != urlPopupSignature) {
+            urlPopupSignature = signature
+            urlPopupAttempts = 0
+        }
+        if (urlPopupAttempts >= 3) return
+        urlPopupAttempts++
+        urlPopupLastAttemptAt = now
+        var node = candidate.node
+        repeat(MAX_CLICKABLE_PARENT_DEPTH + 1) {
+            val current = node ?: return@repeat
+            val area = Rect().also(current::getBoundsInScreen)
+            if (current.isVisibleToUser && current.isEnabled && current.isClickable &&
+                area.contains(bounds.centerX(), bounds.centerY()) && screen.contains(area) &&
+                area.width() <= screen.width() / 4 && area.height() <= screen.height() / 6 &&
+                current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return
+            node = current.parent
+        }
+        // Exact close bounds, or the existing recognized coin-popup close region.
+        // Never tap the invitation/claim CTA and never run legacy timing callbacks.
+        if (urlSequenceRunner === runner && runner.isRunning() && !runner.isPaused() &&
+            automationGeneration == gen && urlRunnerDeviceReady()) {
+            dispatchTap(bounds.centerX().toFloat(), bounds.centerY().toFloat()) { }
+        }
+    }
 
     private fun dismissBlockingPopupIfPresent(generation: Long): Boolean {
         if (
