@@ -213,10 +213,12 @@ class UrlRunnerLifecycleTest {
         assertEquals(0, openedCount())
     }
 
-    @Test fun interruptCancelsAndClearsPersistedRequest() {
+    @Test fun explicitStopAfterInterruptionClearsPersistedRequest() {
         start()
         openedCount()
         service.onInterrupt()
+        assertTrue(AutomationRuntime.snapshot().requested)
+        service.stopAutomation("停止しました")
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
         assertEquals(0, openedCount())
         assertNull(AutomationRuntime.restoreRequested(app))
