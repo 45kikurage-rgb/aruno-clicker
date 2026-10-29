@@ -148,6 +148,10 @@ class UrlRunnerLifecycleTest {
         saveSevenSlots()
         val before = UrlRunnerRepository(app).loadForStart()
         service.startUrlRunnerSequence(true)
+        assertEquals("https://lite.tiktok.com/t/slot1/", shadowOf(app).nextStartedActivity.data.toString())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_999))
+        assertEquals(0, openedCount())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
         assertEquals("https://lite.tiktok.com/t/slot6/", shadowOf(app).nextStartedActivity.data.toString())
         assertTrue(AutomationRuntime.snapshot().message.contains("6番目"))
         assertEquals(before, UrlRunnerRepository(app).loadForStart())
@@ -156,6 +160,8 @@ class UrlRunnerLifecycleTest {
     @Test fun sixthEmptySlotSkipsToSeventhPosition() {
         saveSevenSlots(blankSixth = true)
         service.startUrlRunnerSequence(true)
+        assertEquals("https://lite.tiktok.com/t/slot1/", shadowOf(app).nextStartedActivity.data.toString())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3))
         assertEquals("https://lite.tiktok.com/t/slot7/", shadowOf(app).nextStartedActivity.data.toString())
         assertTrue(AutomationRuntime.snapshot().message.contains("7番目"))
     }
@@ -173,7 +179,7 @@ class UrlRunnerLifecycleTest {
         val overlay = controller.get()
         overlay.onStartCommand(Intent(AutomationContract.ACTION_START_AUTOMATION)
             .putExtra(AutomationContract.EXTRA_START_FROM_SIXTH, true), 0, 1)
-        assertEquals("https://lite.tiktok.com/t/slot6/", shadowOf(app).nextStartedActivity.data.toString())
+        assertEquals("https://lite.tiktok.com/t/slot1/", shadowOf(app).nextStartedActivity.data.toString())
         app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(20))
         assertEquals(0, openedCount())

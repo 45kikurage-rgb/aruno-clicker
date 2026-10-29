@@ -132,6 +132,13 @@ fun UrlRunnerHomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
+                OutlinedButton(
+                    onClick = { jp.aruno.clicker.automation.PopupDiagnostics.share(context) },
+                    enabled = !isRunning,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) { Text("×解除の診断を共有") }
+            }
+            item {
                 Text(
                     if (isRunning) "実行中" else "待機中",
                     style = MaterialTheme.typography.headlineSmall,
@@ -156,7 +163,7 @@ fun UrlRunnerHomeScreen(
                 )
             }
             item {
-                Text("同じ動画の当日上限（この端末）", fontWeight = FontWeight.Bold)
+                Text("6番以降の当日上限（この端末）", fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(2, 3).forEach { value ->
                         OutlinedButton(
@@ -171,39 +178,15 @@ fun UrlRunnerHomeScreen(
                 }
                 Text(
                     if (dailyLimitError) "保存できませんでした。もう一度選んでください。"
-                    else "途中停止も1回に含みます。日本時間0時に日付が切り替わります。",
+                    else "1〜5番は上限対象外。6番以降は途中停止も1回に含み、日本時間0時に切り替わります。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (dailyLimitError) DangerRed else MatrixTextMuted,
                 )
             }
             item {
-                Text("次のURL前：ギフト→ホーム", fontWeight = FontWeight.Bold)
-                GiftHomeMode.entries.chunked(2).forEach { modes ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        modes.forEach { mode ->
-                            OutlinedButton(
-                                onClick = {
-                                    giftHomeError = !giftHomeStore.setMode(mode)
-                                    if (!giftHomeError) giftHomeMode = mode
-                                },
-                                enabled = !isRunning,
-                                modifier = Modifier.weight(1f).height(52.dp),
-                            ) { Text((if (giftHomeMode == mode) "✓ " else "") + mode.label) }
-                        }
-                    }
-                }
+                Text("6番以降：1番URL → 3秒待機 → 対象URL", fontWeight = FontWeight.Bold)
                 Text(
-                    if (giftHomeError) "設定を保存できませんでした。" else "自動は要素→位置の順。この端末に保存し、次の開始から反映します。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (giftHomeError) DangerRed else MatrixTextMuted,
-                )
-                OutlinedButton(
-                    onClick = onTestGiftHome,
-                    enabled = !isRunning && giftHomeMode != GiftHomeMode.OFF,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) { Text("テストパターン：ギフト→ホーム") }
-                Text(
-                    "選択した方法でホームに戻るまでを確認して終了します。次のURLは開かず、当日の回数も増やしません。通常開始・6番以降の開始にも同じ方法を使います。",
+                    "6番から開始する場合も毎回実行します。準備中の1番URLは視聴回数に加算しません。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MatrixTextMuted,
                 )
@@ -632,4 +615,5 @@ fun UrlInputScreen(
 
 private fun rangeLabel(range: IntRange): String =
     "${range.first.toString().padStart(3, '0')}–${range.last.toString().padStart(3, '0')}"
+
 

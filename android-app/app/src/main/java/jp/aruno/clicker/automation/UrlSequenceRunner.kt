@@ -12,7 +12,7 @@ import jp.aruno.clicker.data.UrlRunnerLimits
  * Android 側の実装（ArunoAccessibilityService 内のグルー）が、既存の
  * openTargetUrl（ACTION_VIEW＋setPackage＋resolve確認）と前面確認ポーリングを差し込む。
  *
- * この実行経路では、×認識・広告判定・スワイプ・定期再起動・Recents削除は一切呼ばない。
+ * このコアはURLの切替と待機を管理する。×の解除はAndroid側で独立して行う。
  * それらは既存の初回／スライド経路側にだけ残る。
  *
  * 停止の保証（既存の世代管理パターンの踏襲）:
@@ -116,6 +116,10 @@ class UrlSequenceRunnerCore(
     private val dailyViews: DailyVideoViews? = null,
     private val dailyLimit: Int = 2,
     private val routePreparer: UrlRoutePreparer? = null,
+    private val resetViaFirstUrl: Boolean = false,
+    private val preparationOpener: UrlOpener = opener,
+    private val dailyLimitStartIndex: Int = 5,
+    private val holdBlocked: () -> Boolean = { false },
 ) {
     /** 世代トークン。開始・停止のたびに進む。 */
     var generation: Long = 0L
@@ -140,6 +144,9 @@ class UrlSequenceRunnerCore(
     private var pausedTime = 0L
     private var paused = false
     private var lastStatus: UrlRunnerStatus? = null
+    private var holdBlockedMs = 0L
+    private var lastHoldTickMs = 0L
+    private var holdWasBlocked = false
     private var hasOpenedUrl = false
     private var preparationToken = 0L
 
@@ -234,6 +241,11 @@ class UrlSequenceRunnerCore(
                     finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
                     return
                 }
+                if (dailyViews != null && config.urls.indices.any { it >= dailyLimitStartIndex && config.urls[it].isNotBlank() } &&
+                    config.urls.indices.none { it >= dailyLimitStartIndex && isEligible(it) }) {
+                    finish("本日の全動画が上限${dailyLimit}回に達したため終了しました。1〜5番は回数制限の対象外です")
+                    return
+                }
                 index = 0
             }
             if (scanned >= config.urls.size) {
@@ -241,7 +253,7 @@ class UrlSequenceRunnerCore(
                 return
             }
             val candidate = config.urls[index]
-            val count = try { if (candidate.isBlank()) 0 else dailyViews?.count(candidate) ?: 0 }
+            val count = try { if (candidate.isBlank() || index < dailyLimitStartIndex) 0 else dailyViews?.count(candidate) ?: 0 }
                 catch (_: Exception) { fail(gen, "当日の回数を読み取れないため停止しました"); return }
             if (candidate.isNotBlank() && (dailyViews == null || count < dailyLimit)) break
             report(UrlRunnerPhase.OPENING, index, 0, 0,
@@ -250,8 +262,25 @@ class UrlSequenceRunnerCore(
             index += 1
             scanned += 1
         }
+        if (resetViaFirstUrl && index >= 5) {
+            val firstUrl = config.urls.firstOrNull().orEmpty()
+            if (firstUrl.isBlank()) {
+                fail(gen, "1番URLが未登録です。1番URLを登録してから開始してください")
+                return
+            }
+            phase = UrlRunnerPhase.PREPARING_ROUTE
+            report(phase, index, 0, 0, "URL NO.1で準備中 → 3秒後にURL NO.${index + 1}を開きます")
+            val opened = runCatching { preparationOpener.open(firstUrl) }.getOrDefault(false)
+            if (!checkCanContinue(gen)) return
+            if (!opened) {
+                fail(gen, "準備用の1番URLを開けないため停止しました")
+                return
+            }
+            tasks.schedule(FIRST_URL_DELAY_MS) { launchCurrent(gen) }
+            return
+        }
         val preparer = routePreparer
-        if (preparer != null && hasOpenedUrl) {
+        if (!resetViaFirstUrl && preparer != null && hasOpenedUrl) {
             val preparation = ++preparationToken
             phase = UrlRunnerPhase.PREPARING_ROUTE
             report(phase, index, 0, 0, "次のURL前にギフト→ホームを確認しています")
@@ -318,7 +347,7 @@ class UrlSequenceRunnerCore(
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
         val history = dailyViews
-        if (history != null) {
+        if (history != null && index >= dailyLimitStartIndex) {
             val recorded = runCatching { history.recordStart(config.urls[index], dailyLimit) }.getOrDefault(false)
             if (!recorded) {
                 fail(gen, "当日の回数を保存できないか上限に達したため停止しました")
@@ -330,12 +359,21 @@ class UrlSequenceRunnerCore(
         val startedAtMs = if (config.waitFromForeground) nowMs() else openRequestedAtMs
         consecutiveFailures = 0
         phase = UrlRunnerPhase.HOLDING
+        holdBlockedMs = 0L
+        lastHoldTickMs = nowMs()
+        holdWasBlocked = false
         reportHold(gen, startedAtMs, totalSeconds)
     }
 
     private fun reportHold(gen: Long, startedAtMs: Long, totalSeconds: Int) {
         if (!checkCanContinue(gen)) return
-        val elapsedSeconds = ((nowMs() - startedAtMs) / 1_000L)
+        val tickNow = nowMs()
+        val blocked = runCatching { holdBlocked() }.getOrDefault(false)
+        if (!isCurrent(gen) || paused) return
+        if (blocked || holdWasBlocked) holdBlockedMs += (tickNow - lastHoldTickMs).coerceAtLeast(0L)
+        lastHoldTickMs = tickNow
+        holdWasBlocked = blocked
+        val elapsedSeconds = ((tickNow - startedAtMs - holdBlockedMs) / 1_000L)
             .coerceIn(0L, totalSeconds.toLong())
             .toInt()
         report(
@@ -343,7 +381,7 @@ class UrlSequenceRunnerCore(
             waitTotalSeconds = totalSeconds,
             waitElapsedSeconds = elapsedSeconds,
             message = "${index + 1}番目のURLを開きました（動画の再生は未確認）" +
-                (if (dailyViews != null) " 本日${currentDailyCount}/${dailyLimit}回（途中停止も含む）" else "") +
+                (if (dailyViews != null && index >= dailyLimitStartIndex) " 本日${currentDailyCount}/${dailyLimit}回（途中停止も含む）" else "") +
                 " ${elapsedSeconds}秒経過 / あと${totalSeconds - elapsedSeconds}秒",
         )
         if (elapsedSeconds >= totalSeconds) {
@@ -366,9 +404,9 @@ class UrlSequenceRunnerCore(
         // need a fresh normal TikTok Lite launch before their deep links.
         // Do not splash for an empty slot or after the final STOP-mode URL.
         val next = ((index + 1) until config.urls.size)
-            .firstOrNull { isEligible(config.urls[it]) }
+            .firstOrNull { isEligible(it) }
             ?: if ((loopMode ?: config.loopMode) == LoopMode.LOOP) {
-                config.urls.indexOfFirst { isEligible(it) }.takeIf { it >= 0 }
+                config.urls.indices.firstOrNull { isEligible(it) }
             } else null
         if (next == null) {
             index += 1
@@ -403,12 +441,12 @@ class UrlSequenceRunnerCore(
         skippedFailureCount += 1
         consecutiveFailures += 1
         phase = UrlRunnerPhase.SKIPPED
-        val nonBlankCount = config.urls.count { isEligible(it) }.coerceAtLeast(1)
+        val nonBlankCount = config.urls.indices.count { isEligible(it) }.coerceAtLeast(1)
         val noMoreInCycle = (loopMode ?: config.loopMode) == LoopMode.LOOP &&
             consecutiveFailures >= nonBlankCount
         val hasNextUrl = ((index + 1) until config.urls.size)
-            .any { isEligible(config.urls[it]) } ||
-            ((loopMode ?: config.loopMode) == LoopMode.LOOP && config.urls.any { isEligible(it) })
+            .any { isEligible(it) } ||
+            ((loopMode ?: config.loopMode) == LoopMode.LOOP && config.urls.indices.any { isEligible(it) })
 
         report(
             UrlRunnerPhase.SKIPPED, index, 0, 0,
@@ -483,8 +521,11 @@ class UrlSequenceRunnerCore(
 
     private fun isCurrent(gen: Long): Boolean = active && gen == generation
 
-    private fun isEligible(url: String): Boolean = url.isNotBlank() &&
-        (dailyViews?.let { history -> runCatching { history.count(url) < dailyLimit }.getOrDefault(false) } ?: true)
+    private fun isEligible(slot: Int): Boolean {
+        val url = snapshot?.urls?.getOrNull(slot).orEmpty()
+        return url.isNotBlank() && (slot < dailyLimitStartIndex ||
+            (dailyViews?.let { history -> runCatching { history.count(url) < dailyLimit }.getOrDefault(false) } ?: true))
+    }
 
     private fun report(
         phase: UrlRunnerPhase,
@@ -504,9 +545,9 @@ class UrlSequenceRunnerCore(
                 message = message,
                 nextIndex = config?.let { current ->
                     val next = ((index + 1) until current.urls.size)
-                        .firstOrNull { isEligible(current.urls[it]) }
+                        .firstOrNull { isEligible(it) }
                     next ?: if ((loopMode ?: current.loopMode) == LoopMode.LOOP) {
-                        current.urls.indexOfFirst { isEligible(it) }.takeIf { it >= 0 }
+                        current.urls.indices.firstOrNull { isEligible(it) }
                     } else null
                 },
             )
@@ -517,10 +558,12 @@ class UrlSequenceRunnerCore(
     companion object {
         /** 待機中の状態更新間隔（既存 holdUrlWithCountdown の1秒刻み表示に合わせる）。 */
         const val TICK_MS = 200L
+        const val FIRST_URL_DELAY_MS = 3_000L
         const val FAILED_LINK_SKIP_DELAY_MS = 650L
         // Allow the app's normal launch/splash screen to settle before the
         // next deep link, without waiting indefinitely for a visual logo.
         const val SPLASH_SETTLE_DELAY_MS = 1_800L
     }
 }
+
 

@@ -17,6 +17,7 @@ data class AutomationSnapshot(
     val urlRunnerIndex: Int = -1,
     val urlRunnerPaused: Boolean = false,
     val urlRunnerPreparing: Boolean = false,
+    val popupNotice: String = "",
 ) {
     val elapsedMs: Long
         get() = if (startedAtElapsed <= 0L) 0L else (SystemClock.elapsedRealtime() - startedAtElapsed).coerceAtLeast(0L)
@@ -44,6 +45,7 @@ object AutomationRuntime {
     @Volatile private var urlRunnerIndex = -1
     @Volatile private var urlRunnerPaused = false
     @Volatile private var urlRunnerPreparing = false
+    @Volatile private var popupNotice = ""
 
     fun requestStart(
         context: Context,
@@ -62,6 +64,7 @@ object AutomationRuntime {
         urlRunnerIndex = -1
         urlRunnerPaused = false
         urlRunnerPreparing = false
+        popupNotice = ""
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_REQUESTED, true)
             .putBoolean(KEY_PENDING_START, true)
@@ -128,6 +131,13 @@ object AutomationRuntime {
         notifyChanged(context)
     }
 
+    fun markPopupNotice(context: Context, text: String) {
+        val safe = PresentationText.sanitize(text)
+        if (popupNotice == safe) return
+        popupNotice = safe
+        notifyChanged(context)
+    }
+
     fun incrementSwipe(context: Context) {
         swipeCount += 1
         notifyChanged(context)
@@ -144,6 +154,7 @@ object AutomationRuntime {
         urlRunnerIndex = -1
         urlRunnerPaused = false
         urlRunnerPreparing = false
+        popupNotice = ""
         urlRunnerSecondsToNext = null
         urlRunnerHasNext = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -167,6 +178,7 @@ object AutomationRuntime {
         urlRunnerIndex = urlRunnerIndex,
         urlRunnerPaused = urlRunnerPaused,
         urlRunnerPreparing = urlRunnerPreparing,
+        popupNotice = popupNotice,
     )
 
     private fun notifyChanged(context: Context) {
@@ -186,4 +198,5 @@ object AutomationRuntime {
     private const val KEY_END_WALL_CLOCK = "requested_end_wall_clock_ms"
     private const val KEY_START_MODE = "requested_start_mode"
 }
+
 
