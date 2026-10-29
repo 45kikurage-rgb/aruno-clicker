@@ -95,6 +95,7 @@ fun UrlRunnerHomeScreen(
     onDownload: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLegacySettings: () -> Unit,
+    onTestGiftHome: () -> Unit,
 ) {
     val context = LocalContext.current
     val dailyStore = remember(context) { DailyVideoViewStore(context) }
@@ -195,6 +196,16 @@ fun UrlRunnerHomeScreen(
                     if (giftHomeError) "設定を保存できませんでした。" else "自動は要素→位置の順。この端末に保存し、次の開始から反映します。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (giftHomeError) DangerRed else MatrixTextMuted,
+                )
+                OutlinedButton(
+                    onClick = onTestGiftHome,
+                    enabled = !isRunning && giftHomeMode != GiftHomeMode.OFF,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                ) { Text("テストパターン：ギフト→ホーム") }
+                Text(
+                    "選択した方法でホームに戻るまでを確認して終了します。次のURLは開かず、当日の回数も増やしません。通常開始・6番以降の開始にも同じ方法を使います。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MatrixTextMuted,
                 )
             }
             item {

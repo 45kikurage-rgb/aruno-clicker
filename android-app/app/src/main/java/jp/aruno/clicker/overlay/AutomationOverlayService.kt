@@ -77,6 +77,17 @@ open class AutomationOverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            AutomationContract.ACTION_TEST_GIFT_HOME -> {
+                if (!AutomationRuntime.snapshot().requested) {
+                    val service = ArunoAccessibilityService.instance
+                    if (service == null) AutomationRuntime.stop(this, "ユーザー補助をONにしてからテストしてください")
+                    else {
+                        if (configStore.load().floatingController) showOverlay()
+                        service.startGiftHomeTest()
+                    }
+                    refreshOverlay()
+                }
+            }
             AutomationContract.ACTION_STOP_AUTOMATION -> requestStop()
             AutomationContract.ACTION_CLOSE_OVERLAY -> {
                 requestStop()

@@ -427,6 +427,62 @@ class ArunoAccessibilityService : AccessibilityService() {
         urlSequenceRunner?.updateSplashFrequency(prefs.selectedFrequency(prefs.isEnabled()))
     }
 
+    /** Standalone comparison test: same navigator, no URL runner or view counter. */
+    fun startGiftHomeTest() {
+        if (AutomationRuntime.snapshot().requested) return
+        val mode = jp.aruno.clicker.data.GiftHomeModeStore(this).mode()
+        if (mode == jp.aruno.clicker.data.GiftHomeMode.OFF) {
+            AutomationRuntime.stop(this, "テストする方法（自動・要素のみ・位置のみ）を選んでください")
+            return
+        }
+        if (!urlRunnerDeviceReady()) {
+            AutomationRuntime.stop(this, "画面ロック中はテストできません")
+            return
+        }
+        stopAutomation("ギフト→ホームのテストを開始します")
+        activeConfig = configStore.load().sanitized()
+        val generation = automationGeneration
+        val scheduler = UrlRunnerHandlerScheduler()
+        urlSequenceScheduler = scheduler
+        AutomationRuntime.requestStart(this, 0L, AutomationContract.START_MODE_GIFT_HOME_TEST)
+        AutomationRuntime.markSessionActive(this)
+        if (activeConfig.keepScreenAwake) acquireWakeLock(0L)
+        if (!launchTargetApp(activeConfig.targetPackage)) {
+            stopAutomation("テスト失敗：TikTok Liteを起動できませんでした")
+            return
+        }
+        AutomationRuntime.markWaiting(this, "テスト：TikTok Liteの表示を確認しています")
+        val deadline = android.os.SystemClock.elapsedRealtime() + TARGET_LAUNCH_TIMEOUT_MS
+        var stableSince: Long? = null
+        fun active(): Boolean {
+            if (!isSessionActive(generation)) return false
+            if (urlRunnerDeviceReady()) return true
+            stopAutomation("画面ロック・画面OFFのためテストを停止しました")
+            return false
+        }
+        fun checkForeground() {
+            if (!active()) return
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now >= deadline) {
+                stopAutomation("テスト失敗：TikTok Liteの表示を確認できませんでした")
+                return
+            }
+            if (isTargetForeground()) {
+                if (stableSince == null) stableSince = now
+                if (now - stableSince!! >= TARGET_FOREGROUND_STABLE_MS) {
+                    GiftHomeNavigator(AndroidGiftHomePort(this, ::dispatchTap), mode) {
+                        AutomationRuntime.markWaiting(this, "テスト：$it")
+                    }.prepare(scheduler, ::active) { ready ->
+                        stopAutomation(if (ready) "テスト成功：ギフト→ホーム" else "テスト失敗：ギフト→ホームを確認できませんでした")
+                    }
+                    return
+                }
+            } else stableSince = null
+            scheduler.schedule(FOREGROUND_CHECK_INTERVAL_MS) { checkForeground() }
+        }
+        scheduler.schedule(0L) { checkForeground() }
+    }
+
     private inner class UrlRunnerHandlerScheduler : DelayScheduler {
         private val pending = mutableSetOf<Runnable>()
 

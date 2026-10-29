@@ -109,6 +109,7 @@ fun ArunoClickerApp(
     startAutomaticAutomation: () -> Unit,
     startUrlRunnerAutomation: (Boolean, Boolean) -> Unit,
     stopAutomation: () -> Unit,
+    testGiftHome: () -> Unit,
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val remoteSyncState by viewModel.remoteSyncState.collectAsStateWithLifecycle()
@@ -171,6 +172,13 @@ fun ArunoClickerApp(
             onStartFromSixthWithSplash = { requestUrlStart(true, true) },
             onStartFromSixthWithoutSplash = { requestUrlStart(true, false) },
             onStop = { stopAutomation() },
+            onTestGiftHome = {
+                when {
+                    isRunning -> homeNotice = "先に実行中の処理を停止してください"
+                    !accessibilityGranted -> homeNotice = "ユーザー補助をONにしてください"
+                    else -> { homeNotice = null; testGiftHome() }
+                }
+            },
             onDownload = {
                 homeNotice = null
                 viewModel.downloadUrlRunnerConfig()
@@ -1180,3 +1188,4 @@ private fun StandardScaffold(
         content = content,
     )
 }
+

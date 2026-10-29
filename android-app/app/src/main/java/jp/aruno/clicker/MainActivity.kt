@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
                         ControlContract.startUrlRunner(this, fromSixth, withSplash)
                     },
                     stopAutomation = { ControlContract.stop(this) },
+                    testGiftHome = { ControlContract.testGiftHome(this) },
                 )
             }
         }
@@ -68,3 +69,4 @@ class MainActivity : ComponentActivity() {
         permissionRefresh++
     }
 }
+

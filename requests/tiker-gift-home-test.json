@@ -3,6 +3,6 @@
   "versionCode": 26,
   "sign": false,
   "publish": false,
-  "attempt": 3,
-  "reason": "Wait through initial TikTok loading and transient missing accessibility roots; final Gift/Home route regression"
+  "attempt": 4,
+  "reason": "Add standalone Gift/Home test pattern with no link launches or daily views; retain shared navigator in all existing URL start patterns"
 }
