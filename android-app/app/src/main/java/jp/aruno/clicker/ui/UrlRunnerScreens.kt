@@ -71,7 +71,8 @@ fun UrlRunnerHomeScreen(
     accessibilityGranted: Boolean,
     openAccessibilitySettings: () -> Unit,
     onStartVideo: () -> Unit,
-    onStartFromSixth: () -> Unit,
+    onStartFromSixthWithSplash: () -> Unit,
+    onStartFromSixthWithoutSplash: () -> Unit,
     onStop: () -> Unit,
     onDownload: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -168,11 +169,19 @@ fun UrlRunnerHomeScreen(
             }
             item {
                 OutlinedButton(
-                    onClick = onStartFromSixth,
+                    onClick = onStartFromSixthWithSplash,
                     enabled = !isRunning,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    modifier = Modifier.fillMaxWidth().height(62.dp),
                     shape = RoundedCornerShape(17.dp),
-                ) { Text("6番目からスタート", fontWeight = FontWeight.Bold) }
+                ) { Text("6番以降から開始\nスプラッシュあり", fontWeight = FontWeight.Bold) }
+            }
+            item {
+                OutlinedButton(
+                    onClick = onStartFromSixthWithoutSplash,
+                    enabled = !isRunning,
+                    modifier = Modifier.fillMaxWidth().height(62.dp),
+                    shape = RoundedCornerShape(17.dp),
+                ) { Text("6番以降から開始\nスプラッシュなし", fontWeight = FontWeight.Bold) }
             }
             item {
                 OutlinedButton(
