@@ -1,0 +1,83 @@
+name: Aru-Tiker code24 verify and sign
+on:
+  push:
+    branches: [fix/tiker-code24-accessibility-interrupt-diagnostics-20261029]
+    paths: [requests/tiker-code24-verify.json]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tiker-code24-verify
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+          cache-read-only: false
+      - name: Worker unit and SQLite integration tests
+        run: node --test cloudflare-worker/test/*.js release/download.test.mjs
+      - name: Compile complete Android app and run all normal-edition tests
+        working-directory: android-app
+        run: gradle --no-daemon --console=plain testAtlasDebugUnitTest assembleAtlasRelease
+      - name: Sign using the existing stable key and verify installed-app compatibility
+        env:
+          ARUNO_PRIVATE_KEY_PEM: ${{ secrets.ARUNO_PRIVATE_KEY_PEM }}
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$ARUNO_PRIVATE_KEY_PEM"
+          test -n "$ARUNO_SIGNING_PASSWORD"
+          trap 'rm -f "$RUNNER_TEMP/tiker-key.pem" "$RUNNER_TEMP/tiker.p12"' EXIT
+          printf '%s' "$ARUNO_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/tiker-key.pem"
+          openssl pkcs12 -export -inkey "$RUNNER_TEMP/tiker-key.pem" -in signing/aruno-release.crt -out "$RUNNER_TEMP/tiker.p12" -name aruno-stable -passout env:ARUNO_SIGNING_PASSWORD
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -type d | sort -V | tail -1)"
+          mkdir -p dist
+          "$BUILD_TOOLS/zipalign" -p -f 4 android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk dist/aligned.apk
+          "$BUILD_TOOLS/apksigner" sign --ks "$RUNNER_TEMP/tiker.p12" --ks-key-alias aruno-stable --ks-pass env:ARUNO_SIGNING_PASSWORD --key-pass env:ARUNO_SIGNING_PASSWORD --out dist/Aru-Tiker-v0.6.7-code24.apk dist/aligned.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/Aru-Tiker-v0.6.7-code24.apk > dist/signature.txt
+          "$BUILD_TOOLS/apksigner" verify --print-certs ci/ARUNO_CLICKER_v0.5.0.apk > dist/previous-signature.txt
+          python3 - <<'PY'
+          import pathlib,re,json,hashlib,os,xml.etree.ElementTree as ET
+          apk=pathlib.Path('dist/Aru-Tiker-v0.6.7-code24.apk')
+          pin='14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f'
+          for name in ['signature.txt','previous-signature.txt']:
+              digests=re.findall(r'certificate SHA-256 digest: ([0-9a-f]+)',pathlib.Path('dist/'+name).read_text())
+              assert digests and set(digests)=={pin}, 'Existing signature mismatch'
+          totals={k:0 for k in ['tests','failures','errors','skipped']}
+          for p in pathlib.Path('android-app/app/build/test-results/testAtlasDebugUnitTest').glob('TEST-*.xml'):
+              r=ET.parse(p).getroot()
+              for k in totals: totals[k]+=int(r.attrib.get(k,0))
+          assert totals['tests']>=142 and totals['failures']==totals['errors']==totals['skipped']==0,totals
+          result={'package':'jp.aruno.clicker','versionCode':24,'versionName':'0.6.7','commit':os.environ['GITHUB_SHA'],'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'bytes':apk.stat().st_size,'certificateSha256':pin,'androidTests':totals,'physicalTest':'NOT_RUN'}
+          pathlib.Path('dist/release-facts.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result))
+          PY
+          "$BUILD_TOOLS/aapt" dump badging dist/Aru-Tiker-v0.6.7-code24.apk > dist/apk-badging.txt
+          python3 - <<'PYAPK'
+          import pathlib,re
+          text=pathlib.Path('dist/apk-badging.txt').read_text()
+          assert re.search(r"package: name='jp.aruno.clicker' versionCode='24' versionName='0.6.7'",text)
+          PYAPK
+          rm -f dist/aligned.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tiker-code24-result
+          path: |
+            dist/
+            android-app/app/build/reports/tests/
+            android-app/app/build/test-results/
+          retention-days: 30
