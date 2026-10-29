@@ -29,7 +29,8 @@ import java.util.Locale
 class AccessibilityOverlayController(
     private val service: AccessibilityService,
     private val onStart: () -> Unit,
-    private val onStartFromSixth: () -> Unit,
+    private val onStartFromSixthWithSplash: () -> Unit,
+    private val onStartFromSixthWithoutSplash: () -> Unit,
     private val onStop: () -> Unit,
     private val onClose: () -> Unit,
 ) {
@@ -45,6 +46,7 @@ class AccessibilityOverlayController(
     private var countText: TextView? = null
     private var startButton: Button? = null
     private var startSixthButton: Button? = null
+    private var startSixthSplashButton: Button? = null
     private var sizeButton: Button? = null
     private var compactOverlay = true
 
@@ -151,9 +153,20 @@ class AccessibilityOverlayController(
             }
         }
         val buttonHeight = dp(if (compactOverlay) 40 else 56)
-        val sixthButton = compactButton("6番目からスタート", Color.rgb(15, 116, 54)).apply {
-            textSize = if (compactOverlay) 12f else 16f
-            setOnClickListener { if (!AutomationRuntime.snapshot().requested) onStartFromSixth(); refresh() }
+        val sixthSplashButton = compactButton("6番以降から開始\nスプラッシュあり", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 11f else 15f
+            setOnClickListener {
+                if (!AutomationRuntime.snapshot().requested) onStartFromSixthWithSplash()
+                refresh()
+            }
+        }
+        startSixthSplashButton = sixthSplashButton
+        val sixthButton = compactButton("6番以降から開始\nスプラッシュなし", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 11f else 15f
+            setOnClickListener {
+                if (!AutomationRuntime.snapshot().requested) onStartFromSixthWithoutSplash()
+                refresh()
+            }
         }
         startSixthButton = sixthButton
         val buttonGap = dp(if (compactOverlay) 3 else 6)
@@ -166,8 +179,11 @@ class AccessibilityOverlayController(
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)
         root.addView(countText)
-        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+        root.addView(sixthSplashButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
             topMargin = dp(if (compactOverlay) 5 else 9)
+        })
+        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+            topMargin = dp(if (compactOverlay) 4 else 7)
         })
         root.addView(
             buttons,
@@ -285,6 +301,7 @@ class AccessibilityOverlayController(
     private fun refresh() {
         val state = AutomationRuntime.snapshot()
         startSixthButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
+        startSixthSplashButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
         val (statusTitle, statusDetail) = splitStatus(state.message)
         statusTitleText?.apply {
             text = statusTitle
@@ -326,6 +343,7 @@ class AccessibilityOverlayController(
         countText = null
         startButton = null
         startSixthButton = null
+        startSixthSplashButton = null
         sizeButton = null
     }
 
