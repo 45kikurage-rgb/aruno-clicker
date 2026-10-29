@@ -523,7 +523,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                 else launchTargetApp(activeConfig.targetPackage, resetTask = true)
                     .also { splashReadyForNextUrl = it }
             },
-            splashBetweenLinks = fromSixth && splashBetweenUrls,
+            splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,
