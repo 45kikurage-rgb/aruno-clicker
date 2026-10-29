@@ -1,0 +1,10 @@
+{
+  "release": "Aru-Tiker 0.6.5/code22",
+  "versionCode": 22,
+  "requestedChange": "Replace Android home screen numeric saved URL version with central updatedAt in Japanese Tokyo local time",
+  "action": "verify-and-sign-only",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "authorizedBy": "2026-10-29 user: アプリ側の版が前のまま, with earlier 版4 -> 10月29日7時35分版 specification",
+  "productionChange": false,
+  "scope": "Android only. Keep current URL data, package ID, D1, worker, signatures and previous APK routes."
+}
