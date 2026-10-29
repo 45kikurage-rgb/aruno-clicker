@@ -7,6 +7,7 @@ object AutomationContract {
     const val ACTION_SHOW_OVERLAY = "jp.aruno.clicker.action.SHOW_OVERLAY"
     const val ACTION_CLOSE_OVERLAY = "jp.aruno.clicker.action.CLOSE_OVERLAY"
     const val ACTION_AUTOMATION_STATE_CHANGED = "jp.aruno.clicker.action.STATE_CHANGED"
+    const val ACTION_ACCESSIBILITY_DIAGNOSTICS_UPDATED = "jp.aruno.clicker.action.ACCESSIBILITY_HEALTH_UPDATED"
     const val ACTION_RUN_SCHEDULE = "jp.aruno.clicker.action.RUN_SCHEDULE"
 
     const val EXTRA_DURATION_MS = "duration_ms"
