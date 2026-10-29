@@ -90,6 +90,7 @@ import jp.aruno.clicker.R
 import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.RemoteSyncUiState
 import jp.aruno.clicker.data.AppSettings
+import jp.aruno.clicker.automation.AccessibilityDiagnostics
 import kotlin.math.roundToInt
 
 private enum class AppScreen { HOME, SETTINGS, DETAILS, URL_RUNNER_SETTINGS, URL_INPUT }
@@ -114,6 +115,7 @@ fun ArunoClickerApp(
     val urlRunnerState by viewModel.urlRunnerState.collectAsStateWithLifecycle()
     val isRunning by viewModel.automationRequested.collectAsStateWithLifecycle()
     val automationMessage by viewModel.automationMessage.collectAsStateWithLifecycle()
+    val accessibilityHealth by viewModel.accessibilityHealth.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     if (!settings.onboardingComplete) {
@@ -138,14 +140,7 @@ fun ArunoClickerApp(
     val editRevision by viewModel.editRevision.collectAsStateWithLifecycle()
     var homeNotice by remember { mutableStateOf<String?>(null) }
     var settingsNotice by remember { mutableStateOf<String?>(null) }
-    val accessibilityGranted = remember(permissionRefresh) {
-        val enabled = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ).orEmpty()
-        enabled.contains(context.packageName, ignoreCase = true) &&
-            enabled.contains("ArunoAccessibilityService", ignoreCase = true)
-    }
+    val accessibilityGranted = accessibilityHealth.enabledInSettings
 
     fun requestUrlStart(fromSixth: Boolean, withSplash: Boolean = false) {
         val saved = urlRunnerState.savedConfig
@@ -170,6 +165,7 @@ fun ArunoClickerApp(
             syncBusy = urlRunnerState.busy,
             syncMessage = urlRunnerState.message,
             accessibilityGranted = accessibilityGranted,
+            accessibilityHealth = accessibilityHealth,
             openAccessibilitySettings = openAccessibilitySettings,
             onStartVideo = { requestUrlStart(false) },
             onStartFromSixthWithSplash = { requestUrlStart(true, true) },
@@ -247,12 +243,7 @@ private fun OnboardingScreen(
         useAccessibilityOverlay || Settings.canDrawOverlays(context)
     }
     val accessibilityGranted = remember(permissionRefresh) {
-        val enabled = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ).orEmpty()
-        enabled.contains(context.packageName, ignoreCase = true) &&
-            enabled.contains("ArunoAccessibilityService", ignoreCase = true)
+        AccessibilityDiagnostics.isEnabledInSettings(context)
     }
     val notificationGranted = remember(permissionRefresh) {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
