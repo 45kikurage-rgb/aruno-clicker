@@ -78,7 +78,12 @@ class GiftHomeNavigator(
             }
             check = check@{
                 val screen = port.screen()
-                if (screen?.targetPackage != true) { finish(false); return@check }
+                if (screen == null) {
+                    attempt++
+                    if (attempt >= MAX_POLLS) finish(false) else post { check() }
+                    return@check
+                }
+                if (!screen.targetPackage) { finish(false); return@check }
                 if (screen.surface == GiftHomeSurface.FEED) {
                     stable++
                     if (stable >= 2) { progress("ギフト→ホームを確認しました"); finish(true); return@check }
@@ -119,7 +124,12 @@ class GiftHomeNavigator(
         }
         checkGift = check@{
             val screen = port.screen()
-            if (screen?.targetPackage != true) { finish(false); return@check }
+            if (screen == null) {
+                polls++
+                if (polls >= MAX_POLLS) finish(false) else post { checkGift() }
+                return@check
+            }
+            if (!screen.targetPackage) { finish(false); return@check }
             if (screen.surface == GiftHomeSurface.REWARDS) { returnHome(); return@check }
             polls++
             if (polls >= MAX_POLLS) {
@@ -128,13 +138,19 @@ class GiftHomeNavigator(
                 } else finish(false)
             } else post { checkGift() }
         }
-        val initial = port.screen()
-        when {
-            initial?.targetPackage != true -> finish(false)
-            initial.surface == GiftHomeSurface.REWARDS -> returnHome()
-            initial.surface == GiftHomeSurface.FEED -> openGift(triedCoordinates)
-            else -> finish(false)
+        var initialPolls = 0
+        lateinit var begin: () -> Unit
+        begin = {
+            val initial = port.screen()
+            when {
+                initial != null && !initial.targetPackage -> finish(false)
+                initial?.surface == GiftHomeSurface.REWARDS -> returnHome()
+                initial?.surface == GiftHomeSurface.FEED -> openGift(triedCoordinates)
+                ++initialPolls >= MAX_POLLS -> finish(false)
+                else -> post { begin() }
+            }
         }
+        begin()
     }
 
     companion object {

@@ -3,6 +3,6 @@
   "versionCode": 26,
   "sign": false,
   "publish": false,
-  "attempt": 2,
-  "reason": "Verify final navigation-bar bounds guards, off-screen tab rejection and compact mode labels"
+  "attempt": 3,
+  "reason": "Wait through initial TikTok loading and transient missing accessibility roots; final Gift/Home route regression"
 }

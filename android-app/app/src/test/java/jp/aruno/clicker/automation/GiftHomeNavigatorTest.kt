@@ -33,13 +33,24 @@ class GiftHomeNavigatorTest {
         var width = 684
         var height = 1496
         var reportedTabY: Float? = null
+        var initialLoadingPolls = 0
+        var transientNullPolls = 0
+        var nullAfterEachClick = 0
         val actions = mutableListOf<String>()
         val points = mutableListOf<Pair<Float, Float>>()
-        override fun screen() = GiftHomeScreen(target, surface, 0, 24, width, height - 24,
-            !(hideRewardTabs && surface == GiftHomeSurface.REWARDS), reportedTabY ?: height - 40f)
+        override fun screen(): GiftHomeScreen? {
+            if (transientNullPolls > 0) { transientNullPolls--; return null }
+            if (initialLoadingPolls > 0) {
+                initialLoadingPolls--
+                return GiftHomeScreen(target, GiftHomeSurface.UNKNOWN, 0, 24, width, height - 24, false)
+            }
+            return GiftHomeScreen(target, surface, 0, 24, width, height - 24,
+                !(hideRewardTabs && surface == GiftHomeSurface.REWARDS), reportedTabY ?: height - 40f)
+        }
         override fun click(target: GiftHomeTarget): Boolean {
             actions += "element:$target"
             if (elementWorks && elementMoves) surface = if (target == GiftHomeTarget.GIFT) GiftHomeSurface.REWARDS else GiftHomeSurface.FEED
+            transientNullPolls = nullAfterEachClick
             return elementWorks
         }
         override fun tap(x: Float, y: Float, done: (Boolean) -> Unit) {
@@ -122,5 +133,11 @@ class GiftHomeNavigatorTest {
         val port = Port()
         assertEquals(true, run(port, GiftHomeMode.OFF).first)
         assertTrue(port.actions.isEmpty())
+    }
+
+    @Test fun waitsForInitialLoadingAndTemporaryMissingRootsAcrossBothTransitions() {
+        val port = Port().apply { initialLoadingPolls = 4; nullAfterEachClick = 2 }
+        assertEquals(true, run(port, GiftHomeMode.ELEMENTS).first)
+        assertEquals(listOf("element:GIFT", "element:HOME"), port.actions)
     }
 }

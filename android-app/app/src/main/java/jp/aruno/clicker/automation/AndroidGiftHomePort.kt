@@ -61,6 +61,11 @@ internal class AndroidGiftHomePort(
     }
 
     override fun screen(): GiftHomeScreen? {
+        service.rootInActiveWindow?.let { root ->
+            if (root.packageName?.toString() !in AutomationConfig.TARGET_PACKAGES) {
+                return GiftHomeScreen(false, GiftHomeSurface.UNKNOWN, 0, 0, 0, 0, false)
+            }
+        }
         val (bounds, visible) = nodes() ?: return null
         val home = visible.filter { isTab(it, GiftHomeTarget.HOME, bounds) }
         val gift = visible.filter { isTab(it, GiftHomeTarget.GIFT, bounds) }
