@@ -1,1 +1,1 @@
-{"versionCode":28,"attempt":2,"reason":"Update Android service and overlay lifecycle assertions to expect direct URL6/7 rather than removed URL1 preparation; initial run compiled app but obsolete expectations failed"}
+{"versionCode":28,"attempt":3,"reason":"Final candidate also replaces obsolete on-device URL1 detour explanation with direct URL playback wording"}

@@ -184,9 +184,9 @@ fun UrlRunnerHomeScreen(
                 )
             }
             item {
-                Text("6番以降：1番URL → 3秒待機 → 対象URL", fontWeight = FontWeight.Bold)
+                Text("6番以降：対象URLを直接開きます", fontWeight = FontWeight.Bold)
                 Text(
-                    "6番から開始する場合も毎回実行します。準備中の1番URLは視聴回数に加算しません。",
+                    "6番から開始すると6番URLへ進みます。途中に1番URLを挟む処理と3秒待機はありません。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MatrixTextMuted,
                 )
