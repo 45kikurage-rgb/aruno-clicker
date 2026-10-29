@@ -19,7 +19,7 @@ internal class AndroidGiftHomePort(
         val manager = service.getSystemService(WindowManager::class.java)
         if (Build.VERSION.SDK_INT >= 30) {
             val metrics = manager.currentWindowMetrics
-            val insets = metrics.windowInsets.getInsetsIgnoringVisibility(
+            val insets = metrics.windowInsets.getInsets(
                 WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout())
             val display = metrics.bounds
             bounds.intersect(Rect(display.left + insets.left, display.top + insets.top,
@@ -48,6 +48,7 @@ internal class AndroidGiftHomePort(
 
     private fun isTab(node: AccessibilityNodeInfo, target: GiftHomeTarget, bounds: Rect): Boolean {
         val rect = Rect().also(node::getBoundsInScreen)
+        if (!bounds.contains(rect.centerX(), rect.centerY())) return false
         if (rect.isEmpty || rect.centerY() < bounds.bottom - bounds.height() * 0.14f) return false
         val x = (rect.centerX() - bounds.left).toFloat() / bounds.width()
         if (target == GiftHomeTarget.GIFT && x !in 0.20f..0.40f) return false
@@ -64,7 +65,8 @@ internal class AndroidGiftHomePort(
         val home = visible.filter { isTab(it, GiftHomeTarget.HOME, bounds) }
         val gift = visible.filter { isTab(it, GiftHomeTarget.GIFT, bounds) }
         val labels = visible.flatMap { listOfNotNull(it.text?.toString(), it.contentDescription?.toString()) }
-        val markers = listOf("チェックイン", "ポイント残高", "報酬", "アンロック", "受け取る", "動画を見る")
+        val markers = listOf("チェックイン", "ポイント残高", "報酬", "アンロック", "受け取る", "動画を見る",
+            "動画を見て", "コインストック", "ルーレット", "友達招待", "視聴する")
             .count { keyword -> labels.any { keyword in it } }
         val feed = home.isNotEmpty() && gift.isNotEmpty() &&
             (home.any { it.isSelected || it.parent?.isSelected == true } ||
@@ -88,6 +90,7 @@ internal class AndroidGiftHomePort(
                 val current = candidate ?: return@repeat
                 val rect = Rect().also(current::getBoundsInScreen)
                 if (current.isVisibleToUser && current.isEnabled && current.isClickable &&
+                    bounds.contains(rect.centerX(), rect.centerY()) &&
                     rect.width() <= bounds.width() * 0.45f &&
                     rect.centerY() >= bounds.bottom - bounds.height() * 0.14f &&
                     current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true

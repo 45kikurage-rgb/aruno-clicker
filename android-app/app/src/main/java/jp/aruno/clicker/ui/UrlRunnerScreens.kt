@@ -192,7 +192,7 @@ fun UrlRunnerHomeScreen(
                     }
                 }
                 Text(
-                    if (giftHomeError) "設定を保存できませんでした。" else "この端末だけに保存。次の開始から反映します。",
+                    if (giftHomeError) "設定を保存できませんでした。" else "自動は要素→位置の順。この端末に保存し、次の開始から反映します。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (giftHomeError) DangerRed else MatrixTextMuted,
                 )

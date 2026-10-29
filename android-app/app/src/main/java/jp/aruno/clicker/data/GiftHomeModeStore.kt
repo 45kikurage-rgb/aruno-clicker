@@ -3,7 +3,7 @@ package jp.aruno.clicker.data
 import android.content.Context
 
 enum class GiftHomeMode(val label: String) {
-    AUTO("自動（要素→位置）"), ELEMENTS("要素のみ"), COORDINATES("位置のみ"), OFF("なし（従来）")
+    AUTO("自動"), ELEMENTS("要素のみ"), COORDINATES("位置のみ"), OFF("なし（従来）")
 }
 
 class GiftHomeModeStore(context: Context) {

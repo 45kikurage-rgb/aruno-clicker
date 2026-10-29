@@ -1,1 +1,8 @@
-{"purpose":"Verify Gift to in-app Home before next URL with element and coordinate methods, preserving pause and daily limits","versionCode":26,"sign":false,"publish":false,"attempt":1}
+{
+  "purpose": "Verify Gift to in-app Home before next URL with element and coordinate methods, preserving pause and daily limits",
+  "versionCode": 26,
+  "sign": false,
+  "publish": false,
+  "attempt": 2,
+  "reason": "Verify final navigation-bar bounds guards, off-screen tab rejection and compact mode labels"
+}

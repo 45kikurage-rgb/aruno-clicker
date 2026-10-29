@@ -55,6 +55,7 @@ class GiftHomeNavigator(
             }
             val x = screen.left + screen.width * (if (target == GiftHomeTarget.GIFT) 0.30f else 0.10f)
             val y = screen.tabCenterY ?: (screen.top + screen.height * 0.97f)
+            if (y < screen.top || y >= screen.top + screen.height) { result(false); return }
             port.tap(x, y) { ok -> post(0) { result(ok) } }
         }
 

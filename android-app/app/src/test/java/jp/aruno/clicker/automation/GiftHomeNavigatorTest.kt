@@ -32,10 +32,11 @@ class GiftHomeNavigatorTest {
         var hideRewardTabs = false
         var width = 684
         var height = 1496
+        var reportedTabY: Float? = null
         val actions = mutableListOf<String>()
         val points = mutableListOf<Pair<Float, Float>>()
         override fun screen() = GiftHomeScreen(target, surface, 0, 24, width, height - 24,
-            !(hideRewardTabs && surface == GiftHomeSurface.REWARDS), height - 40f)
+            !(hideRewardTabs && surface == GiftHomeSurface.REWARDS), reportedTabY ?: height - 40f)
         override fun click(target: GiftHomeTarget): Boolean {
             actions += "element:$target"
             if (elementWorks && elementMoves) surface = if (target == GiftHomeTarget.GIFT) GiftHomeSurface.REWARDS else GiftHomeSurface.FEED
@@ -93,6 +94,12 @@ class GiftHomeNavigatorTest {
             assertEquals(false, run(port, GiftHomeMode.COORDINATES).first)
             assertTrue(port.points.isEmpty())
         }
+    }
+
+    @Test fun refusesReportedTabCenterInsideSystemNavigationArea() {
+        val port = Port().apply { height = 1450; reportedTabY = 1490f }
+        assertEquals(false, run(port, GiftHomeMode.COORDINATES).first)
+        assertTrue(port.points.isEmpty())
     }
 
     @Test fun completedGestureWithoutScreenTransitionIsFailureAndBounded() {
