@@ -14,6 +14,8 @@ data class AutomationSnapshot(
     val urlRunnerActive: Boolean = false,
     val urlRunnerSecondsToNext: Int? = null,
     val urlRunnerHasNext: Boolean = false,
+    val urlRunnerIndex: Int = -1,
+    val urlRunnerPaused: Boolean = false,
 ) {
     val elapsedMs: Long
         get() = if (startedAtElapsed <= 0L) 0L else (SystemClock.elapsedRealtime() - startedAtElapsed).coerceAtLeast(0L)
@@ -38,6 +40,8 @@ object AutomationRuntime {
     @Volatile private var urlRunnerActive = false
     @Volatile private var urlRunnerSecondsToNext: Int? = null
     @Volatile private var urlRunnerHasNext = false
+    @Volatile private var urlRunnerIndex = -1
+    @Volatile private var urlRunnerPaused = false
 
     fun requestStart(
         context: Context,
@@ -53,6 +57,8 @@ object AutomationRuntime {
         urlRunnerActive = startMode == AutomationContract.START_MODE_URL_RUNNER
         urlRunnerSecondsToNext = null
         urlRunnerHasNext = false
+        urlRunnerIndex = -1
+        urlRunnerPaused = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_REQUESTED, true)
             .putBoolean(KEY_PENDING_START, true)
@@ -109,7 +115,9 @@ object AutomationRuntime {
     fun markUrlRunnerStatus(context: Context, status: UrlRunnerStatus) {
         running = false
         message = PresentationText.sanitize(status.message)
-        urlRunnerSecondsToNext = if (status.phase == UrlRunnerPhase.HOLDING) {
+        urlRunnerIndex = status.index
+        urlRunnerPaused = status.phase == UrlRunnerPhase.PAUSED
+        urlRunnerSecondsToNext = if (status.phase == UrlRunnerPhase.HOLDING || urlRunnerPaused) {
             (status.waitTotalSeconds - status.waitElapsedSeconds).coerceAtLeast(0)
         } else null
         urlRunnerHasNext = status.nextIndex != null
@@ -129,6 +137,8 @@ object AutomationRuntime {
         endsAtElapsed = 0L
         message = PresentationText.sanitize(text)
         urlRunnerActive = false
+        urlRunnerIndex = -1
+        urlRunnerPaused = false
         urlRunnerSecondsToNext = null
         urlRunnerHasNext = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -149,6 +159,8 @@ object AutomationRuntime {
         urlRunnerActive = urlRunnerActive,
         urlRunnerSecondsToNext = urlRunnerSecondsToNext,
         urlRunnerHasNext = urlRunnerHasNext,
+        urlRunnerIndex = urlRunnerIndex,
+        urlRunnerPaused = urlRunnerPaused,
     )
 
     private fun notifyChanged(context: Context) {
@@ -168,3 +180,4 @@ object AutomationRuntime {
     private const val KEY_END_WALL_CLOCK = "requested_end_wall_clock_ms"
     private const val KEY_START_MODE = "requested_start_mode"
 }
+

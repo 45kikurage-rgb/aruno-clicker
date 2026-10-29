@@ -214,6 +214,8 @@ class ArunoAccessibilityService : AccessibilityService() {
                     )
                 },
                 onStop = { stopAutomation("停止しました") },
+                onPause = { toggleUrlRunnerPause() },
+                onSplashSettingsChanged = { updateUrlRunnerSplashSettings() },
                 onStartFromSixth = { enabled -> startUrlRunnerSequence(true, enabled) },
                 onClose = {
                     stopService(Intent(this, AutomationService::class.java))
@@ -418,6 +420,13 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var urlSequenceRunner: UrlSequenceRunnerCore? = null
     private var urlSequenceScheduler: UrlRunnerHandlerScheduler? = null
 
+    fun toggleUrlRunnerPause() { urlSequenceRunner?.togglePause() }
+
+    fun updateUrlRunnerSplashSettings() {
+        val prefs = jp.aruno.clicker.data.SplashFrequencyStore(this)
+        urlSequenceRunner?.updateSplashFrequency(prefs.selectedFrequency(prefs.isEnabled()))
+    }
+
     private inner class UrlRunnerHandlerScheduler : DelayScheduler {
         private val pending = mutableSetOf<Runnable>()
 
@@ -537,6 +546,8 @@ class ArunoAccessibilityService : AccessibilityService() {
                     .also { splashReadyForNextUrl = it }
             },
             splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
+            dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
+            dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,
@@ -2320,3 +2331,4 @@ class ArunoAccessibilityService : AccessibilityService() {
             private set
     }
 }
+

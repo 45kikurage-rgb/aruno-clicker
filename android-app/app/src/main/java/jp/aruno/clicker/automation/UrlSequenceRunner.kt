@@ -1,6 +1,7 @@
 package jp.aruno.clicker.automation
 
 import jp.aruno.clicker.data.LoopMode
+import jp.aruno.clicker.data.DailyVideoViews
 import jp.aruno.clicker.data.UrlRunnerConfig
 import jp.aruno.clicker.data.UrlRunnerLimits
 
@@ -65,6 +66,7 @@ enum class UrlRunnerPhase {
     OPENING,
     WAITING_FOREGROUND,
     HOLDING,
+    PAUSED,
     SKIPPED,
     RECOVERING,
     FINISHED,
@@ -107,9 +109,11 @@ class UrlSequenceRunnerCore(
     private val statusSink: UrlRunnerStatusSink,
     private val splashLauncher: UrlRunnerSplashLauncher = UrlRunnerSplashLauncher { false },
     /** 0=off, 1=every URL, 2..5=every N completed URL positions. Fixed per run. */
-    private val splashEveryLinks: Int = 0,
+    private var splashEveryLinks: Int = 0,
     private val loopMode: LoopMode? = null,
     private val canContinue: () -> Boolean = { true },
+    private val dailyViews: DailyVideoViews? = null,
+    private val dailyLimit: Int = 2,
 ) {
     /** 世代トークン。開始・停止のたびに進む。 */
     var generation: Long = 0L
@@ -126,6 +130,52 @@ class UrlSequenceRunnerCore(
     private var skippedFailureCount = 0
     private var consecutiveFailures = 0
     private var completedLinksSinceSplash = 0
+    private var visitToken = 0L
+    private var currentDailyCount = 0
+    private val tasks = PausableScheduler(scheduler, clock)
+    private var pausedPhase = UrlRunnerPhase.IDLE
+    private var pausedAt = 0L
+    private var pausedTime = 0L
+    private var paused = false
+    private var lastStatus: UrlRunnerStatus? = null
+
+    fun isPaused(): Boolean = paused
+
+    /** Apply user-edited splash controls at the next URL boundary. */
+    fun updateSplashFrequency(value: Int) {
+        if (value !in 0..5) return
+        splashEveryLinks = value
+        completedLinksSinceSplash = 0
+    }
+
+    fun togglePause() {
+        if (!active) return
+        if (paused) {
+            if (!checkCanContinue(generation)) return
+            pausedTime += clock.nowMs() - pausedAt
+            paused = false
+            phase = pausedPhase
+            // Previous foreground callbacks are invalid. Start a fresh bounded
+            // check without reopening or charging an already-started hold.
+            if (phase == UrlRunnerPhase.WAITING_FOREGROUND) awaitCurrentForeground(generation, ++visitToken)
+            else {
+                lastStatus?.let { report(phase, index, it.waitTotalSeconds, it.waitElapsedSeconds, "再開しました") }
+            }
+            tasks.resume()
+        } else {
+            pausedAt = clock.nowMs()
+            pausedPhase = phase
+            paused = true
+            visitToken += 1
+            tasks.pause()
+            phase = UrlRunnerPhase.PAUSED
+            val previous = lastStatus
+            report(phase, index, previous?.waitTotalSeconds ?: 0, previous?.waitElapsedSeconds ?: 0, "一時停止中")
+        }
+    }
+
+    private fun nowMs(): Long = clock.nowMs() - pausedTime -
+        (if (paused) clock.nowMs() - pausedAt else 0L)
 
     fun isRunning(): Boolean = active
 
@@ -136,6 +186,9 @@ class UrlSequenceRunnerCore(
     fun start(config: UrlRunnerConfig): UrlRunnerStartResult {
         if (active) return UrlRunnerStartResult.AlreadyRunning
         val issues = config.validate()
+        if (dailyViews != null && dailyLimit !in 2..3) {
+            return UrlRunnerStartResult.Invalid(listOf("当日の上限は2回または3回にしてください"))
+        }
         if (issues.isNotEmpty()) {
             return UrlRunnerStartResult.Invalid(issues.map { it.message })
         }
@@ -145,6 +198,9 @@ class UrlSequenceRunnerCore(
         skippedFailureCount = 0
         consecutiveFailures = 0
         completedLinksSinceSplash = 0
+        paused = false
+        pausedTime = 0L
+        tasks.resume()
         generation += 1L
         openCurrent(generation)
         return UrlRunnerStartResult.Started
@@ -155,7 +211,8 @@ class UrlSequenceRunnerCore(
         if (!active) return
         active = false
         generation += 1L
-        scheduler.cancelAll()
+        tasks.cancelAll()
+        paused = false
         phase = UrlRunnerPhase.STOPPED
         report(phase, index, waitTotalSeconds = 0, waitElapsedSeconds = 0, message = reason)
     }
@@ -163,28 +220,41 @@ class UrlSequenceRunnerCore(
     private fun openCurrent(gen: Long) {
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
-        // Preserve numbered positions while skipping blank URLs without a delay.
-        while (index < config.urls.size && config.urls[index].isBlank()) {
-            report(UrlRunnerPhase.OPENING, index, 0, 0, "${index + 1}番は空欄のためスキップ")
-            index += 1
-        }
-        if (index >= config.urls.size) {
-            if ((loopMode ?: config.loopMode) == LoopMode.LOOP) {
+        // A bounded scan avoids recursion/spinning when every URL is capped.
+        var scanned = 0
+        while (true) {
+            if (!checkCanContinue(gen)) return
+            if (index >= config.urls.size) {
+                if ((loopMode ?: config.loopMode) != LoopMode.LOOP) {
+                    finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
+                    return
+                }
                 index = 0
-                openCurrent(gen) // validate() guarantees at least one nonblank URL.
-            } else {
-                finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
             }
-            return
+            if (scanned >= config.urls.size) {
+                finish("本日の全動画が上限${dailyLimit}回に達したため終了しました。次の日は開始操作で再開できます")
+                return
+            }
+            val candidate = config.urls[index]
+            val count = try { if (candidate.isBlank()) 0 else dailyViews?.count(candidate) ?: 0 }
+                catch (_: Exception) { fail(gen, "当日の回数を読み取れないため停止しました"); return }
+            if (candidate.isNotBlank() && (dailyViews == null || count < dailyLimit)) break
+            report(UrlRunnerPhase.OPENING, index, 0, 0,
+                if (candidate.isBlank()) "${index + 1}番は空欄のためスキップ"
+                else "${index + 1}番は本日${count}/${dailyLimit}回のためスキップ")
+            index += 1
+            scanned += 1
         }
         val url = config.urls[index]
+        val token = ++visitToken
+        currentDailyCount = 0
         phase = UrlRunnerPhase.OPENING
         report(
             phase, index,
             waitTotalSeconds = config.secondsFor(index), waitElapsedSeconds = 0,
             message = "${index + 1}番目のURLを開いています",
         )
-        openRequestedAtMs = clock.nowMs()
+        openRequestedAtMs = nowMs()
         val opened = runCatching { opener.open(url) }.getOrDefault(false)
         if (!isCurrent(gen)) return
         if (!opened) {
@@ -197,8 +267,12 @@ class UrlSequenceRunnerCore(
             waitTotalSeconds = config.secondsFor(index), waitElapsedSeconds = 0,
             message = "${index + 1}番目のURLを開きました。表示を確認しています",
         )
+        awaitCurrentForeground(gen, token)
+    }
+
+    private fun awaitCurrentForeground(gen: Long, token: Long) {
         foregroundChecker.awaitForeground(gen) { ready ->
-            if (!isCurrent(gen)) return@awaitForeground
+            if (!isCurrent(gen) || paused || token != visitToken || phase != UrlRunnerPhase.WAITING_FOREGROUND) return@awaitForeground
             if (!ready) {
                 skipFailedUrl(gen, "10秒以内に画面を確認できませんでした")
                 return@awaitForeground
@@ -214,8 +288,17 @@ class UrlSequenceRunnerCore(
     private fun beginHold(gen: Long) {
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
+        val history = dailyViews
+        if (history != null) {
+            val recorded = runCatching { history.recordStart(config.urls[index], dailyLimit) }.getOrDefault(false)
+            if (!recorded) {
+                fail(gen, "当日の回数を保存できないか上限に達したため停止しました")
+                return
+            }
+            currentDailyCount = runCatching { history.count(config.urls[index]) }.getOrDefault(0)
+        }
         val totalSeconds = config.secondsFor(index)
-        val startedAtMs = if (config.waitFromForeground) clock.nowMs() else openRequestedAtMs
+        val startedAtMs = if (config.waitFromForeground) nowMs() else openRequestedAtMs
         consecutiveFailures = 0
         phase = UrlRunnerPhase.HOLDING
         reportHold(gen, startedAtMs, totalSeconds)
@@ -223,7 +306,7 @@ class UrlSequenceRunnerCore(
 
     private fun reportHold(gen: Long, startedAtMs: Long, totalSeconds: Int) {
         if (!checkCanContinue(gen)) return
-        val elapsedSeconds = ((clock.nowMs() - startedAtMs) / 1_000L)
+        val elapsedSeconds = ((nowMs() - startedAtMs) / 1_000L)
             .coerceIn(0L, totalSeconds.toLong())
             .toInt()
         report(
@@ -231,13 +314,14 @@ class UrlSequenceRunnerCore(
             waitTotalSeconds = totalSeconds,
             waitElapsedSeconds = elapsedSeconds,
             message = "${index + 1}番目のURLを開きました（動画の再生は未確認）" +
+                (if (dailyViews != null) " 本日${currentDailyCount}/${dailyLimit}回（途中停止も含む）" else "") +
                 " ${elapsedSeconds}秒経過 / あと${totalSeconds - elapsedSeconds}秒",
         )
         if (elapsedSeconds >= totalSeconds) {
             advance(gen)
             return
         }
-        scheduler.schedule(TICK_MS) { reportHold(gen, startedAtMs, totalSeconds) }
+        tasks.schedule(TICK_MS) { reportHold(gen, startedAtMs, totalSeconds) }
     }
 
     private fun advance(gen: Long) {
@@ -253,9 +337,9 @@ class UrlSequenceRunnerCore(
         // need a fresh normal TikTok Lite launch before their deep links.
         // Do not splash for an empty slot or after the final STOP-mode URL.
         val next = ((index + 1) until config.urls.size)
-            .firstOrNull { config.urls[it].isNotBlank() }
+            .firstOrNull { isEligible(config.urls[it]) }
             ?: if ((loopMode ?: config.loopMode) == LoopMode.LOOP) {
-                config.urls.indexOfFirst { it.isNotBlank() }.takeIf { it >= 0 }
+                config.urls.indexOfFirst { isEligible(it) }.takeIf { it >= 0 }
             } else null
         if (next == null) {
             index += 1
@@ -270,7 +354,7 @@ class UrlSequenceRunnerCore(
         if (!launched) {
             report(phase, index, 0, 0, "通常起動に失敗しました。次のURLを試します")
         }
-        scheduler.schedule(SPLASH_SETTLE_DELAY_MS) nextUrl@{
+        tasks.schedule(SPLASH_SETTLE_DELAY_MS) nextUrl@{
             if (!checkCanContinue(gen)) return@nextUrl
             index += 1
             openCurrent(gen)
@@ -290,12 +374,12 @@ class UrlSequenceRunnerCore(
         skippedFailureCount += 1
         consecutiveFailures += 1
         phase = UrlRunnerPhase.SKIPPED
-        val nonBlankCount = config.urls.count { it.isNotBlank() }
+        val nonBlankCount = config.urls.count { isEligible(it) }.coerceAtLeast(1)
         val noMoreInCycle = (loopMode ?: config.loopMode) == LoopMode.LOOP &&
             consecutiveFailures >= nonBlankCount
         val hasNextUrl = ((index + 1) until config.urls.size)
-            .any { config.urls[it].isNotBlank() } ||
-            (loopMode ?: config.loopMode) == LoopMode.LOOP
+            .any { isEligible(config.urls[it]) } ||
+            ((loopMode ?: config.loopMode) == LoopMode.LOOP && config.urls.any { isEligible(it) })
 
         report(
             UrlRunnerPhase.SKIPPED, index, 0, 0,
@@ -322,7 +406,7 @@ class UrlSequenceRunnerCore(
 
         // Keep a short minimum gap before attempting to start a new Activity.
         // The continuation is cancelled by stop() or any safety condition.
-        scheduler.schedule(FAILED_LINK_SKIP_DELAY_MS) {
+        tasks.schedule(FAILED_LINK_SKIP_DELAY_MS) {
             if (!checkCanContinue(gen)) return@schedule
             val splashStarted = runCatching { splashLauncher.launch() }.getOrDefault(false)
             if (!checkCanContinue(gen)) return@schedule
@@ -335,7 +419,7 @@ class UrlSequenceRunnerCore(
                     "TikTok Liteの通常起動に失敗。次のURLを試します"
                 },
             )
-            scheduler.schedule(SPLASH_SETTLE_DELAY_MS) next@{
+            tasks.schedule(SPLASH_SETTLE_DELAY_MS) next@{
                 if (!checkCanContinue(gen)) return@next
                 index += 1
                 openCurrent(gen)
@@ -353,7 +437,8 @@ class UrlSequenceRunnerCore(
         if (!isCurrent(gen)) return
         active = false
         generation += 1L
-        scheduler.cancelAll()
+        tasks.cancelAll()
+        paused = false
         phase = UrlRunnerPhase.FAILED
         report(phase, index, waitTotalSeconds = 0, waitElapsedSeconds = 0, message = reason)
     }
@@ -369,6 +454,9 @@ class UrlSequenceRunnerCore(
 
     private fun isCurrent(gen: Long): Boolean = active && gen == generation
 
+    private fun isEligible(url: String): Boolean = url.isNotBlank() &&
+        (dailyViews?.let { history -> runCatching { history.count(url) < dailyLimit }.getOrDefault(false) } ?: true)
+
     private fun report(
         phase: UrlRunnerPhase,
         index: Int,
@@ -377,8 +465,7 @@ class UrlSequenceRunnerCore(
         message: String,
     ) {
         val config = snapshot
-        statusSink.onStatus(
-            UrlRunnerStatus(
+        val status = UrlRunnerStatus(
                 phase = phase,
                 index = index,
                 total = config?.urls?.size ?: 0,
@@ -388,13 +475,14 @@ class UrlSequenceRunnerCore(
                 message = message,
                 nextIndex = config?.let { current ->
                     val next = ((index + 1) until current.urls.size)
-                        .firstOrNull { current.urls[it].isNotBlank() }
+                        .firstOrNull { isEligible(current.urls[it]) }
                     next ?: if ((loopMode ?: current.loopMode) == LoopMode.LOOP) {
-                        current.urls.indexOfFirst(String::isNotBlank).takeIf { it >= 0 }
+                        current.urls.indexOfFirst { isEligible(it) }.takeIf { it >= 0 }
                     } else null
                 },
-            ),
-        )
+            )
+        lastStatus = status
+        statusSink.onStatus(status)
     }
 
     companion object {
@@ -406,3 +494,4 @@ class UrlSequenceRunnerCore(
         const val SPLASH_SETTLE_DELAY_MS = 1_800L
     }
 }
+

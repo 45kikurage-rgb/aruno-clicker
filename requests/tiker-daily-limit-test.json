@@ -1,0 +1,7 @@
+{
+  "purpose": "Verify daily interrupted attempt limits, pause/resume and editable inline splash controls",
+  "versionCode": 25,
+  "sign": false,
+  "publish": false,
+  "attempt": 2
+}
