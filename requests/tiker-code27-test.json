@@ -1,1 +1,1 @@
-{"versionCode":27,"requested":"2026-10-29","scope":"each video slot 6+ opens URL1 then waits 3000ms; slots1-5 unlimited; close popup cross during URL playback; preserve signer and data"}
+{"versionCode":27,"attempt":2,"reason":"Update API28/35 lifecycle assertions to require URL1 preparation and a full 3000ms delay; preserve screen-off cancellation"}
