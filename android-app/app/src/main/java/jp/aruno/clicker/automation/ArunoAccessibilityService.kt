@@ -203,8 +203,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                     )
                 },
                 onStop = { stopAutomation("停止しました") },
-                onStartFromSixthWithSplash = { startUrlRunnerSequence(true, true) },
-                onStartFromSixthWithoutSplash = { startUrlRunnerSequence(true, false) },
+                onStartFromSixth = { enabled -> startUrlRunnerSequence(true, enabled) },
                 onClose = {
                     stopService(Intent(this, AutomationService::class.java))
                 },
