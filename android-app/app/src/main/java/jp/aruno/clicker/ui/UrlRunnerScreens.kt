@@ -121,7 +121,7 @@ fun UrlRunnerHomeScreen(
                         "保存済み設定: なし（先にデータダウンロードしてください）"
                     } else {
                         "保存済み設定: URL ${savedConfig.urls.size}件" +
-                            "（版 ${savedConfig.configVersion}）"
+                            "（${UrlRunnerRevisionLabel.format(savedConfig.updatedAt)}）"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MatrixTextMuted,
