@@ -89,10 +89,16 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var popupCheckScheduled = false
     private var lastPopupScanAtMs = 0L
     private var lastPopupDismissAtMs = 0L
-    private var urlPopupGeneration = -1L
-    private var urlPopupAttempts = 0
-    private var urlPopupSignature = ""
-    private var urlPopupLastAttemptAt = 0L
+    private var urlPopupBudget = PopupAttemptBudget()
+    private var urlPopupOperation = 0L
+    private var urlPopupVideoToken = 0L
+    private var urlPopupInFlight = false
+    private var urlPopupLastScanAt = -1L
+    private var urlPopupLatestScan: UrlPopupScan? = null
+    private var urlPopupNotice = ""
+    private var urlPopupNoticeUntil = 0L
+    private var urlPopupDiagnosticSaved = false
+    private var urlPopupFailureReported = false
     private var pendingDailyStartCompletion = false
     private var accessibilityOverlayController: AccessibilityOverlayController? = null
 
@@ -420,7 +426,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     // ---- URLランナー（URL順次展開） ----
     //
     // 既存の初回／スライド経路とは分離した新しい実行経路。
-    // この経路では ×認識・広告判定・スワイプ・定期再起動・Recents削除を呼ばない。
+    // ×解除は専用の検出・確認経路のみ。旧スライドやRecents削除は呼ばない。
     // URLを開く処理は既存 openTargetUrl をそのまま再利用し、前面確認は既存
     // waitForTargetForeground と同じ条件（10秒制限・600ms安定・200ms間隔）で
     // ランナー専用にポーリングする（既存関数は世代管理が従来経路専用のため）。
@@ -428,7 +434,11 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var urlSequenceRunner: UrlSequenceRunnerCore? = null
     private var urlSequenceScheduler: UrlRunnerHandlerScheduler? = null
 
-    fun toggleUrlRunnerPause() { urlSequenceRunner?.togglePause() }
+    fun toggleUrlRunnerPause() {
+        urlPopupOperation++
+        urlPopupInFlight = false
+        urlSequenceRunner?.togglePause()
+    }
 
     fun updateUrlRunnerSplashSettings() {
         val prefs = jp.aruno.clicker.data.SplashFrequencyStore(this)
@@ -589,6 +599,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         var firstUrlReadyForNextUrl = false
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
+                resetUrlPopupVideo()
                 if (!urlRunnerDeviceReady()) false
                 else {
                     // Code19 normally recreates the TikTok Lite Activity task
@@ -620,12 +631,19 @@ class ArunoAccessibilityService : AccessibilityService() {
                 else openTargetUrl(url, preserveTask = true).also { firstUrlReadyForNextUrl = it }
             },
             canContinue = { urlRunnerDeviceReady() },
+            holdBlocked = { dismissUrlRunnerPopupIfPresent() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,
             clock = UrlRunnerClock { android.os.SystemClock.elapsedRealtime() },
             statusSink = UrlRunnerStatusSink { status ->
                 AutomationRuntime.markUrlRunnerStatus(this, status)
-                if (status.phase == UrlRunnerPhase.HOLDING) dismissUrlRunnerPopupIfPresent()
+                if (status.phase != UrlRunnerPhase.HOLDING) {
+                    urlPopupOperation++
+                    urlPopupInFlight = false
+                }
+                val now = android.os.SystemClock.elapsedRealtime()
+                AutomationRuntime.markPopupNotice(this,
+                    if (status.phase == UrlRunnerPhase.HOLDING && now < urlPopupNoticeUntil) urlPopupNotice else "")
                 if (
                     status.phase == UrlRunnerPhase.FINISHED ||
                     status.phase == UrlRunnerPhase.STOPPED ||
@@ -1638,55 +1656,149 @@ class ArunoAccessibilityService : AccessibilityService() {
         val knownCoinPopup: Boolean = false,
     )
 
-    /** URL playback owns its timers; dismissing × must never start legacy swipes. */
-    private fun dismissUrlRunnerPopupIfPresent() {
-        val runner = urlSequenceRunner ?: return
-        if (!runner.isRunning() || runner.isPaused() ||
-            runner.phase !in setOf(UrlRunnerPhase.HOLDING, UrlRunnerPhase.WAITING_FOREGROUND) ||
-            !urlRunnerDeviceReady() || !isTargetForeground()) return
-        val gen = automationGeneration
-        if (urlPopupGeneration != gen) {
-            urlPopupGeneration = gen
-            urlPopupAttempts = 0
-            urlPopupSignature = ""
-            urlPopupLastAttemptAt = 0L
+    private fun resetUrlPopupVideo() {
+        urlPopupVideoToken++
+        urlPopupOperation++
+        urlPopupBudget = PopupAttemptBudget()
+        urlPopupInFlight = false
+        urlPopupLatestScan = null
+        urlPopupLastScanAt = -1L
+        urlPopupNotice = ""
+        urlPopupDiagnosticSaved = false
+        urlPopupFailureReported = false
+    }
+
+    private fun scanUrlPopup(): UrlPopupScan {
+        val visibleWindows = windows
+        val unavailableApplicationWindow = visibleWindows.any {
+            it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION && it.root == null
         }
+        val roots = visibleWindows.sortedByDescending { it.layer }.mapNotNull { w ->
+            w.root?.takeIf { it.packageName?.toString() == activeConfig.targetPackage }
+                ?.let { PopupWindowRoot(it, w.type, w.layer) }
+        }.toMutableList()
+        rootInActiveWindow?.takeIf { it.packageName?.toString() == activeConfig.targetPackage }?.let { root ->
+            if (roots.none { it.root.windowId == root.windowId }) {
+                roots.add(PopupWindowRoot(root, android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION, 0))
+            }
+        }
+        val scan = CoinPopupScanner.scan(roots, currentScreenBounds(), activeConfig.targetPackage)
+        return if (unavailableApplicationWindow) scan.copy(complete = false, candidate = null) else scan
+    }
+
+    private fun popupNotice(text: String) {
+        urlPopupNotice = text
+        urlPopupNoticeUntil = android.os.SystemClock.elapsedRealtime() + 5_000L
+        AutomationRuntime.markPopupNotice(this, text)
+    }
+
+    private fun popupFailure(reason: String) {
+        if (urlPopupFailureReported) return
+        urlPopupFailureReported = true
+        val index = AutomationRuntime.snapshot().urlRunnerIndex + 1
+        val text = "URL NO.$index：×を閉じられません（$reason）"
+        popupNotice(text)
+        AccessibilityDiagnostics(this).popup(text)
+    }
+
+    /** True only while a bounded popup recovery is withholding hold time. */
+    private fun dismissUrlRunnerPopupIfPresent(): Boolean {
+        val runner = urlSequenceRunner ?: return false
+        if (!runner.isRunning() || runner.isPaused() || runner.phase != UrlRunnerPhase.HOLDING ||
+            !urlRunnerDeviceReady() || !isTargetForeground()) return false
         val now = android.os.SystemClock.elapsedRealtime()
-        if (now - urlPopupLastAttemptAt < POPUP_DISMISS_COOLDOWN_MS) return
-        val candidate = findPopupCloseCandidate()
+        if (urlPopupLastScanAt >= 0L && now - urlPopupLastScanAt < POPUP_SCAN_THROTTLE_MS) {
+            return urlPopupBudget.blocking(now)
+        }
+        urlPopupLastScanAt = now
+        val scan = runCatching { scanUrlPopup() }.getOrNull() ?: return false
+        urlPopupLatestScan = scan
+        // An unavailable or truncated tree cannot prove that a popup disappeared.
+        if (!scan.complete && !scan.known) return urlPopupBudget.blocking(now)
+        urlPopupBudget.observe(scan.known, now)
+        if (!scan.known) return false
+        if (!urlPopupDiagnosticSaved) {
+            urlPopupDiagnosticSaved = true
+            val diagnostic = scan.diagnostic
+                .put("versionCode", BuildConfig.VERSION_CODE).put("sdk", Build.VERSION.SDK_INT)
+                .put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
+                .put("urlNumber", AutomationRuntime.snapshot().urlRunnerIndex + 1)
+                .put("capturedAt", System.currentTimeMillis()).put("density", resources.displayMetrics.density)
+                .put("screenBounds", currentScreenBounds().toShortString())
+                .put("floatBounds", org.json.JSONArray(jp.aruno.clicker.overlay.PopupOverlayAvoidance.bounds().map { it.toShortString() }))
+            runCatching { gaugeExecutor.execute { runCatching { PopupDiagnostics.save(this, diagnostic) } } }
+        }
+        if (!urlPopupBudget.blocking(now)) {
+            popupFailure(if (scan.complete) "試行上限" else "画面要素が不完全")
+            return false
+        }
+        if (urlPopupInFlight) return true
+        val candidate = scan.candidate
         if (candidate == null) {
-            urlPopupAttempts = 0
-            urlPopupSignature = ""
-            return
+            popupNotice("×を確認中・待機カウント停止")
+            return true
         }
-        val screen = currentScreenBounds()
-        val bounds = candidate.bounds
-        if (!screen.contains(bounds) || bounds.width() > screen.width() / 4 ||
-            bounds.height() > screen.height() / 6) return
-        val signature = bounds.toShortString() + candidate.knownCoinPopup
-        if (signature != urlPopupSignature) {
-            urlPopupSignature = signature
-            urlPopupAttempts = 0
+        if (!jp.aruno.clicker.overlay.PopupOverlayAvoidance.clear(candidate.bounds, currentScreenBounds())) {
+            popupNotice("操作枠を移動して×を確認中")
+            return true
         }
-        if (urlPopupAttempts >= 3) return
-        urlPopupAttempts++
-        urlPopupLastAttemptAt = now
+        if (!urlPopupBudget.reserve(now)) return true
+        urlPopupInFlight = true
+        val operation = ++urlPopupOperation
+        val video = urlPopupVideoToken
+        val gen = automationGeneration
+        val runnerGen = runner.generation
+        fun valid() = urlSequenceRunner === runner && runner.isRunning() && !runner.isPaused() &&
+            runner.phase == UrlRunnerPhase.HOLDING && runner.generation == runnerGen &&
+            automationGeneration == gen && urlPopupVideoToken == video && urlPopupOperation == operation &&
+            urlRunnerDeviceReady() && isTargetForeground()
+        fun verify(attempt: Int) {
+            handler.postDelayed({
+                if (!valid()) {
+                    if (urlPopupOperation == operation) urlPopupInFlight = false
+                    return@postDelayed
+                }
+                val after = runCatching { scanUrlPopup() }.getOrNull()
+                if (after != null && after.complete && !after.known && after.candidate == null) {
+                    urlPopupInFlight = false
+                    urlPopupBudget.observe(false, android.os.SystemClock.elapsedRealtime())
+                    popupNotice("×を閉じました（ゲージ再開は未確認）")
+                    AccessibilityDiagnostics(this).popup("×の消失確認・URL NO.${AutomationRuntime.snapshot().urlRunnerIndex + 1}")
+                } else if (attempt < 2) verify(attempt + 1)
+                else {
+                    urlPopupInFlight = false
+                    if (urlPopupBudget.attempts >= 3) popupFailure("消失未確認")
+                }
+            }, POPUP_DISMISS_VERIFY_MS)
+        }
+        popupNotice("×を閉じています ${urlPopupBudget.attempts}/3")
         var node = candidate.node
         repeat(MAX_CLICKABLE_PARENT_DEPTH + 1) {
             val current = node ?: return@repeat
             val area = Rect().also(current::getBoundsInScreen)
-            if (current.isVisibleToUser && current.isEnabled && current.isClickable &&
-                area.contains(bounds.centerX(), bounds.centerY()) && screen.contains(area) &&
-                area.width() <= screen.width() / 4 && area.height() <= screen.height() / 6 &&
-                current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return
+            val label = (current.text?.toString().orEmpty() + current.contentDescription).lowercase()
+            if (valid() && current.isVisibleToUser && current.isEnabled && current.isClickable &&
+                area.contains(candidate.bounds) && CoinPopupScanner.safeCloseBounds(area, currentScreenBounds()) &&
+                scan.forbiddenBounds.none { Rect.intersects(area, it) } &&
+                listOf("始める", "受け取る", "招待", "start", "claim").none(label::contains) &&
+                runCatching { current.performAction(AccessibilityNodeInfo.ACTION_CLICK) }.getOrDefault(false)) {
+                verify(0)
+                return true
+            }
             node = current.parent
         }
-        // Exact close bounds, or the existing recognized coin-popup close region.
-        // Never tap the invitation/claim CTA and never run legacy timing callbacks.
-        if (urlSequenceRunner === runner && runner.isRunning() && !runner.isPaused() &&
-            automationGeneration == gen && urlRunnerDeviceReady()) {
-            dispatchTap(bounds.centerX().toFloat(), bounds.centerY().toFloat()) { }
+        if (!valid()) { urlPopupInFlight = false; return false }
+        dispatchTap(candidate.bounds.centerX().toFloat(), candidate.bounds.centerY().toFloat()) { succeeded ->
+            if (valid()) {
+                if (succeeded) verify(0)
+                else {
+                    urlPopupInFlight = false
+                    popupNotice("×のタップに失敗・再確認中")
+                    if (urlPopupBudget.attempts >= 3) popupFailure("タップ失敗")
+                }
+            } else if (urlPopupOperation == operation) urlPopupInFlight = false
         }
+        return true
     }
 
     private fun dismissBlockingPopupIfPresent(generation: Long): Boolean {
@@ -2456,4 +2568,5 @@ class ArunoAccessibilityService : AccessibilityService() {
             private set
     }
 }
+
 

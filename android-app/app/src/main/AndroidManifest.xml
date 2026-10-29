@@ -28,6 +28,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ArunoClicker.Starting">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.popup-diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/popup_diagnostic_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -89,3 +97,4 @@
         </receiver>
     </application>
 </manifest>
+

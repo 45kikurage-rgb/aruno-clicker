@@ -323,6 +323,7 @@ open class AutomationOverlayService : Service() {
         windowManager.addView(root, params)
         overlayView = root
         overlayParams = params
+        PopupOverlayAvoidance.register(root, params)
         root.post { clampOverlayToBounds() }
         refreshOverlay()
     }
@@ -358,7 +359,7 @@ open class AutomationOverlayService : Service() {
     }
 
     private fun removeOverlay() {
-        overlayView?.let { runCatching { windowManager.removeView(it) } }
+        overlayView?.let { PopupOverlayAvoidance.unregister(it); runCatching { windowManager.removeView(it) } }
         overlayView = null
         overlayParams = null
         statusTitleText = null
@@ -414,7 +415,7 @@ open class AutomationOverlayService : Service() {
         val showUrl = state.requested && state.urlRunnerActive && state.urlRunnerIndex >= 0
         val statusTitle = if (showUrl) "URL NO.${state.urlRunnerIndex + 1} " +
             (if (state.urlRunnerPaused) "一時停止" else if (state.urlRunnerPreparing) "準備" else "再生") else fallbackTitle
-        val statusDetail = if (showUrl && !state.urlRunnerPreparing) "" else fallbackDetail
+        val statusDetail = state.popupNotice.ifBlank { if (showUrl && !state.urlRunnerPreparing) "" else fallbackDetail }
         statusTitleText?.apply {
             text = statusTitle
             maxLines = 1
@@ -541,4 +542,5 @@ open class AutomationOverlayService : Service() {
         private const val NOTIFICATION_ID = 1001
     }
 }
+
 

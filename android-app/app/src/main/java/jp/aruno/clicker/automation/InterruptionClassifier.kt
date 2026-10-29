@@ -1,7 +1,6 @@
 package jp.aruno.clicker.automation
 
 internal object InterruptionClassifier {
-    private val amountPattern = Regex("""\d{1,3}(?:,\d{3})+円分""")
 
     fun isContactsPermissionDialog(labels: Collection<String>): Boolean {
         val normalized = labels.map(::normalize).filter(String::isNotEmpty)
@@ -24,7 +23,6 @@ internal object InterruptionClassifier {
         val joined = normalized.joinToString(" ")
         return joined.contains("コインストック") &&
             joined.contains("ゲットしよう") &&
-            amountPattern.containsMatchIn(joined) &&
             normalized.any { it == "始める" }
     }
 
@@ -55,3 +53,4 @@ internal object TargetForegroundPolicy {
     fun shouldForceLaunch(missingDurationMs: Long, thresholdMs: Long): Boolean =
         missingDurationMs >= thresholdMs
 }
+

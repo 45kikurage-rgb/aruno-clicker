@@ -36,6 +36,8 @@ class AccessibilityDiagnostics(context: Context) {
         record("中断通知", if (active) "中断通知、動画処理は継続" else "停止中の中断通知")
     }
 
+    fun popup(detail: String) = record("×解除", detail)
+
     fun stopped(reason: String) = record("停止", reason, true)
 
     fun history(): List<AccessibilityEventRecord> = runCatching {
@@ -72,3 +74,4 @@ class AccessibilityDiagnostics(context: Context) {
         }
     }
 }
+

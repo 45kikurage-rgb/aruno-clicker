@@ -68,6 +68,7 @@ class UrlSequenceRunnerTest {
         routePreparer: UrlRoutePreparer? = null,
         resetViaFirstUrl: Boolean = false,
         dailyLimitStartIndex: Int = 0,
+        holdBlocked: () -> Boolean = { false },
     ) {
         var allowed = true
         val clock = FakeClock()
@@ -103,6 +104,7 @@ class UrlSequenceRunnerTest {
             routePreparer = routePreparer,
             resetViaFirstUrl = resetViaFirstUrl,
             dailyLimitStartIndex = dailyLimitStartIndex,
+            holdBlocked = holdBlocked,
         )
     }
 
@@ -115,6 +117,31 @@ class UrlSequenceRunnerTest {
             counts[url] = count(url) + 1
             return true
         }
+    }
+
+    @Test fun popupRecoveryTimeDoesNotConsumeConfiguredHoldAndStopStillCancels() {
+        var blocked = true
+        val h = Harness(holdBlocked = { blocked })
+        h.runner.start(config(2))
+        h.scheduler.advanceBy(4_000)
+        assertEquals(1, h.opened.size)
+        assertEquals(0, h.statuses.last().waitElapsedSeconds)
+        blocked = false
+        h.scheduler.advanceBy(3_200)
+        assertEquals(2, h.opened.size)
+        h.runner.stop()
+        h.scheduler.advanceBy(60_000)
+        assertEquals(2, h.opened.size)
+    }
+
+    @Test fun manualPauseDuringPopupRecoveryDoesNotDoubleChargePausedTime() {
+        var blocked = true
+        val h = Harness(holdBlocked = { blocked })
+        h.runner.start(config(2)); h.scheduler.advanceBy(1_000)
+        h.runner.togglePause(); h.scheduler.advanceBy(60_000)
+        blocked = false
+        h.runner.togglePause(); h.scheduler.advanceBy(3_200)
+        assertEquals(2, h.opened.size)
     }
 
     @Test fun sixthStartAndEveryVideoOpenFirstUrlThenWaitExactlyThreeSeconds() {
@@ -976,4 +1003,5 @@ class UrlSequenceRunnerTest {
     }
 
 }
+
 

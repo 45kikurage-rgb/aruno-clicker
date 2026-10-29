@@ -132,6 +132,13 @@ fun UrlRunnerHomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
+                OutlinedButton(
+                    onClick = { jp.aruno.clicker.automation.PopupDiagnostics.share(context) },
+                    enabled = !isRunning,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) { Text("×解除の診断を共有") }
+            }
+            item {
                 Text(
                     if (isRunning) "実行中" else "待機中",
                     style = MaterialTheme.typography.headlineSmall,
@@ -608,4 +615,5 @@ fun UrlInputScreen(
 
 private fun rangeLabel(range: IntRange): String =
     "${range.first.toString().padStart(3, '0')}–${range.last.toString().padStart(3, '0')}"
+
 

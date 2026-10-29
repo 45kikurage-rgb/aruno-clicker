@@ -1,1 +1,1 @@
-{"versionCode":27,"attempt":2,"reason":"Update API28/35 lifecycle assertions to require URL1 preparation and a full 3000ms delay; preserve screen-off cancellation"}
+{"versionCode":27,"attempt":3,"reason":"Muse popup review: contextual multi-window selector, verified dismissal, bounded attempts/hold-time recovery, overlay avoidance and local diagnostic sharing"}

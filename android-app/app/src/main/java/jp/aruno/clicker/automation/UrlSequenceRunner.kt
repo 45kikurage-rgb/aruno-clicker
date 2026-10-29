@@ -119,6 +119,7 @@ class UrlSequenceRunnerCore(
     private val resetViaFirstUrl: Boolean = false,
     private val preparationOpener: UrlOpener = opener,
     private val dailyLimitStartIndex: Int = 5,
+    private val holdBlocked: () -> Boolean = { false },
 ) {
     /** 世代トークン。開始・停止のたびに進む。 */
     var generation: Long = 0L
@@ -143,6 +144,9 @@ class UrlSequenceRunnerCore(
     private var pausedTime = 0L
     private var paused = false
     private var lastStatus: UrlRunnerStatus? = null
+    private var holdBlockedMs = 0L
+    private var lastHoldTickMs = 0L
+    private var holdWasBlocked = false
     private var hasOpenedUrl = false
     private var preparationToken = 0L
 
@@ -355,12 +359,21 @@ class UrlSequenceRunnerCore(
         val startedAtMs = if (config.waitFromForeground) nowMs() else openRequestedAtMs
         consecutiveFailures = 0
         phase = UrlRunnerPhase.HOLDING
+        holdBlockedMs = 0L
+        lastHoldTickMs = nowMs()
+        holdWasBlocked = false
         reportHold(gen, startedAtMs, totalSeconds)
     }
 
     private fun reportHold(gen: Long, startedAtMs: Long, totalSeconds: Int) {
         if (!checkCanContinue(gen)) return
-        val elapsedSeconds = ((nowMs() - startedAtMs) / 1_000L)
+        val tickNow = nowMs()
+        val blocked = runCatching { holdBlocked() }.getOrDefault(false)
+        if (!isCurrent(gen) || paused) return
+        if (blocked || holdWasBlocked) holdBlockedMs += (tickNow - lastHoldTickMs).coerceAtLeast(0L)
+        lastHoldTickMs = tickNow
+        holdWasBlocked = blocked
+        val elapsedSeconds = ((tickNow - startedAtMs - holdBlockedMs) / 1_000L)
             .coerceIn(0L, totalSeconds.toLong())
             .toInt()
         report(
@@ -552,4 +565,5 @@ class UrlSequenceRunnerCore(
         const val SPLASH_SETTLE_DELAY_MS = 1_800L
     }
 }
+
 
