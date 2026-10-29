@@ -41,6 +41,11 @@ import jp.aruno.clicker.data.PasteMode
 import jp.aruno.clicker.data.PasteReport
 import jp.aruno.clicker.data.UrlListEditState
 import jp.aruno.clicker.data.UrlRunnerConfig
+import jp.aruno.clicker.automation.AccessibilityHealthSnapshot
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import jp.aruno.clicker.data.UrlRunnerLimits
 
 /**
@@ -52,6 +57,14 @@ import jp.aruno.clicker.data.UrlRunnerLimits
  * flavor（通常版/ver.S/シェア版）では出し分けしない。
  * 実行中の停止は既存どおりフロート／通知／この画面の「停止する」から行う。
  */
+
+private val accessibilityEventFormatter = DateTimeFormatter
+    .ofPattern("M/d HH:mm", Locale.JAPAN)
+    .withZone(ZoneId.of("Asia/Tokyo"))
+
+private fun formatAccessibilityEventTime(timestamp: Long): String =
+    runCatching { accessibilityEventFormatter.format(Instant.ofEpochMilli(timestamp)) }
+        .getOrDefault("--/-- --:--")
 
 /** Bulk URL slots start at 006. The first 5 slots remain individually editable. */
 val URL_RUNNER_RANGES: List<IntRange> =
@@ -69,6 +82,7 @@ fun UrlRunnerHomeScreen(
     syncBusy: Boolean,
     syncMessage: String,
     accessibilityGranted: Boolean,
+    accessibilityHealth: AccessibilityHealthSnapshot,
     openAccessibilitySettings: () -> Unit,
     onStartVideo: () -> Unit,
     onStartFromSixthWithSplash: () -> Unit,
@@ -132,14 +146,58 @@ fun UrlRunnerHomeScreen(
             item {
                 MatrixCard {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(if (accessibilityGranted) "ユーザー補助：ON" else "ユーザー補助：OFF", fontWeight = FontWeight.Bold)
-                        if (!accessibilityGranted) {
+                        val connected = accessibilityHealth.serviceConnected
+                        Text(
+                            when {
+                                !accessibilityGranted -> "ユーザー補助：設定OFF"
+                                connected -> "ユーザー補助：設定ON ／ サービス接続中"
+                                else -> "ユーザー補助：設定ON ／ サービス未接続"
+                            },
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "動画操作：" + if (isRunning) "実行中" else "待機中",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MatrixTextMuted,
+                        )
+                        if (accessibilityGranted && !connected) {
                             Text(
-                                "設定でAru-Tikerを選び、ONにして許可してください。",
+                                "設定はONですが、サービスが接続されていません。設定画面で接続状況を確認してください。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MatrixTextMuted,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                                modifier = Modifier.padding(top = 5.dp, bottom = 4.dp),
                             )
+                        } else if (!accessibilityGranted) {
+                            Text(
+                                "設定でAru-Tikerを選び、ONにしてください。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MatrixTextMuted,
+                            )
+                        }
+                        Text(
+                            "直近の停止：" + accessibilityHealth.lastStop.ifEmpty { "記録なし" },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MatrixTextMuted,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                        var historyExpanded by rememberSaveable { mutableStateOf(false) }
+                        TextButton(onClick = { historyExpanded = !historyExpanded }) {
+                            Text(if (historyExpanded) "接続・停止履歴を閉じる" else "接続・停止履歴を表示")
+                        }
+                        if (historyExpanded) {
+                            if (accessibilityHealth.recent.isEmpty()) {
+                                Text("履歴はありません", style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                accessibilityHealth.recent.forEach { entry ->
+                                    Text(
+                                        formatAccessibilityEventTime(entry.at) + "  " +
+                                            entry.category + "：" + entry.detail,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MatrixTextMuted,
+                                        modifier = Modifier.padding(bottom = 3.dp),
+                                    )
+                                }
+                            }
                         }
                         OutlinedButton(
                             onClick = openAccessibilitySettings,
