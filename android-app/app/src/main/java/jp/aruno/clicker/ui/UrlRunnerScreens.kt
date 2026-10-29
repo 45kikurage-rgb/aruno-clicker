@@ -156,7 +156,7 @@ fun UrlRunnerHomeScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "動画操作：" + if (isRunning) "実行中" else "待機中",
+                            "動画操作：" + (if (isRunning) "実行中" else "待機中"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MatrixTextMuted,
                         )
