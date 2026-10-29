@@ -35,6 +35,9 @@ object ControlContract {
         splashBetweenUrls: Boolean = false,
     ) = sendToService(context, ACTION_START, START_MODE_URL_RUNNER, fromSixth, splashBetweenUrls)
     fun stop(context: Context) = sendToService(context, ACTION_STOP)
+    fun testGiftHome(context: Context) = sendToService(
+        context, jp.aruno.clicker.automation.AutomationContract.ACTION_TEST_GIFT_HOME,
+    )
 
     private fun sendToService(
         context: Context, action: String, startMode: String? = null,
@@ -53,3 +56,4 @@ object ControlContract {
         }
     }
 }
+

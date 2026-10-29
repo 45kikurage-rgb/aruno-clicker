@@ -1,0 +1,8 @@
+{
+  "purpose": "Verify Gift to in-app Home before next URL with element and coordinate methods, preserving pause and daily limits",
+  "versionCode": 26,
+  "sign": false,
+  "publish": false,
+  "attempt": 4,
+  "reason": "Add standalone Gift/Home test pattern with no link launches or daily views; retain shared navigator in all existing URL start patterns"
+}

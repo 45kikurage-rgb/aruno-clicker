@@ -1,0 +1,65 @@
+name: Stage tested unsigned Tiker candidate without public changes
+on:
+  push:
+    branches: [feat/tiker-gift-home-route-20261029]
+    paths: [requests/tiker-code26-unsigned-stage.json]
+permissions: {contents: read, actions: read}
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Verify the tested source run
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          q=json.load(open('requests/tiker-code26-unsigned-stage.json'))
+          u='https://api.github.com/repos/45kikurage-rgb/aruno-clicker/actions/runs/'+str(q['run_id'])
+          with urllib.request.urlopen(urllib.request.Request(u,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})) as r:d=json.load(r)
+          assert d['conclusion']=='success' and d['head_sha']==q['source_commit'] and d['path']=='.github/workflows/tiker-gift-home-test.yml'
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: tiker-code26-unsigned-tests
+          run-id: 40829535711
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Verify exact unsigned bytes and complete test reports
+        run: |
+          python - <<'PY'
+          import pathlib,hashlib,json,xml.etree.ElementTree as E
+          q=json.load(open('requests/tiker-code26-unsigned-stage.json'))
+          p=pathlib.Path('candidate/outputs/apk/atlas/release/app-atlas-release-unsigned.apk')
+          assert hashlib.sha256(p.read_bytes()).hexdigest()==q['sha256'] and p.stat().st_size==q['bytes']
+          totals={k:0 for k in ['tests','failures','errors','skipped']}
+          for p in pathlib.Path('candidate/test-results').rglob('TEST-*.xml'):
+              e=E.parse(p).getroot()
+              for k in totals:totals[k]+=int(e.attrib.get(k,0))
+          assert totals=={'tests':195,'failures':0,'errors':0,'skipped':0}
+          PY
+      - name: Preserve only a new private unsigned object
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          set -euo pipefail
+          endpoint="https://02100d2235d6f7d7f893b4217b58b902.r2.cloudflarestorage.com"
+          key="signing-candidates/tiker/code26/4a1194c0c30508db3e7a8d0f49d155599e46f3a7837a9aa5cf99840d0af9463e/unsigned.apk"
+          aws s3 cp candidate/outputs/apk/atlas/release/app-atlas-release-unsigned.apk "s3://aruno-clicker-download/$key" --endpoint-url "$endpoint" --no-progress --only-show-errors
+          aws s3 cp "s3://aruno-clicker-download/$key" candidate/readback.apk --endpoint-url "$endpoint" --no-progress --only-show-errors
+          test "$(sha256sum candidate/readback.apk | cut -d ' ' -f1)" = 4a1194c0c30508db3e7a8d0f49d155599e46f3a7837a9aa5cf99840d0af9463e
+          python - <<'PY'
+          import json,os,pathlib
+          q=json.load(open('requests/tiker-code26-unsigned-stage.json'));q.update(stage_run=os.environ['GITHUB_RUN_ID'],private_readback_verified=True,published=False)
+          pathlib.Path('unsigned-stage-receipt.json').write_text(json.dumps(q,indent=2));print(json.dumps(q))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiker-code26-unsigned-private-stage
+          path: unsigned-stage-receipt.json
+          retention-days: 30

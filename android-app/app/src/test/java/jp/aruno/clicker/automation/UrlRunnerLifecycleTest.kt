@@ -34,6 +34,9 @@ class UrlRunnerLifecycleTest {
     private val url = "https://lite.tiktok.com/t/AAA/"
 
     @Before fun setup() {
+        // This fixture verifies the legacy Activity lifecycle; route navigation
+        // is tested separately against actual node selectors and navigator ports.
+        jp.aruno.clicker.data.GiftHomeModeStore(app).setMode(jp.aruno.clicker.data.GiftHomeMode.OFF)
         AutomationRuntime.stop(app)
         shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(true)
         shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(false)
@@ -87,6 +90,58 @@ class UrlRunnerLifecycleTest {
                 }
             })
         }
+    }
+
+    @Test fun standaloneTestNeedsNoSavedUrlsAndNeverRecordsViewsOrOpensALink() {
+        jp.aruno.clicker.data.GiftHomeModeStore(app).setMode(jp.aruno.clicker.data.GiftHomeMode.AUTO)
+        app.getSharedPreferences("aruno_clicker_url_runner", Context.MODE_PRIVATE).edit().clear().commit()
+        java.io.File(app.filesDir, "url-runner").deleteRecursively()
+        val before = UrlRunnerRepository(app).loadForStart()
+        assertNull(before)
+        val views = jp.aruno.clicker.data.DailyVideoViewStore(app)
+        val count = views.count(url)
+        val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            .setPackage(AutomationConfig.TARGET_PACKAGES.first())
+        shadowOf(app.packageManager).addResolveInfoForIntent(launch, ResolveInfo().apply {
+            activityInfo = ActivityInfo().apply {
+                packageName = AutomationConfig.TARGET_PACKAGES.first()
+                name = "TargetActivity"
+            }
+        })
+        service.startGiftHomeTest()
+        val opened = shadowOf(app).nextStartedActivity
+        assertNotNull(opened)
+        assertNull(opened.data)
+        assertEquals(Intent.ACTION_MAIN, opened.action)
+        assertTrue(AutomationRuntime.snapshot().requested)
+        assertFalse(AutomationRuntime.snapshot().urlRunnerActive)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(12))
+        assertFalse(AutomationRuntime.snapshot().requested)
+        assertTrue(AutomationRuntime.snapshot().message.startsWith("テスト失敗"))
+        assertEquals(0, openedCount())
+        assertEquals(count, views.count(url))
+        assertEquals(before, UrlRunnerRepository(app).loadForStart())
+    }
+
+    @Test fun standaloneTestOffAndLockedDeviceDoNotLaunchAnything() {
+        service.startGiftHomeTest()
+        assertFalse(AutomationRuntime.snapshot().requested)
+        assertEquals(0, openedCount())
+        jp.aruno.clicker.data.GiftHomeModeStore(app).setMode(jp.aruno.clicker.data.GiftHomeMode.AUTO)
+        shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+        service.startGiftHomeTest()
+        assertFalse(AutomationRuntime.snapshot().requested)
+        assertTrue(AutomationRuntime.snapshot().message.contains("画面ロック"))
+        assertEquals(0, openedCount())
+    }
+
+    @Test fun standaloneTestCannotReplaceAnExistingRun() {
+        start()
+        openedCount()
+        val before = AutomationRuntime.snapshot()
+        service.startGiftHomeTest()
+        assertEquals(before, AutomationRuntime.snapshot())
+        assertEquals(0, openedCount())
     }
 
     @Test fun sixthStartOpensSlotSixWithoutChangingSavedDataset() {
@@ -255,3 +310,4 @@ class UrlRunnerLifecycleTest {
         controller.destroy()
     }
 }
+

@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "operation": "export-existing-encrypted",
+  "source": "existing CI Secrets",
+  "apkSigning": false,
+  "publish": false,
+  "reason": "Preserve existing signer in two private repositories before user-requested update; never rotate the APK key"
+}

@@ -427,6 +427,62 @@ class ArunoAccessibilityService : AccessibilityService() {
         urlSequenceRunner?.updateSplashFrequency(prefs.selectedFrequency(prefs.isEnabled()))
     }
 
+    /** Standalone comparison test: same navigator, no URL runner or view counter. */
+    fun startGiftHomeTest() {
+        if (AutomationRuntime.snapshot().requested) return
+        val mode = jp.aruno.clicker.data.GiftHomeModeStore(this).mode()
+        if (mode == jp.aruno.clicker.data.GiftHomeMode.OFF) {
+            AutomationRuntime.stop(this, "テストする方法（自動・要素のみ・位置のみ）を選んでください")
+            return
+        }
+        if (!urlRunnerDeviceReady()) {
+            AutomationRuntime.stop(this, "画面ロック中はテストできません")
+            return
+        }
+        stopAutomation("ギフト→ホームのテストを開始します")
+        activeConfig = configStore.load().sanitized()
+        val generation = automationGeneration
+        val scheduler = UrlRunnerHandlerScheduler()
+        urlSequenceScheduler = scheduler
+        AutomationRuntime.requestStart(this, 0L, AutomationContract.START_MODE_GIFT_HOME_TEST)
+        AutomationRuntime.markSessionActive(this)
+        if (activeConfig.keepScreenAwake) acquireWakeLock(0L)
+        if (!launchTargetApp(activeConfig.targetPackage)) {
+            stopAutomation("テスト失敗：TikTok Liteを起動できませんでした")
+            return
+        }
+        AutomationRuntime.markWaiting(this, "テスト：TikTok Liteの表示を確認しています")
+        val deadline = android.os.SystemClock.elapsedRealtime() + TARGET_LAUNCH_TIMEOUT_MS
+        var stableSince: Long? = null
+        fun active(): Boolean {
+            if (!isSessionActive(generation)) return false
+            if (urlRunnerDeviceReady()) return true
+            stopAutomation("画面ロック・画面OFFのためテストを停止しました")
+            return false
+        }
+        fun checkForeground() {
+            if (!active()) return
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now >= deadline) {
+                stopAutomation("テスト失敗：TikTok Liteの表示を確認できませんでした")
+                return
+            }
+            if (isTargetForeground()) {
+                if (stableSince == null) stableSince = now
+                if (now - stableSince!! >= TARGET_FOREGROUND_STABLE_MS) {
+                    GiftHomeNavigator(AndroidGiftHomePort(this, ::dispatchTap), mode) {
+                        AutomationRuntime.markWaiting(this, "テスト：$it")
+                    }.prepare(scheduler, ::active) { ready ->
+                        stopAutomation(if (ready) "テスト成功：ギフト→ホーム" else "テスト失敗：ギフト→ホームを確認できませんでした")
+                    }
+                    return
+                }
+            } else stableSince = null
+            scheduler.schedule(FOREGROUND_CHECK_INTERVAL_MS) { checkForeground() }
+        }
+        scheduler.schedule(0L) { checkForeground() }
+    }
+
     private inner class UrlRunnerHandlerScheduler : DelayScheduler {
         private val pending = mutableSetOf<Runnable>()
 
@@ -522,6 +578,11 @@ class ArunoAccessibilityService : AccessibilityService() {
         urlSequenceScheduler = scheduler
         var successfullyOpenedUrls = 0
         var splashReadyForNextUrl = false
+        var giftHomeReadyForNextUrl = false
+        val giftHomeMode = jp.aruno.clicker.data.GiftHomeModeStore(this).mode()
+        val giftHomeNavigator = GiftHomeNavigator(AndroidGiftHomePort(this, ::dispatchTap), giftHomeMode) {
+            AutomationRuntime.markWaiting(this, it)
+        }
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
                 if (!urlRunnerDeviceReady()) false
@@ -530,9 +591,10 @@ class ArunoAccessibilityService : AccessibilityService() {
                     // for subsequent links. After a recovery splash already
                     // recreated the task, deliver the next link to that fresh
                     // instance instead of immediately clearing it again.
-                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl
-                    val opened = openTargetUrl(url, resetTask = resetTask)
+                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl && !giftHomeReadyForNextUrl
+                    val opened = openTargetUrl(url, resetTask = resetTask, preserveTask = giftHomeReadyForNextUrl)
                     splashReadyForNextUrl = false
+                    giftHomeReadyForNextUrl = false
                     if (opened) successfullyOpenedUrls += 1
                     opened
                 }
@@ -548,6 +610,12 @@ class ArunoAccessibilityService : AccessibilityService() {
             splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
             dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
+            routePreparer = if (giftHomeMode == jp.aruno.clicker.data.GiftHomeMode.OFF) null else UrlRoutePreparer { queue, active, done ->
+                giftHomeNavigator.prepare(queue, active) { ready ->
+                    giftHomeReadyForNextUrl = ready
+                    done(ready)
+                }
+            },
             canContinue = { urlRunnerDeviceReady() },
             foregroundChecker = UrlRunnerForegroundChecker(),
             scheduler = scheduler,
@@ -1421,14 +1489,16 @@ class ArunoAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun openTargetUrl(url: String, resetTask: Boolean = false): Boolean {
+    private fun openTargetUrl(url: String, resetTask: Boolean = false, preserveTask: Boolean = false): Boolean {
         val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
         val candidates = listOf(activeConfig.targetPackage) + AutomationConfig.TARGET_PACKAGES
         candidates.distinct().forEach { packageName ->
             // For successive URL-runner entries, do not reuse the already-open
             // Activity with CLEAR_TOP: TikTok Lite may leave the previous video
             // in place even though startActivity() succeeds.
-            val flags = Intent.FLAG_ACTIVITY_NEW_TASK or if (resetTask) {
+            val flags = Intent.FLAG_ACTIVITY_NEW_TASK or if (preserveTask) {
+                0 // Gift→Home already prepared this task; deliver the new URL normally.
+            } else if (resetTask) {
                 Intent.FLAG_ACTIVITY_CLEAR_TASK
             } else {
                 Intent.FLAG_ACTIVITY_CLEAR_TOP

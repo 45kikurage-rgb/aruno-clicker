@@ -1,0 +1,24 @@
+name: Encrypt existing Tiker signer for shared-vault preservation
+on:
+  push:
+    branches: [feat/tiker-gift-home-route-20261029]
+    paths: [requests/tiker-signer-export.json]
+permissions: {contents: read}
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - run: python -m pip install 'cryptography==46.0.2'
+      - name: Encrypt the same existing key without signing any APK
+        env:
+          ARUNO_PRIVATE_KEY_PEM: ${{ secrets.ARUNO_PRIVATE_KEY_PEM }}
+          ARUNO_SIGNING_PASSWORD: ${{ secrets.ARUNO_SIGNING_PASSWORD }}
+        run: python signing/export-existing-tiker.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiker-existing-signer-encrypted-export
+          path: encrypted-export/
+          retention-days: 7

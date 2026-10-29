@@ -11,6 +11,16 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28, 35])
 class ControlContractTest {
+    @Test fun giftHomeTestUsesDedicatedCommandWithoutUrlStartFlags() {
+        val app = RuntimeEnvironment.getApplication()
+        ControlContract.testGiftHome(app)
+        val intent = shadowOf(app).nextStartedService
+        assertEquals(jp.aruno.clicker.automation.AutomationContract.ACTION_TEST_GIFT_HOME, intent.action)
+        assertEquals(ControlContract.AUTOMATION_SERVICE, intent.component!!.className)
+        assertFalse(intent.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
+        assertFalse(intent.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, true))
+        assertNull(intent.getStringExtra(ControlContract.EXTRA_START_MODE))
+    }
     @Test fun sixthButtonCommandCarriesOneRunSelectionToExistingService() {
         val app = RuntimeEnvironment.getApplication()
         ControlContract.startUrlRunner(app, true)
@@ -50,3 +60,4 @@ class ControlContractTest {
         assertFalse(shadowOf(app).nextStartedService.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
     }
 }
+

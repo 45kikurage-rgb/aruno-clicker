@@ -77,6 +77,17 @@ open class AutomationOverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            AutomationContract.ACTION_TEST_GIFT_HOME -> {
+                if (!AutomationRuntime.snapshot().requested) {
+                    val service = ArunoAccessibilityService.instance
+                    if (service == null) AutomationRuntime.stop(this, "ユーザー補助をONにしてからテストしてください")
+                    else {
+                        if (configStore.load().floatingController) showOverlay()
+                        service.startGiftHomeTest()
+                    }
+                    refreshOverlay()
+                }
+            }
             AutomationContract.ACTION_STOP_AUTOMATION -> requestStop()
             AutomationContract.ACTION_CLOSE_OVERLAY -> {
                 requestStop()
@@ -402,8 +413,8 @@ open class AutomationOverlayService : Service() {
         val (fallbackTitle, fallbackDetail) = splitStatus(state.message)
         val showUrl = state.requested && state.urlRunnerActive && state.urlRunnerIndex >= 0
         val statusTitle = if (showUrl) "URL NO.${state.urlRunnerIndex + 1} " +
-            (if (state.urlRunnerPaused) "一時停止" else "再生") else fallbackTitle
-        val statusDetail = if (showUrl) "" else fallbackDetail
+            (if (state.urlRunnerPaused) "一時停止" else if (state.urlRunnerPreparing) "準備" else "再生") else fallbackTitle
+        val statusDetail = if (showUrl && !state.urlRunnerPreparing) "" else fallbackDetail
         statusTitleText?.apply {
             text = statusTitle
             maxLines = 1

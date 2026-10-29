@@ -16,6 +16,7 @@ data class AutomationSnapshot(
     val urlRunnerHasNext: Boolean = false,
     val urlRunnerIndex: Int = -1,
     val urlRunnerPaused: Boolean = false,
+    val urlRunnerPreparing: Boolean = false,
 ) {
     val elapsedMs: Long
         get() = if (startedAtElapsed <= 0L) 0L else (SystemClock.elapsedRealtime() - startedAtElapsed).coerceAtLeast(0L)
@@ -42,6 +43,7 @@ object AutomationRuntime {
     @Volatile private var urlRunnerHasNext = false
     @Volatile private var urlRunnerIndex = -1
     @Volatile private var urlRunnerPaused = false
+    @Volatile private var urlRunnerPreparing = false
 
     fun requestStart(
         context: Context,
@@ -59,6 +61,7 @@ object AutomationRuntime {
         urlRunnerHasNext = false
         urlRunnerIndex = -1
         urlRunnerPaused = false
+        urlRunnerPreparing = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_REQUESTED, true)
             .putBoolean(KEY_PENDING_START, true)
@@ -117,6 +120,7 @@ object AutomationRuntime {
         message = PresentationText.sanitize(status.message)
         urlRunnerIndex = status.index
         urlRunnerPaused = status.phase == UrlRunnerPhase.PAUSED
+        urlRunnerPreparing = status.phase == UrlRunnerPhase.PREPARING_ROUTE
         urlRunnerSecondsToNext = if (status.phase == UrlRunnerPhase.HOLDING || urlRunnerPaused) {
             (status.waitTotalSeconds - status.waitElapsedSeconds).coerceAtLeast(0)
         } else null
@@ -139,6 +143,7 @@ object AutomationRuntime {
         urlRunnerActive = false
         urlRunnerIndex = -1
         urlRunnerPaused = false
+        urlRunnerPreparing = false
         urlRunnerSecondsToNext = null
         urlRunnerHasNext = false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -161,6 +166,7 @@ object AutomationRuntime {
         urlRunnerHasNext = urlRunnerHasNext,
         urlRunnerIndex = urlRunnerIndex,
         urlRunnerPaused = urlRunnerPaused,
+        urlRunnerPreparing = urlRunnerPreparing,
     )
 
     private fun notifyChanged(context: Context) {

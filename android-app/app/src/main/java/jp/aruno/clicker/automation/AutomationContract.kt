@@ -9,6 +9,7 @@ object AutomationContract {
     const val ACTION_AUTOMATION_STATE_CHANGED = "jp.aruno.clicker.action.STATE_CHANGED"
     const val ACTION_ACCESSIBILITY_DIAGNOSTICS_UPDATED = "jp.aruno.clicker.action.ACCESSIBILITY_HEALTH_UPDATED"
     const val ACTION_RUN_SCHEDULE = "jp.aruno.clicker.action.RUN_SCHEDULE"
+    const val ACTION_TEST_GIFT_HOME = "jp.aruno.clicker.action.TEST_GIFT_HOME"
 
     const val EXTRA_DURATION_MS = "duration_ms"
     const val EXTRA_INTERVAL_MS = "interval_ms"
@@ -27,4 +28,6 @@ object AutomationContract {
 
     /** URL順次展開（URLランナー）の開始モード。従来モードとは開始経路を分離する。 */
     const val START_MODE_URL_RUNNER = "url-runner"
+    const val START_MODE_GIFT_HOME_TEST = "gift-home-test"
 }
+

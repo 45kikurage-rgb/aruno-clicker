@@ -49,6 +49,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import jp.aruno.clicker.data.UrlRunnerLimits
 import jp.aruno.clicker.data.DailyVideoViewStore
+import jp.aruno.clicker.data.GiftHomeMode
+import jp.aruno.clicker.data.GiftHomeModeStore
 
 /**
  * URLランナーの画面群。
@@ -93,11 +95,15 @@ fun UrlRunnerHomeScreen(
     onDownload: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenLegacySettings: () -> Unit,
+    onTestGiftHome: () -> Unit,
 ) {
     val context = LocalContext.current
     val dailyStore = remember(context) { DailyVideoViewStore(context) }
     var dailyLimit by remember { mutableStateOf(dailyStore.limit()) }
     var dailyLimitError by remember { mutableStateOf(false) }
+    val giftHomeStore = remember(context) { GiftHomeModeStore(context) }
+    var giftHomeMode by remember { mutableStateOf(giftHomeStore.mode()) }
+    var giftHomeError by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -168,6 +174,38 @@ fun UrlRunnerHomeScreen(
                     else "途中停止も1回に含みます。日本時間0時に日付が切り替わります。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (dailyLimitError) DangerRed else MatrixTextMuted,
+                )
+            }
+            item {
+                Text("次のURL前：ギフト→ホーム", fontWeight = FontWeight.Bold)
+                GiftHomeMode.entries.chunked(2).forEach { modes ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        modes.forEach { mode ->
+                            OutlinedButton(
+                                onClick = {
+                                    giftHomeError = !giftHomeStore.setMode(mode)
+                                    if (!giftHomeError) giftHomeMode = mode
+                                },
+                                enabled = !isRunning,
+                                modifier = Modifier.weight(1f).height(52.dp),
+                            ) { Text((if (giftHomeMode == mode) "✓ " else "") + mode.label) }
+                        }
+                    }
+                }
+                Text(
+                    if (giftHomeError) "設定を保存できませんでした。" else "自動は要素→位置の順。この端末に保存し、次の開始から反映します。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (giftHomeError) DangerRed else MatrixTextMuted,
+                )
+                OutlinedButton(
+                    onClick = onTestGiftHome,
+                    enabled = !isRunning && giftHomeMode != GiftHomeMode.OFF,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                ) { Text("テストパターン：ギフト→ホーム") }
+                Text(
+                    "選択した方法でホームに戻るまでを確認して終了します。次のURLは開かず、当日の回数も増やしません。通常開始・6番以降の開始にも同じ方法を使います。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MatrixTextMuted,
                 )
             }
             item {

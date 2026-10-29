@@ -65,6 +65,7 @@ enum class UrlRunnerPhase {
     IDLE,
     OPENING,
     WAITING_FOREGROUND,
+    PREPARING_ROUTE,
     HOLDING,
     PAUSED,
     SKIPPED,
@@ -114,6 +115,7 @@ class UrlSequenceRunnerCore(
     private val canContinue: () -> Boolean = { true },
     private val dailyViews: DailyVideoViews? = null,
     private val dailyLimit: Int = 2,
+    private val routePreparer: UrlRoutePreparer? = null,
 ) {
     /** 世代トークン。開始・停止のたびに進む。 */
     var generation: Long = 0L
@@ -138,6 +140,8 @@ class UrlSequenceRunnerCore(
     private var pausedTime = 0L
     private var paused = false
     private var lastStatus: UrlRunnerStatus? = null
+    private var hasOpenedUrl = false
+    private var preparationToken = 0L
 
     fun isPaused(): Boolean = paused
 
@@ -200,6 +204,7 @@ class UrlSequenceRunnerCore(
         completedLinksSinceSplash = 0
         paused = false
         pausedTime = 0L
+        hasOpenedUrl = false
         tasks.resume()
         generation += 1L
         openCurrent(generation)
@@ -245,6 +250,29 @@ class UrlSequenceRunnerCore(
             index += 1
             scanned += 1
         }
+        val preparer = routePreparer
+        if (preparer != null && hasOpenedUrl) {
+            val preparation = ++preparationToken
+            phase = UrlRunnerPhase.PREPARING_ROUTE
+            report(phase, index, 0, 0, "次のURL前にギフト→ホームを確認しています")
+            tasks.schedule(0) {
+                if (!checkCanContinue(gen)) return@schedule
+                runCatching {
+                    preparer.prepare(tasks, { checkCanContinue(gen) }) { ready ->
+                        tasks.schedule(0) prepared@{
+                            if (!checkCanContinue(gen) || preparation != preparationToken || phase != UrlRunnerPhase.PREPARING_ROUTE) return@prepared
+                            if (!ready) fail(gen, "ギフト→ホームを確認できないため停止しました。フロートの位置や切替方法を確認してください")
+                            else launchCurrent(gen)
+                        }
+                    }
+                }.onFailure { fail(gen, "ギフト→ホームの操作に失敗したため停止しました") }
+            }
+        } else launchCurrent(gen)
+    }
+
+    private fun launchCurrent(gen: Long) {
+        if (!checkCanContinue(gen)) return
+        val config = snapshot ?: return
         val url = config.urls[index]
         val token = ++visitToken
         currentDailyCount = 0
@@ -261,6 +289,7 @@ class UrlSequenceRunnerCore(
             skipFailedUrl(gen, "起動失敗")
             return
         }
+        hasOpenedUrl = true
         phase = UrlRunnerPhase.WAITING_FOREGROUND
         report(
             phase, index,

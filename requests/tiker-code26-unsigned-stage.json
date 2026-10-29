@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "run_id": 40829535711,
+  "source_commit": "e0166dc7cacdc1000ff85ccfdb3fd016859bee60",
+  "sha256": "4a1194c0c30508db3e7a8d0f49d155599e46f3a7837a9aa5cf99840d0af9463e",
+  "bytes": 14777184,
+  "key": "signing-candidates/tiker/code26/4a1194c0c30508db3e7a8d0f49d155599e46f3a7837a9aa5cf99840d0af9463e/unsigned.apk",
+  "publish": false
+}
