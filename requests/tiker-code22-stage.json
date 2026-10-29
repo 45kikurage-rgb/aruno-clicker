@@ -1,0 +1,10 @@
+{
+  "verifyRun": 40793001762,
+  "sourceCommit": "cf1dca25c1e882d8403bc45decbc5e5a40876306",
+  "apkSha256": "98ffc14a026e098faae7e5af0584ac88bc45b98dea789f7615da73af5db2635f",
+  "versionCode": 22,
+  "authorizedBy": "2026-10-29 user: アプリ側の版が前のまま; saved-datetime display in native Android",
+  "operation": "immutable-private-stage-only",
+  "expectedCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "publicAliasesChanged": false
+}
