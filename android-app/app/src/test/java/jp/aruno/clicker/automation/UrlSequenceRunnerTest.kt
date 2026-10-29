@@ -66,7 +66,6 @@ class UrlSequenceRunnerTest {
         dailyViews: DailyVideoViews? = null,
         dailyLimit: Int = 2,
         routePreparer: UrlRoutePreparer? = null,
-        resetViaFirstUrl: Boolean = false,
         dailyLimitStartIndex: Int = 0,
         holdBlocked: () -> Boolean = { false },
     ) {
@@ -102,7 +101,6 @@ class UrlSequenceRunnerTest {
             dailyViews = dailyViews,
             dailyLimit = dailyLimit,
             routePreparer = routePreparer,
-            resetViaFirstUrl = resetViaFirstUrl,
             dailyLimitStartIndex = dailyLimitStartIndex,
             holdBlocked = holdBlocked,
         )
@@ -144,74 +142,72 @@ class UrlSequenceRunnerTest {
         assertEquals(2, h.opened.size)
     }
 
-    @Test fun sixthStartAndEveryVideoOpenFirstUrlThenWaitExactlyThreeSeconds() {
+    @Test fun sixthStartOpensTargetImmediatelyAndNeverInsertsFirstUrl() {
         val c = config(7).copy(startIndex = 5)
         val history = MemoryViews()
-        val h = Harness(resetViaFirstUrl = true, dailyLimitStartIndex = 5, dailyViews = history,
-            routePreparer = UrlRoutePreparer { _, _, _ -> error("Gift must not be used") })
+        val h = Harness(dailyLimitStartIndex = 5, dailyViews = history)
         h.runner.start(c)
-        assertEquals(listOf(c.urls[0]), h.opened)
-        h.scheduler.advanceBy(2_999)
-        assertEquals(listOf(c.urls[0]), h.opened)
-        assertTrue(history.counts.isEmpty())
-        h.scheduler.advanceBy(1)
-        assertEquals(listOf(c.urls[0], c.urls[5]), h.opened)
+        assertEquals(listOf(c.urls[5]), h.opened)
         assertEquals(1, history.count(c.urls[5]))
-        h.scheduler.advanceBy(5_000)
-        assertEquals(listOf(c.urls[0], c.urls[5], c.urls[0]), h.opened)
-        h.scheduler.advanceBy(3_000)
-        assertEquals(listOf(c.urls[0], c.urls[5], c.urls[0], c.urls[6]), h.opened)
+        h.scheduler.advanceBy(4_999)
+        assertEquals(listOf(c.urls[5]), h.opened)
+        h.scheduler.advanceBy(1)
+        assertEquals(listOf(c.urls[5], c.urls[6]), h.opened)
+        assertEquals(1, history.count(c.urls[6]))
         assertEquals(0, history.count(c.urls[0]))
+        assertTrue(h.statuses.none { it.phase == UrlRunnerPhase.PREPARING_ROUTE })
         h.scheduler.advanceBy(5_000)
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
-        assertEquals(4, h.opened.size)
+        assertEquals(2, h.opened.size)
     }
 
     @Test fun firstFiveIgnoreOldCountsAndNeverWriteHistory() {
         val c = config(5)
         val history = MemoryViews().also { it.writable = false }
         c.urls.forEach { history.counts[it] = 3 }
-        val h = Harness(resetViaFirstUrl = true, dailyLimitStartIndex = 5, dailyViews = history)
+        val h = Harness(dailyLimitStartIndex = 5, dailyViews = history)
         h.runner.start(c);h.scheduler.advanceBy(15_000)
         assertEquals(c.urls, h.opened)
         c.urls.forEach { assertEquals(3, history.count(it)) }
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
     }
 
-    @Test fun pauseStopAndLockDuringPreparationNeverOpenVideoEarlyOrAfterCancellation() {
+    @Test fun sixthStartPauseStopAndLockNeverInsertFirstUrlOrOpenAfterCancellation() {
         for (stop in listOf(true, false)) {
-            val c = config(6).copy(startIndex = 5)
-            val h = Harness(resetViaFirstUrl = true, dailyLimitStartIndex = 5)
-            h.runner.start(c);h.scheduler.advanceBy(1_000);h.runner.togglePause()
+            val c = config(7).copy(startIndex = 5)
+            val h = Harness(dailyLimitStartIndex = 5)
+            h.runner.start(c); h.scheduler.advanceBy(1_000); h.runner.togglePause()
             h.scheduler.advanceBy(60_000)
-            assertEquals(listOf(c.urls[0]), h.opened)
-            h.runner.togglePause();h.scheduler.advanceBy(1_999)
-            assertEquals(listOf(c.urls[0]), h.opened)
+            assertEquals(listOf(c.urls[5]), h.opened)
+            h.runner.togglePause(); h.scheduler.advanceBy(3_999)
+            assertEquals(listOf(c.urls[5]), h.opened)
             if (stop) h.runner.stop() else h.allowed = false
             h.scheduler.advanceBy(60_000)
-            assertEquals(listOf(c.urls[0]), h.opened)
+            assertEquals(listOf(c.urls[5]), h.opened)
         }
     }
 
-    @Test fun missingOrFailedPreparationStopsAndCappedVideoDoesNotOpenPreparationUrl() {
+    @Test fun sixthStartDoesNotRequireFirstUrlAndCappedVideoSkipsDirectlyToNext() {
         val c = config(7).copy(startIndex = 5)
         for (missing in listOf(true, false)) {
-            val h = Harness(resetViaFirstUrl = true, failUrls = setOf(c.urls[0]))
+            val h = Harness(failUrls = setOf(c.urls[0]), dailyLimitStartIndex = 5)
             h.runner.start(if (missing) c.copy(urls = c.urls.toMutableList().also { it[0] = "" }) else c)
-            h.scheduler.advanceBy(60_000)
-            assertTrue(h.opened.isEmpty())
-            assertEquals(UrlRunnerPhase.FAILED, h.runner.phase)
+            assertEquals(listOf(c.urls[5]), h.opened)
+            h.scheduler.advanceBy(10_000)
+            assertEquals(listOf(c.urls[5], c.urls[6]), h.opened)
+            assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
         }
         val history = MemoryViews().also { it.counts[c.urls[5]] = 2 }
-        val h = Harness(resetViaFirstUrl = true, dailyLimitStartIndex = 5, dailyViews = history)
-        h.runner.start(c);h.scheduler.advanceBy(3_000)
-        assertEquals(listOf(c.urls[0], c.urls[6]), h.opened)
+        val h = Harness(dailyLimitStartIndex = 5, dailyViews = history)
+        h.runner.start(c)
+        assertEquals(listOf(c.urls[6]), h.opened)
+        assertEquals(0, history.count(c.urls[0]))
     }
 
     @Test fun loopFinishesWhenVideosCappedEvenThoughUtilityLinksAreUnlimited() {
         val c = config(6).copy(startIndex = 5)
         val history = MemoryViews()
-        val h = Harness(resetViaFirstUrl = true, dailyLimitStartIndex = 5,
+        val h = Harness(dailyLimitStartIndex = 5,
             dailyViews = history, loopMode = LoopMode.LOOP)
         h.runner.start(c);h.scheduler.advanceBy(100_000)
         assertEquals(2, history.count(c.urls[5]))

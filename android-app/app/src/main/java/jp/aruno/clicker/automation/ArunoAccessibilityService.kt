@@ -596,7 +596,6 @@ class ArunoAccessibilityService : AccessibilityService() {
         urlSequenceScheduler = scheduler
         var successfullyOpenedUrls = 0
         var splashReadyForNextUrl = false
-        var firstUrlReadyForNextUrl = false
         val runner = UrlSequenceRunnerCore(
             opener = UrlOpener { url ->
                 resetUrlPopupVideo()
@@ -606,10 +605,9 @@ class ArunoAccessibilityService : AccessibilityService() {
                     // for subsequent links. After a recovery splash already
                     // recreated the task, deliver the next link to that fresh
                     // instance instead of immediately clearing it again.
-                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl && !firstUrlReadyForNextUrl
-                    val opened = openTargetUrl(url, resetTask = resetTask, preserveTask = firstUrlReadyForNextUrl)
+                    val resetTask = successfullyOpenedUrls > 0 && !splashReadyForNextUrl
+                    val opened = openTargetUrl(url, resetTask = resetTask)
                     splashReadyForNextUrl = false
-                    firstUrlReadyForNextUrl = false
                     if (opened) successfullyOpenedUrls += 1
                     opened
                 }
@@ -625,11 +623,6 @@ class ArunoAccessibilityService : AccessibilityService() {
             splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
             dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
-            resetViaFirstUrl = true,
-            preparationOpener = UrlOpener { url ->
-                if (!urlRunnerDeviceReady()) false
-                else openTargetUrl(url, preserveTask = true).also { firstUrlReadyForNextUrl = it }
-            },
             canContinue = { urlRunnerDeviceReady() },
             holdBlocked = { dismissUrlRunnerPopupIfPresent() },
             foregroundChecker = UrlRunnerForegroundChecker(),

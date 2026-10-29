@@ -116,8 +116,6 @@ class UrlSequenceRunnerCore(
     private val dailyViews: DailyVideoViews? = null,
     private val dailyLimit: Int = 2,
     private val routePreparer: UrlRoutePreparer? = null,
-    private val resetViaFirstUrl: Boolean = false,
-    private val preparationOpener: UrlOpener = opener,
     private val dailyLimitStartIndex: Int = 5,
     private val holdBlocked: () -> Boolean = { false },
 ) {
@@ -262,25 +260,8 @@ class UrlSequenceRunnerCore(
             index += 1
             scanned += 1
         }
-        if (resetViaFirstUrl && index >= 5) {
-            val firstUrl = config.urls.firstOrNull().orEmpty()
-            if (firstUrl.isBlank()) {
-                fail(gen, "1番URLが未登録です。1番URLを登録してから開始してください")
-                return
-            }
-            phase = UrlRunnerPhase.PREPARING_ROUTE
-            report(phase, index, 0, 0, "URL NO.1で準備中 → 3秒後にURL NO.${index + 1}を開きます")
-            val opened = runCatching { preparationOpener.open(firstUrl) }.getOrDefault(false)
-            if (!checkCanContinue(gen)) return
-            if (!opened) {
-                fail(gen, "準備用の1番URLを開けないため停止しました")
-                return
-            }
-            tasks.schedule(FIRST_URL_DELAY_MS) { launchCurrent(gen) }
-            return
-        }
         val preparer = routePreparer
-        if (!resetViaFirstUrl && preparer != null && hasOpenedUrl) {
+        if (preparer != null && hasOpenedUrl) {
             val preparation = ++preparationToken
             phase = UrlRunnerPhase.PREPARING_ROUTE
             report(phase, index, 0, 0, "次のURL前にギフト→ホームを確認しています")
@@ -558,7 +539,6 @@ class UrlSequenceRunnerCore(
     companion object {
         /** 待機中の状態更新間隔（既存 holdUrlWithCountdown の1秒刻み表示に合わせる）。 */
         const val TICK_MS = 200L
-        const val FIRST_URL_DELAY_MS = 3_000L
         const val FAILED_LINK_SKIP_DELAY_MS = 650L
         // Allow the app's normal launch/splash screen to settle before the
         // next deep link, without waiting indefinitely for a visual logo.
