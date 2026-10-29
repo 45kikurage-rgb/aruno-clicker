@@ -1,1 +1,1 @@
-{"versionCode":28,"attempt":1,"reason":"User explicitly requests code28 removing URL1 insertion and its 3-second delay; preserve popup close, counts and settings"}
+{"versionCode":28,"attempt":2,"reason":"Update Android service and overlay lifecycle assertions to expect direct URL6/7 rather than removed URL1 preparation; initial run compiled app but obsolete expectations failed"}
