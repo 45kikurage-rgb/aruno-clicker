@@ -1,0 +1,14 @@
+{
+  "release": "Aru-Tiker 0.6.7/code24",
+  "versionCode": 24,
+  "action": "verify-and-sign-only",
+  "purpose": "Correct ON-but-stopped: ignore transient accessibility onInterrupt, show connected status and bounded stop diagnostics",
+  "authorizedBy": "2026-10-29 user confirmed Android user accessibility switch remains ON despite stops and requested all recommended fixes",
+  "signingCertificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "retains": "code23 1-5 splash frequency, six-start mode, local URLs, same package and data",
+  "productionChange": false,
+  "attempt": 3,
+  "reason": "151 Android tests passed on prior run. Final best-effort diagnostic log guards prevent disk errors from affecting service connection or stop safety. Reverify signed exact source SHA.",
+  "testsRun": 40799633398,
+  "priorSuccessfulRun": 40800343909
+}

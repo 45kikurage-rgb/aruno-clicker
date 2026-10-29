@@ -161,10 +161,46 @@ class UrlRunnerLifecycleTest {
         assertTrue(during.urlRunnerHasNext)
         assertNotNull(during.urlRunnerSecondsToNext)
         assertTrue(during.urlRunnerSecondsToNext!! in 0..1)
-        service.onInterrupt()
+        service.stopAutomation("停止しました")
         val stopped = AutomationRuntime.snapshot()
         assertFalse(stopped.urlRunnerActive)
         assertNull(stopped.urlRunnerSecondsToNext)
+    }
+
+    @Test fun briefAccessibilityInterruptionDoesNotStopVideoSequence() {
+        start()
+        assertEquals(url, shadowOf(app).nextStartedActivity.data.toString())
+        service.onInterrupt()
+        assertTrue(AutomationRuntime.snapshot().requested)
+        assertTrue(AutomationRuntime.snapshot().urlRunnerActive)
+        assertEquals(0, openedCount())
+        assertTrue(AccessibilityDiagnostics(app).history().any { it.category == "中断通知" })
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2_500))
+        assertEquals("https://lite.tiktok.com/t/BBB/",
+            shadowOf(app).nextStartedActivity.data.toString())
+    }
+
+    @Test fun realUnbindStopsPlaybackAndCancelsPendingLinks() {
+        start()
+        openedCount()
+        service.onUnbind(null)
+        assertFalse(AutomationRuntime.snapshot().requested)
+        assertNull(ArunoAccessibilityService.instance)
+        val health = AccessibilityDiagnostics(app).snapshot()
+        assertTrue(health.lastStop.contains("切断"))
+        assertTrue(health.recent.any { it.category == "切断" })
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(12))
+        assertEquals(0, openedCount())
+    }
+
+    @Test fun unbindThenDestroyKeepsOriginalStopReason() {
+        start()
+        openedCount()
+        service.onUnbind(null)
+        val before = AccessibilityDiagnostics(app).snapshot().lastStop
+        service.onDestroy()
+        assertEquals(before, AccessibilityDiagnostics(app).snapshot().lastStop)
+        assertEquals(1, AccessibilityDiagnostics(app).history().count { it.category == "切断" })
     }
 
     @Test fun screenOffCancelsDelayedNextUrl() {
@@ -177,10 +213,12 @@ class UrlRunnerLifecycleTest {
         assertEquals(0, openedCount())
     }
 
-    @Test fun interruptCancelsAndClearsPersistedRequest() {
+    @Test fun explicitStopAfterInterruptionClearsPersistedRequest() {
         start()
         openedCount()
         service.onInterrupt()
+        assertTrue(AutomationRuntime.snapshot().requested)
+        service.stopAutomation("停止しました")
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
         assertEquals(0, openedCount())
         assertNull(AutomationRuntime.restoreRequested(app))

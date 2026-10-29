@@ -37,6 +37,15 @@ import kotlin.random.Random
 
 class ArunoAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
+    private var boundToAccessibility = false
+
+    private fun handleServiceDisconnection() {
+        if (!boundToAccessibility) return
+        boundToAccessibility = false
+        if (instance === this) instance = null
+        runCatching { AccessibilityDiagnostics(this).disconnected() }
+        stopAutomation("ユーザー補助サービスが切断されました。設定を確認してください")
+    }
     private val gaugeExecutor = Executors.newSingleThreadExecutor()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var startSyncJob: Job? = null
@@ -54,7 +63,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        stopAutomation("ユーザー補助が切断されたため停止しました")
+        handleServiceDisconnection()
         return super.onUnbind(intent)
     }
     private lateinit var configStore: AutomationConfigStore
@@ -191,7 +200,9 @@ class ArunoAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        boundToAccessibility = true
         configStore = AutomationConfigStore(this)
+        runCatching { AccessibilityDiagnostics(this).connected() }
         if (BuildConfig.USE_ACCESSIBILITY_OVERLAY) {
             accessibilityOverlayController = AccessibilityOverlayController(
                 service = this,
@@ -257,7 +268,10 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        stopAutomation("アクセシビリティが中断されました。再開には動画スタートを押してください")
+        // Android's feedback-interruption callback does not mean the user
+        // switched Accessibility OFF or the service was disconnected.
+        // Do not cancel valid running video timers or restart any URL.
+        runCatching { AccessibilityDiagnostics(this).interrupted(AutomationRuntime.snapshot().requested) }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -266,8 +280,8 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        // サービス切断時は実行中扱いにせず、URLランナーを停止する。
-        stopAutomation("サービスが切断されました。再開には動画スタートを押してください")
+        // onUnbind and onDestroy can both happen: record/stop at most once.
+        handleServiceDisconnection()
         urlSequenceRunner = null
         urlSequenceScheduler = null
         automationGeneration += 1L

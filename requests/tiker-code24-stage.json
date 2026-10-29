@@ -1,0 +1,10 @@
+{
+  "verifyRun": 40800673438,
+  "sourceCommit": "80af21ace17cd18446c3a17e89e34f68b1d9c17b",
+  "apkSha256": "3c6ba687c836095cbe356c9dcaa76b379cef162ac43ebaaf7d8c0e1e52f734e5",
+  "versionCode": 24,
+  "operation": "immutable-stage-only",
+  "certificateSha256": "14e1d564276b56dfbc95888ce8108aafbdaf4da938f7d5b1ed0fb593f274ca3f",
+  "authorizedBy": "2026-10-29 user requested all Aru-Tiker accessibility ON-but-stopped improvements",
+  "publicAliasesChanged": false
+}

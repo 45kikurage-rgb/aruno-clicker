@@ -10,6 +10,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import jp.aruno.clicker.automation.AutomationContract
 import jp.aruno.clicker.automation.AutomationRuntime
+import jp.aruno.clicker.automation.AccessibilityDiagnostics
+import jp.aruno.clicker.automation.AccessibilityHealthSnapshot
 import jp.aruno.clicker.data.AppSettings
 import jp.aruno.clicker.data.RemoteConfigClient
 import jp.aruno.clicker.data.RemoteSyncResult
@@ -42,6 +44,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val remoteClient = RemoteConfigClient(application)
     private val urlRunnerRepository = UrlRunnerRepository(application)
     private val urlRunnerClient = UrlRunnerClient(application)
+    private val accessibilityDiagnostics = AccessibilityDiagnostics(application)
+    private val mutableAccessibilityHealth = MutableStateFlow(accessibilityDiagnostics.snapshot())
+    val accessibilityHealth: StateFlow<AccessibilityHealthSnapshot> = mutableAccessibilityHealth.asStateFlow()
     private val mutableEditRevision = MutableStateFlow(0)
     val editRevision: StateFlow<Int> = mutableEditRevision.asStateFlow()
     val urlEditState = jp.aruno.clicker.data.UrlListEditState {
@@ -72,11 +77,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onReceive(context: Context?, intent: Intent?) {
             mutableAutomationRequested.value = AutomationRuntime.snapshot().requested
             mutableAutomationMessage.value = AutomationRuntime.snapshot().message
+            mutableAccessibilityHealth.value = accessibilityDiagnostics.snapshot()
         }
     }
 
     init {
-        val filter = IntentFilter(AutomationContract.ACTION_AUTOMATION_STATE_CHANGED)
+        val filter = IntentFilter(AutomationContract.ACTION_AUTOMATION_STATE_CHANGED).apply {
+            addAction(AutomationContract.ACTION_ACCESSIBILITY_DIAGNOSTICS_UPDATED)
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             application.registerReceiver(automationReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -105,6 +113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshSettings() {
+        mutableAccessibilityHealth.value = accessibilityDiagnostics.snapshot()
         repository.refresh()
         if (!mutableRemoteSyncState.value.busy) {
             mutableRemoteSyncState.value = RemoteSyncUiState(

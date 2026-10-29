@@ -122,6 +122,8 @@ object AutomationRuntime {
     }
 
     fun stop(context: Context, text: String = "停止中") {
+        val wasActive = requested || running ||
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_REQUESTED, false)
         requested = false
         running = false
         endsAtElapsed = 0L
@@ -133,6 +135,7 @@ object AutomationRuntime {
             .putBoolean(KEY_REQUESTED, false)
             .putBoolean(KEY_PENDING_START, false)
             .apply()
+        if (wasActive) runCatching { AccessibilityDiagnostics(context).stopped(message) }
         notifyChanged(context)
     }
 
