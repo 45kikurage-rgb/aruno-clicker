@@ -1,1 +1,1 @@
-{"versionCode":27,"attempt":4,"reason":"User clarified all popup close controls, not only coin stock: shared labelled close selector, bounded geometry, no blind coordinates on unknown popup types"}
+{"versionCode":27,"attempt":5,"reason":"Final integration: bind popup window scan to the actually foreground TikTok Lite variant when URL resolution used a fallback package"}

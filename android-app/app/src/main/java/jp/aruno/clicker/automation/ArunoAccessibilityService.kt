@@ -1669,20 +1669,26 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     private fun scanUrlPopup(): UrlPopupScan {
+        val foregroundRoot = rootInActiveWindow
+        val targetPackage = foregroundRoot?.packageName?.toString()
+            ?.takeIf { it in AutomationConfig.TARGET_PACKAGES }
+            ?: foregroundPackage?.takeIf { it in AutomationConfig.TARGET_PACKAGES &&
+                android.os.SystemClock.elapsedRealtime() - foregroundPackageUpdatedAt <= EVENT_FALLBACK_MAX_AGE_MS }
+            ?: activeConfig.targetPackage
         val visibleWindows = windows
         val unavailableApplicationWindow = visibleWindows.any {
             it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION && it.root == null
         }
         val roots = visibleWindows.sortedByDescending { it.layer }.mapNotNull { w ->
-            w.root?.takeIf { it.packageName?.toString() == activeConfig.targetPackage }
+            w.root?.takeIf { it.packageName?.toString() == targetPackage }
                 ?.let { PopupWindowRoot(it, w.type, w.layer) }
         }.toMutableList()
-        rootInActiveWindow?.takeIf { it.packageName?.toString() == activeConfig.targetPackage }?.let { root ->
+        foregroundRoot?.takeIf { it.packageName?.toString() == targetPackage }?.let { root ->
             if (roots.none { it.root.windowId == root.windowId }) {
                 roots.add(PopupWindowRoot(root, android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION, 0))
             }
         }
-        val scan = PopupCloseScanner.scan(roots, currentScreenBounds(), activeConfig.targetPackage)
+        val scan = PopupCloseScanner.scan(roots, currentScreenBounds(), targetPackage)
         return if (unavailableApplicationWindow) scan.copy(complete = false, candidate = null) else scan
     }
 
