@@ -46,6 +46,7 @@ open class AutomationOverlayService : Service() {
     private var countText: TextView? = null
     private var startButton: Button? = null
     private var startSixthButton: Button? = null
+    private var startSixthSplashButton: Button? = null
     private var sizeButton: Button? = null
     private var compactOverlay = true
     private val handler = Handler(Looper.getMainLooper())
@@ -91,6 +92,7 @@ open class AutomationOverlayService : Service() {
                         ?: AutomationContract.SOURCE_MANUAL,
                     startMode = AutomationContract.START_MODE_URL_RUNNER,
                     fromSixth = intent?.getBooleanExtra(AutomationContract.EXTRA_START_FROM_SIXTH, false) == true,
+                    splashBetweenUrls = intent?.getBooleanExtra(AutomationContract.EXTRA_SPLASH_BETWEEN_URLS, false) == true,
                 )
             }
         }
@@ -117,6 +119,7 @@ open class AutomationOverlayService : Service() {
         source: String,
         startMode: String = AutomationContract.START_MODE_REPEAT,
         fromSixth: Boolean = false,
+        splashBetweenUrls: Boolean = false,
     ) {
         if (AutomationRuntime.snapshot().requested) return
         val service = ArunoAccessibilityService.instance
@@ -125,7 +128,7 @@ open class AutomationOverlayService : Service() {
             AutomationRuntime.stop(this, "ユーザー補助をONにしてから動画スタートを押してください")
             Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
         } else if (source != AutomationContract.SOURCE_SCHEDULE) {
-            service.startUrlRunnerSequence(fromSixth)
+            service.startUrlRunnerSequence(fromSixth, fromSixth && splashBetweenUrls)
         }
         refreshOverlay()
     }
@@ -242,9 +245,18 @@ open class AutomationOverlayService : Service() {
             }
         }
         val buttonHeight = dp(if (compactOverlay) 40 else 56)
-        val sixthButton = compactButton("6番目からスタート", Color.rgb(15, 116, 54)).apply {
-            textSize = if (compactOverlay) 12f else 16f
-            setOnClickListener { requestStart(source = AutomationContract.SOURCE_MANUAL, fromSixth = true) }
+        val sixthSplashButton = compactButton("6番以降から開始\nスプラッシュあり", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 11f else 15f
+            setOnClickListener {
+                requestStart(source = AutomationContract.SOURCE_MANUAL, fromSixth = true, splashBetweenUrls = true)
+            }
+        }
+        startSixthSplashButton = sixthSplashButton
+        val sixthButton = compactButton("6番以降から開始\nスプラッシュなし", Color.rgb(15, 116, 54)).apply {
+            textSize = if (compactOverlay) 11f else 15f
+            setOnClickListener {
+                requestStart(source = AutomationContract.SOURCE_MANUAL, fromSixth = true, splashBetweenUrls = false)
+            }
         }
         startSixthButton = sixthButton
         val buttonGap = dp(if (compactOverlay) 3 else 6)
@@ -256,8 +268,11 @@ open class AutomationOverlayService : Service() {
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)
         root.addView(countText)
-        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+        root.addView(sixthSplashButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
             topMargin = dp(if (compactOverlay) 5 else 9)
+        })
+        root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
+            topMargin = dp(if (compactOverlay) 4 else 7)
         })
         root.addView(buttons, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(if (compactOverlay) 5 else 9)
@@ -329,6 +344,7 @@ open class AutomationOverlayService : Service() {
         countText = null
         startButton = null
         startSixthButton = null
+        startSixthSplashButton = null
         sizeButton = null
     }
 
