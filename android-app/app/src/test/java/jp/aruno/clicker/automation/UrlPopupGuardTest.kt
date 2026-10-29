@@ -53,6 +53,14 @@ class UrlPopupGuardTest {
         assertNull(scan(root(listOf(node("x", Rect(800, 200, 850, 250), true)))).candidate)
     }
 
+    @Test fun disabledCloseDuringLoadingCannotCountAsDisappearance() {
+        val close = node("閉じる", Rect(880, 180, 950, 250), true).apply { isEnabled = false }
+        val pending = scan(root(listOf(close)))
+        assertTrue(pending.complete); assertTrue(pending.known); assertNull(pending.candidate)
+        val dismissed = scan(root(emptyList()))
+        assertTrue(dismissed.complete); assertFalse(dismissed.known)
+    }
+
     @Test fun noCloseNodeUsesBoundedFallbackAndNeverHitsStart() {
         val s = scan(popup(close = false))
         assertTrue(s.known)

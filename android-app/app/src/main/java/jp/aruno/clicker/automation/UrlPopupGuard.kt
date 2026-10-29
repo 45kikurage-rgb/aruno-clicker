@@ -109,6 +109,11 @@ internal object PopupCloseScanner {
             val coinPopup = InterruptionClassifier.isCoinStockPopup(labels)
             // Explicit close controls are shared by all popup types. Unknown
             // screens get no coordinate guesses: only a small labelled close.
+            val genericMarkers = nodes.filter { n ->
+                n.info.isVisibleToUser && safeElementBounds(n.bounds, screen) &&
+                    n.bounds.width() <= screen.width() * .18f && n.bounds.height() <= screen.height() * .10f &&
+                    PopupCloseClassifier.score(n.info.text, n.info.contentDescription, n.info.viewIdResourceName) >= 70
+            }
             val genericClose = visible.filter { n ->
                 safeElementBounds(n.bounds, screen) &&
                     n.bounds.width() <= screen.width() * .18f && n.bounds.height() <= screen.height() * .10f &&
@@ -116,9 +121,11 @@ internal object PopupCloseScanner {
                     ctas.none { Rect.intersects(n.bounds, it) }
             }.maxByOrNull { PopupCloseClassifier.score(it.info.text, it.info.contentDescription, it.info.viewIdResourceName) }
             if (!coinPopup) {
-                if (genericClose != null) {
-                    known = true
-                    if (candidate == null) candidate = UrlPopupCandidate(genericClose.info, Rect(genericClose.bounds), "要素")
+                // A disabled close during a loading animation is still present;
+                // lack of an actionable candidate is not dismissal evidence.
+                if (genericMarkers.isNotEmpty()) known = true
+                if (genericClose != null && candidate == null) {
+                    candidate = UrlPopupCandidate(genericClose.info, Rect(genericClose.bounds), "要素")
                 }
                 continue
             }

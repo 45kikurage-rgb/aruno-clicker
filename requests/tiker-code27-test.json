@@ -1,1 +1,1 @@
-{"versionCode":27,"attempt":5,"reason":"Final integration: bind popup window scan to the actually foreground TikTok Lite variant when URL resolution used a fallback package"}
+{"versionCode":27,"attempt":6,"reason":"Final verification guard: a temporarily disabled but still visible close control is not evidence that a non-coin popup disappeared"}
