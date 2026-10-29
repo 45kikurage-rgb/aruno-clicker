@@ -27,7 +27,7 @@ class UrlPopupGuardTest {
         node("コインストックを割って ゲットしよう", Rect(250, 750, 750, 950)),
         node("始める", Rect(300, 1150, 700, 1250), true),
     ) + (if (close) listOf(node("×", Rect(460, 1420, 520, 1480), true)) else emptyList()) + extra)
-    private fun scan(root: AccessibilityNodeInfo) = CoinPopupScanner.scan(listOf(PopupWindowRoot(root, 1, 0)), screen, pkg)
+    private fun scan(root: AccessibilityNodeInfo) = PopupCloseScanner.scan(listOf(PopupWindowRoot(root, 1, 0)), screen, pkg)
 
     @Test fun fullContextFindsSmallCloseAndIgnoresUnrelatedTopRightClose() {
         val s = scan(popup(extra = listOf(node("×", Rect(900, 80, 960, 140), true))))
@@ -35,11 +35,24 @@ class UrlPopupGuardTest {
         assertEquals(Rect(460, 1420, 520, 1480), s.candidate?.bounds)
         assertEquals("要素", s.candidate?.method)
     }
-    @Test fun noContextOrForeignPackageNeverProvidesACandidate() {
-        assertNull(scan(root(listOf(node("×", Rect(460, 1420, 520, 1480), true)))).candidate)
+    @Test fun explicitCloseDoesNotRequireCoinContextButForeignPackageIsRejected() {
+        assertNotNull(scan(root(listOf(node("×", Rect(460, 1420, 520, 1480), true)))).candidate)
         assertNull(scan(root(listOf(node("コインストック ゲットしよう", Rect(100, 700, 900, 900)),
             node("始める", Rect(300, 1150, 700, 1250), true)), "foreign.app")).candidate)
     }
+    @Test fun nonCoinPopupsAcceptTopRightOrBottomCloseLabels() {
+        for (label in listOf("×", "閉じる", "Close", "Dismiss")) {
+            val b = Rect(880, 180, 950, 250)
+            val s = scan(root(listOf(node("お知らせ", Rect(100, 500, 900, 800)), node(label, b, true))))
+            assertTrue(s.known); assertEquals(b, s.candidate?.bounds)
+        }
+    }
+    @Test fun unlabelledUnknownPopupOrOversizedCloseGetsNoCoordinateGuess() {
+        assertNull(scan(root(listOf(node("お知らせ", Rect(100, 500, 900, 800))))).candidate)
+        assertNull(scan(root(listOf(node("×", Rect(100, 100, 900, 1900), true)))).candidate)
+        assertNull(scan(root(listOf(node("x", Rect(800, 200, 850, 250), true)))).candidate)
+    }
+
     @Test fun noCloseNodeUsesBoundedFallbackAndNeverHitsStart() {
         val s = scan(popup(close = false))
         assertTrue(s.known)
@@ -52,12 +65,12 @@ class UrlPopupGuardTest {
         assertTrue(s.known); assertNull(s.candidate)
     }
     @Test fun separateTargetDialogWindowIsScanned() {
-        val s = CoinPopupScanner.scan(listOf(PopupWindowRoot(root(emptyList()), 1, 0),
+        val s = PopupCloseScanner.scan(listOf(PopupWindowRoot(root(emptyList()), 1, 0),
             PopupWindowRoot(popup(), 1, 2)), screen, pkg)
         assertTrue(s.known); assertNotNull(s.candidate)
     }
     @Test fun truncatedOrMissingTreeNeverOffersTapOrDismissalProof() {
-        assertFalse(CoinPopupScanner.scan(emptyList(), screen, pkg).complete)
+        assertFalse(PopupCloseScanner.scan(emptyList(), screen, pkg).complete)
         val tooMany = (0..4000).map { node("item", Rect(0, 0, 1, 1)) }
         val s = scan(popup(extra = tooMany))
         assertFalse(s.complete); assertNull(s.candidate)
@@ -65,9 +78,9 @@ class UrlPopupGuardTest {
     @Test fun unsafeSizeEdgesAndNavigationAreRejectedAtBothResolutions() {
         for (scale in listOf(1, 2)) {
             val s = Rect(0, 0, 1000 * scale, 2000 * scale)
-            assertTrue(CoinPopupScanner.safeCloseBounds(Rect(460*scale, 1420*scale, 520*scale, 1480*scale), s))
-            assertFalse(CoinPopupScanner.safeCloseBounds(Rect(0, 0, s.width(), s.height()), s))
-            assertFalse(CoinPopupScanner.safeCloseBounds(Rect(460*scale, 1900*scale, 520*scale, 1980*scale), s))
+            assertTrue(PopupCloseScanner.safeCloseBounds(Rect(460*scale, 1420*scale, 520*scale, 1480*scale), s))
+            assertFalse(PopupCloseScanner.safeCloseBounds(Rect(0, 0, s.width(), s.height()), s))
+            assertFalse(PopupCloseScanner.safeCloseBounds(Rect(460*scale, 1900*scale, 520*scale, 1980*scale), s))
         }
     }
     @Test fun missingAmountAndCommaVariationsStillRequireAllThreeContextMarkers() {

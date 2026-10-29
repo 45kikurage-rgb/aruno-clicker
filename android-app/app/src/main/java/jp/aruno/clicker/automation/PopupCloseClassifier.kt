@@ -20,7 +20,8 @@ internal object PopupCloseClassifier {
         if (labels.any { it.lowercase() in exactWords }) return 90
 
         val normalizedId = viewId.orEmpty().lowercase()
-        if (resourceHints.any(normalizedId::contains)) return 70
+        if (resourceHints.any(normalizedId::contains) ||
+            Regex("(?:^|[_:/-])(?:close|dismiss)(?:[_/-]|$)").containsMatchIn(normalizedId)) return 70
         return 0
     }
 
@@ -29,3 +30,4 @@ internal object PopupCloseClassifier {
             .mapNotNull { it?.toString()?.trim()?.takeIf(String::isNotEmpty) }
             .any { it in exactSymbols }
 }
+

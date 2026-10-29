@@ -1682,7 +1682,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                 roots.add(PopupWindowRoot(root, android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION, 0))
             }
         }
-        val scan = CoinPopupScanner.scan(roots, currentScreenBounds(), activeConfig.targetPackage)
+        val scan = PopupCloseScanner.scan(roots, currentScreenBounds(), activeConfig.targetPackage)
         return if (unavailableApplicationWindow) scan.copy(complete = false, candidate = null) else scan
     }
 
@@ -1778,7 +1778,7 @@ class ArunoAccessibilityService : AccessibilityService() {
             val area = Rect().also(current::getBoundsInScreen)
             val label = (current.text?.toString().orEmpty() + current.contentDescription).lowercase()
             if (valid() && current.isVisibleToUser && current.isEnabled && current.isClickable &&
-                area.contains(candidate.bounds) && CoinPopupScanner.safeCloseBounds(area, currentScreenBounds()) &&
+                area.contains(candidate.bounds) && PopupCloseScanner.safeElementBounds(area, currentScreenBounds()) &&
                 scan.forbiddenBounds.none { Rect.intersects(area, it) } &&
                 listOf("始める", "受け取る", "招待", "start", "claim").none(label::contains) &&
                 runCatching { current.performAction(AccessibilityNodeInfo.ACTION_CLICK) }.getOrDefault(false)) {

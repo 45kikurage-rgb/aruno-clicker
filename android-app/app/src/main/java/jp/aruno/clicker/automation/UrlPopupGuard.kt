@@ -58,7 +58,7 @@ internal data class UrlPopupScan(
 )
 
 /** A complete, package-filtered scan; unknown trees are never proof of dismissal. */
-internal object CoinPopupScanner {
+internal object PopupCloseScanner {
     private data class Node(val info: AccessibilityNodeInfo, val bounds: Rect, val parent: Int)
     private val forbidden = listOf("始める", "受け取る", "招待", "ゲット", "獲得", "応募", "購入", "start", "claim")
 
@@ -99,20 +99,35 @@ internal object CoinPopupScanner {
             if (queue.isNotEmpty()) complete = false
             windows.put(JSONObject().put("package", window.root.packageName?.toString())
                 .put("type", window.type).put("layer", window.layer).put("nodes", jsonNodes))
-            if (window.root.packageName?.toString() != targetPackage ||
-                !InterruptionClassifier.isCoinStockPopup(labels)) continue
-            known = true
-            if (candidate != null) continue
+            if (window.root.packageName?.toString() != targetPackage) continue
             val visible = nodes.filter { it.info.isVisibleToUser && it.info.isEnabled && !it.bounds.isEmpty }
-            val start = visible.firstOrNull {
-                InterruptionClassifier.isCoinStockStartAction(it.info.text, it.info.contentDescription)
-            } ?: continue
-            val titles = visible.filter { (it.info.text?.toString().orEmpty() + it.info.contentDescription).contains("コインストック") }
             val ctas = visible.filter { n ->
                 val label = (n.info.text?.toString().orEmpty() + " " + n.info.contentDescription?.toString().orEmpty()).lowercase()
                 forbidden.any(label::contains)
             }.map { it.bounds }
             forbiddenBounds.addAll(ctas)
+            val coinPopup = InterruptionClassifier.isCoinStockPopup(labels)
+            // Explicit close controls are shared by all popup types. Unknown
+            // screens get no coordinate guesses: only a small labelled close.
+            val genericClose = visible.filter { n ->
+                safeElementBounds(n.bounds, screen) &&
+                    n.bounds.width() <= screen.width() * .18f && n.bounds.height() <= screen.height() * .10f &&
+                    PopupCloseClassifier.score(n.info.text, n.info.contentDescription, n.info.viewIdResourceName) >= 70 &&
+                    ctas.none { Rect.intersects(n.bounds, it) }
+            }.maxByOrNull { PopupCloseClassifier.score(it.info.text, it.info.contentDescription, it.info.viewIdResourceName) }
+            if (!coinPopup) {
+                if (genericClose != null) {
+                    known = true
+                    if (candidate == null) candidate = UrlPopupCandidate(genericClose.info, Rect(genericClose.bounds), "要素")
+                }
+                continue
+            }
+            known = true
+            if (candidate != null) continue
+            val start = visible.firstOrNull {
+                InterruptionClassifier.isCoinStockStartAction(it.info.text, it.info.contentDescription)
+            } ?: continue
+            val titles = visible.filter { (it.info.text?.toString().orEmpty() + it.info.contentDescription).contains("コインストック") }
             val exact = visible.filter { n ->
                 safeCloseBounds(n.bounds, screen) &&
                     n.bounds.centerY() >= start.bounds.bottom &&
@@ -147,10 +162,15 @@ internal object CoinPopupScanner {
             }
         }
         val diagnostic = JSONObject().put("windows", windows).put("truncatedOrUnavailable", !complete)
-            .put("knownCoinPopup", known).put("candidateMethod", candidate?.method)
+            .put("popupVisible", known).put("candidateMethod", candidate?.method)
             .put("candidateBounds", candidate?.bounds?.toShortString())
         return UrlPopupScan(known, complete, candidate.takeIf { complete }, diagnostic, forbiddenBounds)
     }
+
+    internal fun safeElementBounds(bounds: Rect, screen: Rect): Boolean = !screen.isEmpty &&
+        screen.contains(bounds) && bounds.width() in 6..(screen.width() / 4) &&
+        bounds.height() in 6..(screen.height() / 6) &&
+        bounds.centerY() in (screen.top + screen.height() * .02f).toInt()..(screen.top + screen.height() * .94f).toInt()
 
     internal fun safeCloseBounds(bounds: Rect, screen: Rect): Boolean = !screen.isEmpty &&
         screen.contains(bounds) && bounds.width() in 6..(screen.width() / 4) &&
