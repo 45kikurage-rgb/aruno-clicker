@@ -1,7 +1,7 @@
 name: Preserve verified Aru-Tiker APK in existing private R2
 on:
   push:
-    branches: [feature/tiker-sixth-start-code22-20261028]
+    branches: [fix/tiker-code22-saved-timestamp-label-20261029]
     paths: [requests/tiker-code22-stage.json]
 permissions:
   contents: read
