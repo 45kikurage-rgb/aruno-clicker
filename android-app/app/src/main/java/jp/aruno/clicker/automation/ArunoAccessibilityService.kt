@@ -43,7 +43,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         if (!boundToAccessibility) return
         boundToAccessibility = false
         if (instance === this) instance = null
-        AccessibilityDiagnostics(this).disconnected()
+        runCatching { AccessibilityDiagnostics(this).disconnected() }
         stopAutomation("ユーザー補助サービスが切断されました。設定を確認してください")
     }
     private val gaugeExecutor = Executors.newSingleThreadExecutor()
@@ -202,7 +202,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         instance = this
         boundToAccessibility = true
         configStore = AutomationConfigStore(this)
-        AccessibilityDiagnostics(this).connected()
+        runCatching { AccessibilityDiagnostics(this).connected() }
         if (BuildConfig.USE_ACCESSIBILITY_OVERLAY) {
             accessibilityOverlayController = AccessibilityOverlayController(
                 service = this,
@@ -271,7 +271,7 @@ class ArunoAccessibilityService : AccessibilityService() {
         // Android's feedback-interruption callback does not mean the user
         // switched Accessibility OFF or the service was disconnected.
         // Do not cancel valid running video timers or restart any URL.
-        AccessibilityDiagnostics(this).interrupted(AutomationRuntime.snapshot().requested)
+        runCatching { AccessibilityDiagnostics(this).interrupted(AutomationRuntime.snapshot().requested) }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
