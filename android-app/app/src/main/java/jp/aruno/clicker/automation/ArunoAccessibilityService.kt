@@ -214,6 +214,8 @@ class ArunoAccessibilityService : AccessibilityService() {
                     )
                 },
                 onStop = { stopAutomation("停止しました") },
+                onPause = { toggleUrlRunnerPause() },
+                onSplashSettingsChanged = { updateUrlRunnerSplashSettings() },
                 onStartFromSixth = { enabled -> startUrlRunnerSequence(true, enabled) },
                 onClose = {
                     stopService(Intent(this, AutomationService::class.java))
@@ -417,6 +419,13 @@ class ArunoAccessibilityService : AccessibilityService() {
 
     private var urlSequenceRunner: UrlSequenceRunnerCore? = null
     private var urlSequenceScheduler: UrlRunnerHandlerScheduler? = null
+
+    fun toggleUrlRunnerPause() { urlSequenceRunner?.togglePause() }
+
+    fun updateUrlRunnerSplashSettings() {
+        val prefs = jp.aruno.clicker.data.SplashFrequencyStore(this)
+        urlSequenceRunner?.updateSplashFrequency(prefs.selectedFrequency(prefs.isEnabled()))
+    }
 
     private inner class UrlRunnerHandlerScheduler : DelayScheduler {
         private val pending = mutableSetOf<Runnable>()
@@ -2322,3 +2331,4 @@ class ArunoAccessibilityService : AccessibilityService() {
             private set
     }
 }
+

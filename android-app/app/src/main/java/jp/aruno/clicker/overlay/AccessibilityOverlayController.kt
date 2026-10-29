@@ -36,6 +36,8 @@ class AccessibilityOverlayController(
     private val onStartFromSixth: (Boolean) -> Unit,
     private val onStop: () -> Unit,
     private val onClose: () -> Unit,
+    private val onPause: () -> Unit = {},
+    private val onSplashSettingsChanged: () -> Unit = {},
 ) {
     private val windowManager = service.getSystemService(WindowManager::class.java)
     private val configStore = AutomationConfigStore(service)
@@ -50,8 +52,8 @@ class AccessibilityOverlayController(
     private var countText: TextView? = null
     private var startButton: Button? = null
     private var startSixthButton: Button? = null
-    private var splashToggleButton: Button? = null
-    private var splashFrequencyPicker: Spinner? = null
+    private var splashControls: SplashControls? = null
+    private var pauseButton: Button? = null
     private var sizeButton: Button? = null
     private var compactOverlay = true
 
@@ -148,6 +150,10 @@ class AccessibilityOverlayController(
             }
         }
         startButton = actionButton
+        val pause = compactButton("一時停止", Color.rgb(95, 79, 25)).apply {
+            setOnClickListener { onPause(); refresh() }
+        }
+        pauseButton = pause
         val closeButton = compactButton("閉じる", Color.rgb(83, 83, 83)).apply {
             // Stop and remove are separate operations: the Stop button keeps the controller,
             // while Close explicitly performs both so a later Start can recreate it.
@@ -157,17 +163,9 @@ class AccessibilityOverlayController(
                 onClose()
             }
         }
-        val buttonHeight = dp(if (compactOverlay) 40 else 56)
-        val splashToggle = compactButton("スプラッシュ ON", Color.rgb(25, 111, 83)).apply {
-            textSize = if (compactOverlay) 12f else 16f
-            setOnClickListener {
-                if (!AutomationRuntime.snapshot().requested) {
-                    splashPreferences.setEnabled(!splashPreferences.isEnabled())
-                    refresh()
-                }
-            }
-        }
-        splashToggleButton = splashToggle
+        val buttonHeight = dp(if (compactOverlay) 48 else 56)
+        val splashPanel = SplashControls(service) { onSplashSettingsChanged() }
+        splashControls = splashPanel
         val sixthButton = compactButton("6番目以降再生", Color.rgb(15, 116, 54)).apply {
             textSize = if (compactOverlay) 12f else 16f
             setOnClickListener {
@@ -176,38 +174,11 @@ class AccessibilityOverlayController(
             }
         }
         startSixthButton = sixthButton
-        val frequencyRow = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val frequencyText = label(if (compactOverlay) 10f else 14f, Color.WHITE).apply {
-            text = "頻度"
-        }
-        val frequencyPicker = Spinner(service).apply {
-            contentDescription = "スプラッシュ頻度 1から5件ごと"
-            minimumHeight = dp(44)
-        }
-        val adapter = ArrayAdapter(
-            service, android.R.layout.simple_spinner_item,
-            (1..5).map { "${it}件ごと" },
-        )
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        frequencyPicker.adapter = adapter
-        frequencyPicker.setSelection(splashPreferences.interval() - 1, false)
-        frequencyPicker.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (!AutomationRuntime.snapshot().requested) {
-                    splashPreferences.setInterval(position + 1)
-                }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-        splashFrequencyPicker = frequencyPicker
-        frequencyRow.addView(frequencyText, LinearLayout.LayoutParams(0, dp(44), 1f))
-        frequencyRow.addView(frequencyPicker, LinearLayout.LayoutParams(0, dp(44), 2f))
         val buttonGap = dp(if (compactOverlay) 3 else 6)
-        actionButton.textSize = if (compactOverlay) 13f else 17f
-        closeButton.textSize = if (compactOverlay) 13f else 17f
+        pause.textSize = if (compactOverlay) 11f else 15f
+        actionButton.textSize = if (compactOverlay) 11f else 15f
+        closeButton.textSize = if (compactOverlay) 11f else 15f
+        buttons.addView(pause, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginEnd = buttonGap })
         buttons.addView(actionButton, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginEnd = buttonGap })
         buttons.addView(closeButton, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginStart = buttonGap })
 
@@ -215,11 +186,8 @@ class AccessibilityOverlayController(
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)
         root.addView(countText)
-        root.addView(splashToggle, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
-            topMargin = dp(if (compactOverlay) 5 else 9)
-        })
-        root.addView(frequencyRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
-            topMargin = dp(if (compactOverlay) 2 else 6)
+        root.addView(splashPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(5)
         })
         root.addView(sixthButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, buttonHeight).apply {
             topMargin = dp(if (compactOverlay) 4 else 7)
@@ -340,18 +308,19 @@ class AccessibilityOverlayController(
     private fun refresh() {
         val state = AutomationRuntime.snapshot()
         startSixthButton?.apply { isEnabled = !state.requested; alpha = if (isEnabled) 1f else 0.4f }
-        splashToggleButton?.apply {
-            isEnabled = !state.requested
-            alpha = if (isEnabled) 1f else 0.4f
-            text = if (splashPreferences.isEnabled()) "スプラッシュ ON" else "スプラッシュ OFF"
+        splashControls?.refresh()
+        pauseButton?.apply {
+            isEnabled = state.requested && state.urlRunnerActive
+            text = if (state.urlRunnerPaused) "再開" else "一時停止"
         }
-        splashFrequencyPicker?.apply {
-            isEnabled = !state.requested && splashPreferences.isEnabled()
-            alpha = if (isEnabled) 1f else 0.45f
-        }
-        val (statusTitle, statusDetail) = splitStatus(state.message)
+        val (fallbackTitle, fallbackDetail) = splitStatus(state.message)
+        val showUrl = state.requested && state.urlRunnerActive && state.urlRunnerIndex >= 0
+        val statusTitle = if (showUrl) "URL NO.${state.urlRunnerIndex + 1} " +
+            (if (state.urlRunnerPaused) "一時停止" else "再生") else fallbackTitle
+        val statusDetail = if (showUrl) "" else fallbackDetail
         statusTitleText?.apply {
             text = statusTitle
+            maxLines = 1
             textSize = when {
                 compactOverlay && statusTitle.length >= 15 -> 11f
                 compactOverlay -> 14f
@@ -390,8 +359,8 @@ class AccessibilityOverlayController(
         countText = null
         startButton = null
         startSixthButton = null
-        splashToggleButton = null
-        splashFrequencyPicker = null
+        splashControls = null
+        pauseButton = null
         sizeButton = null
     }
 
@@ -446,3 +415,4 @@ class AccessibilityOverlayController(
         )
     }
 }
+

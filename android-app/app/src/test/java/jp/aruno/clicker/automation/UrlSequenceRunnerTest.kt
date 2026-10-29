@@ -238,6 +238,84 @@ class UrlSequenceRunnerTest {
         commonSeconds = common,
     )
 
+    @Test fun pauseFreezesNinetySecondHoldAndResumeDoesNotCountAnotherView() {
+        val history = MemoryViews()
+        val h = Harness(dailyViews = history)
+        val c = config(2, individual = List(5) { 90 })
+        h.runner.start(c)
+        h.scheduler.advanceBy(30_000)
+        h.runner.togglePause()
+        assertTrue(h.runner.isPaused())
+        assertEquals(UrlRunnerPhase.PAUSED, h.runner.phase)
+        h.scheduler.advanceBy(600_000)
+        assertEquals(1, h.opened.size)
+        assertEquals(1, history.count(c.urls[0]))
+        h.runner.togglePause()
+        h.scheduler.advanceBy(59_999)
+        assertEquals(1, h.opened.size)
+        h.scheduler.advanceBy(1)
+        assertEquals(2, h.opened.size)
+        assertEquals(1, history.count(c.urls[0]))
+    }
+
+    @Test fun pauseDuringSplashAndStopCancelsAllFutureOpenings() {
+        val h = Harness(splashEveryLinks = 1)
+        h.runner.start(config(2))
+        h.scheduler.advanceBy(3_000)
+        assertEquals(UrlRunnerPhase.RECOVERING, h.runner.phase)
+        h.runner.togglePause()
+        h.scheduler.advanceBy(60_000)
+        assertEquals(1, h.opened.size)
+        h.runner.stop()
+        h.runner.togglePause()
+        h.scheduler.advanceBy(60_000)
+        assertEquals(1, h.opened.size)
+        assertEquals(UrlRunnerPhase.STOPPED, h.runner.phase)
+    }
+
+    @Test fun pauseDuringForegroundCheckIgnoresOldCallbackAndRechecksOnResume() {
+        val history = MemoryViews()
+        val h = Harness(dailyViews = history)
+        h.foreground.manual = true
+        val c = config(1)
+        h.runner.start(c)
+        val old = h.foreground.pendingCallback!!
+        h.runner.togglePause()
+        old(true)
+        assertEquals(0, history.count(c.urls[0]))
+        h.scheduler.advanceBy(60_000)
+        h.runner.togglePause()
+        old(true)
+        assertEquals(0, history.count(c.urls[0]))
+        h.foreground.pendingCallback!!(true)
+        assertEquals(1, history.count(c.urls[0]))
+        assertEquals(1, h.opened.size)
+    }
+
+    @Test fun lockedWhilePausedCannotResumeOrOpenAnotherVideo() {
+        val h = Harness()
+        h.runner.start(config(2))
+        h.runner.togglePause()
+        h.allowed = false
+        h.runner.togglePause()
+        h.scheduler.advanceBy(60_000)
+        assertEquals(UrlRunnerPhase.FAILED, h.runner.phase)
+        assertEquals(1, h.opened.size)
+    }
+
+    @Test fun runtimeSplashSettingAppliesAtNextBoundaryIncludingOff() {
+        val h = Harness()
+        h.runner.start(config(3))
+        h.runner.updateSplashFrequency(1)
+        h.scheduler.advanceBy(3_000)
+        assertEquals(1, h.splashCalls.size)
+        h.scheduler.advanceBy(UrlSequenceRunnerCore.SPLASH_SETTLE_DELAY_MS)
+        h.runner.updateSplashFrequency(0)
+        h.scheduler.advanceBy(3_000)
+        assertEquals(3, h.opened.size)
+        assertEquals(1, h.splashCalls.size)
+    }
+
     @Test
     fun opensInOrderWithIndividualThenCommonSeconds() {
         val harness = Harness()
