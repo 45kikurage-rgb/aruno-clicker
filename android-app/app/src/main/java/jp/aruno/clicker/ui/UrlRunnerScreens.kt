@@ -139,6 +139,13 @@ fun UrlRunnerHomeScreen(
                 ) { Text("×解除の診断を共有") }
             }
             item {
+                OutlinedButton(
+                    onClick = { jp.aruno.clicker.automation.ElementReferenceUpload.send(context) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) { Text("参考データを中央へ送信") }
+                Text("TikTok画面でフロートの「要素確認」→×の枠を選択→はい／いいえで端末保存。送信はこのボタンから行います。", style = MaterialTheme.typography.bodySmall)
+            }
+            item {
                 Text(
                     if (isRunning) "実行中" else "待機中",
                     style = MaterialTheme.typography.headlineSmall,

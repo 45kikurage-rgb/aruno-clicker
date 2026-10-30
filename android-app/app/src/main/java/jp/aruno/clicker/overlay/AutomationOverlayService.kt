@@ -287,6 +287,18 @@ open class AutomationOverlayService : Service() {
         buttons.addView(pause, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginEnd = buttonGap })
         buttons.addView(actionButton, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginEnd = buttonGap })
         buttons.addView(closeButton, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginStart = buttonGap })
+        val referenceButtons = LinearLayout(this)
+        referenceButtons.addView(compactButton("要素確認", Color.rgb(15, 86, 95)).apply {
+            setOnClickListener {
+                val connection = jp.aruno.clicker.automation.ArunoAccessibilityService.instance
+                if (connection == null) Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
+                else connection.startElementInspection()
+            }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        referenceButtons.addView(compactButton("参考データ送信", Color.rgb(15, 86, 95)).apply {
+            setOnClickListener { jp.aruno.clicker.automation.ElementReferenceUpload.send(this) }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        root.addView(referenceButtons)
         root.addView(titleRow)
         root.addView(statusPanel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(timeText)

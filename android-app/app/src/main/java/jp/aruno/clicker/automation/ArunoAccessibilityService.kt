@@ -101,6 +101,29 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var urlPopupFailureReported = false
     private var pendingDailyStartCompletion = false
     private var accessibilityOverlayController: AccessibilityOverlayController? = null
+    private var elementInspector: ElementInspectorOverlay? = null
+
+    fun startElementInspection() {
+        if (elementInspector != null) return
+        val runner = urlSequenceRunner
+        if (runner?.isRunning() == true) {
+            if (!runner.isPaused()) toggleUrlRunnerPause()
+        } else if (AutomationRuntime.snapshot().requested) {
+            stopAutomation("要素確認のため停止しました")
+        }
+        if (!isTargetForeground()) {
+            android.widget.Toast.makeText(this, "TikTokの確認したい画面で要素確認を押してください", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            val snapshot = ElementReferenceCapture.capture(this, currentScreenBounds(),
+                if (runner?.isRunning() == true) AutomationRuntime.snapshot().urlRunnerIndex + 1 else 0)
+            elementInspector = ElementInspectorOverlay(this, snapshot) { elementInspector = null }.also { it.show() }
+        } catch (_: Exception) {
+            elementInspector?.dismiss(); elementInspector = null
+            android.widget.Toast.makeText(this, "要素を取得できませんでした。もう一度お試しください", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
 
     private val commandReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -292,10 +315,12 @@ class ArunoAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        elementInspector?.dismiss()
         accessibilityOverlayController?.onConfigurationChanged()
     }
 
     override fun onDestroy() {
+        elementInspector?.dismiss()
         // onUnbind and onDestroy can both happen: record/stop at most once.
         handleServiceDisconnection()
         urlSequenceRunner = null
@@ -406,6 +431,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     fun stopAutomation(reason: String = "停止しました") {
+        elementInspector?.dismiss()
         // フロート／通知／ホームからの停止が URLランナーにも届くようにする。
         urlSequenceRunner?.stop(reason)
         urlSequenceRunner = null
@@ -435,6 +461,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var urlSequenceScheduler: UrlRunnerHandlerScheduler? = null
 
     fun toggleUrlRunnerPause() {
+        if (elementInspector != null) return
         urlPopupOperation++
         urlPopupInFlight = false
         urlSequenceRunner?.togglePause()

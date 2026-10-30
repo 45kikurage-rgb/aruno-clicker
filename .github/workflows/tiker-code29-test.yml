@@ -1,0 +1,56 @@
+name: Aru-Tiker code29 manual element inspection and reference records
+on:
+  push:
+    branches: [feature/tiker-element-reference-code29-20261030]
+    paths: [requests/tiker-code29-test.json]
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Unit regressions and unsigned release
+        working-directory: android-app
+        run: gradle --no-daemon --console=plain testAtlasDebugUnitTest assembleAtlasRelease
+      - name: Verify reports and pin unsigned bytes
+        run: |
+          python - <<'PY'
+          import json,pathlib,hashlib,os,xml.etree.ElementTree as E
+          totals={k:0 for k in ('tests','failures','errors','skipped')}
+          for p in pathlib.Path('android-app/app/build/test-results').rglob('TEST-*.xml'):
+              e=E.parse(p).getroot()
+              for k in totals:totals[k]+=int(e.attrib.get(k,0))
+          assert totals['tests']>=200 and all(totals[k]==0 for k in ('failures','errors','skipped')),totals
+          p=pathlib.Path('android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk')
+          raw=p.read_bytes();sha=hashlib.sha256(raw).hexdigest()
+          facts={'source_commit':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'sha256':sha,'bytes':len(raw),'tests':totals,'unsigned_key':'signing-candidates/tiker/code29/'+sha+'/unsigned.apk','published':False}
+          pathlib.Path('code29-unsigned-facts.json').write_text(json.dumps(facts,indent=2));print(json.dumps(facts))
+          PY
+      - name: Preserve verified unsigned candidate privately
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          set -euo pipefail
+          endpoint="https://02100d2235d6f7d7f893b4217b58b902.r2.cloudflarestorage.com"
+          key=$(python -c 'import json;print(json.load(open("code29-unsigned-facts.json"))["unsigned_key"])')
+          aws s3 cp android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk "s3://aruno-clicker-download/$key" --endpoint-url "$endpoint" --no-progress --only-show-errors
+          aws s3 cp "s3://aruno-clicker-download/$key" /tmp/code29-readback.apk --endpoint-url "$endpoint" --no-progress --only-show-errors
+          cmp android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk /tmp/code29-readback.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tiker-code29-unsigned-tests
+          path: |
+            code29-unsigned-facts.json
+            android-app/app/build/outputs/apk/atlas/release/
+            android-app/app/build/test-results/
+          retention-days: 30
