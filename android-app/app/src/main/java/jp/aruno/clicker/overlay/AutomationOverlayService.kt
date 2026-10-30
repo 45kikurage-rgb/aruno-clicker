@@ -144,7 +144,7 @@ open class AutomationOverlayService : Service() {
         if (service == null) {
             // No queued start: enabling accessibility later must not start unexpectedly.
             AutomationRuntime.stop(this, "ユーザー補助をONにしてから動画スタートを押してください")
-            Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
+            Toast.makeText(this@AutomationOverlayService, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
         } else if (source != AutomationContract.SOURCE_SCHEDULE) {
             service.startUrlRunnerSequence(fromSixth, fromSixth && splashBetweenUrls)
         }
@@ -291,12 +291,12 @@ open class AutomationOverlayService : Service() {
         referenceButtons.addView(compactButton("要素確認", Color.rgb(15, 86, 95)).apply {
             setOnClickListener {
                 val connection = jp.aruno.clicker.automation.ArunoAccessibilityService.instance
-                if (connection == null) Toast.makeText(this, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
+                if (connection == null) Toast.makeText(this@AutomationOverlayService, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
                 else connection.startElementInspection()
             }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         referenceButtons.addView(compactButton("参考データ送信", Color.rgb(15, 86, 95)).apply {
-            setOnClickListener { jp.aruno.clicker.automation.ElementReferenceUpload.send(this) }
+            setOnClickListener { jp.aruno.clicker.automation.ElementReferenceUpload.send(this@AutomationOverlayService) }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         root.addView(referenceButtons)
         root.addView(titleRow)
