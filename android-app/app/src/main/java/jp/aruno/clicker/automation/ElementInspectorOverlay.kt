@@ -97,7 +97,7 @@ internal class ElementInspectorOverlay(
         val choices = LinearLayout(service)
         choices.addView(button("候補次へ") { nextCandidate() }, LinearLayout.LayoutParams(0, dp(48), 1f))
         choices.addView(button("重なり切替") {
-            if (matches.isNotEmpty()) { matchIndex = (matchIndex + 1) % matches.size; selected = matches[matchIndex]; region = null; update() }
+            if (matches.isNotEmpty()) { matchIndex = (matchIndex + 1) % matches.size; selected = matches[matchIndex]; regionMode = false; region = null; update() }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         choices.addView(button("枠を指定") {
             regionMode = !regionMode; region = null; selected = null

@@ -102,9 +102,18 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var pendingDailyStartCompletion = false
     private var accessibilityOverlayController: AccessibilityOverlayController? = null
     private var elementInspector: ElementInspectorOverlay? = null
+    private val elementReferenceExecutor = Executors.newSingleThreadExecutor()
+    private var elementInspectionGeneration = 0L
+    private var elementInspectionPending = false
+
+    private fun cancelElementInspection() {
+        elementInspectionGeneration++
+        elementInspectionPending = false
+        elementInspector?.dismiss()
+    }
 
     fun startElementInspection() {
-        if (elementInspector != null) return
+        if (elementInspector != null || elementInspectionPending) return
         val runner = urlSequenceRunner
         if (runner?.isRunning() == true) {
             if (!runner.isPaused()) toggleUrlRunnerPause()
@@ -115,13 +124,24 @@ class ArunoAccessibilityService : AccessibilityService() {
             android.widget.Toast.makeText(this, "TikTokの確認したい画面で要素確認を押してください", android.widget.Toast.LENGTH_LONG).show()
             return
         }
-        try {
-            val snapshot = ElementReferenceCapture.capture(this, currentScreenBounds(),
-                if (runner?.isRunning() == true) AutomationRuntime.snapshot().urlRunnerIndex + 1 else 0)
-            elementInspector = ElementInspectorOverlay(this, snapshot) { elementInspector = null }.also { it.show() }
-        } catch (_: Exception) {
-            elementInspector?.dismiss(); elementInspector = null
-            android.widget.Toast.makeText(this, "要素を取得できませんでした。もう一度お試しください", android.widget.Toast.LENGTH_LONG).show()
+        val generation = ++elementInspectionGeneration
+        elementInspectionPending = true
+        val screen = currentScreenBounds()
+        val index = if (runner?.isRunning() == true) AutomationRuntime.snapshot().urlRunnerIndex + 1 else 0
+        android.widget.Toast.makeText(this, "要素を取得中です。自動操作は停止しています", android.widget.Toast.LENGTH_SHORT).show()
+        elementReferenceExecutor.execute {
+            val result = runCatching { ElementReferenceCapture.capture(this, screen, index) }
+            handler.post {
+                if (generation != elementInspectionGeneration || instance !== this) return@post
+                elementInspectionPending = false
+                if (!urlRunnerDeviceReady() || !isTargetForeground()) return@post
+                try {
+                    elementInspector = ElementInspectorOverlay(this, result.getOrThrow()) { elementInspector = null }.also { it.show() }
+                } catch (_: Exception) {
+                    elementInspector?.dismiss(); elementInspector = null
+                    android.widget.Toast.makeText(this, "要素を取得できませんでした。もう一度お試しください", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -315,12 +335,13 @@ class ArunoAccessibilityService : AccessibilityService() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        elementInspector?.dismiss()
+        cancelElementInspection()
         accessibilityOverlayController?.onConfigurationChanged()
     }
 
     override fun onDestroy() {
-        elementInspector?.dismiss()
+        cancelElementInspection()
+        elementReferenceExecutor.shutdownNow()
         // onUnbind and onDestroy can both happen: record/stop at most once.
         handleServiceDisconnection()
         urlSequenceRunner = null
@@ -431,7 +452,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     }
 
     fun stopAutomation(reason: String = "停止しました") {
-        elementInspector?.dismiss()
+        cancelElementInspection()
         // フロート／通知／ホームからの停止が URLランナーにも届くようにする。
         urlSequenceRunner?.stop(reason)
         urlSequenceRunner = null
@@ -461,7 +482,7 @@ class ArunoAccessibilityService : AccessibilityService() {
     private var urlSequenceScheduler: UrlRunnerHandlerScheduler? = null
 
     fun toggleUrlRunnerPause() {
-        if (elementInspector != null) return
+        if (elementInspector != null || elementInspectionPending) return
         urlPopupOperation++
         urlPopupInFlight = false
         urlSequenceRunner?.togglePause()

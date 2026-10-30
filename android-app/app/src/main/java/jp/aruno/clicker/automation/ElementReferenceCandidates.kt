@@ -13,6 +13,9 @@ internal object ElementReferenceCandidates {
         val density = snapshot.optDouble("density", 1.0).coerceAtLeast(0.5)
         val nodes = snapshot.getJSONArray("nodes").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
         val visible = nodes.filter { it.optBoolean("visible") }
+        val wideContent = visible.map { it to ElementReferenceSelection.bounds(it) }
+            .filter { (n, b) -> !n.optBoolean("textMissing") && b.width() >= sw * 0.25 && b.height() < sh * 0.25 }
+            .sortedByDescending { it.second.bottom }
         val ranked = visible.mapNotNull { node ->
             val b = ElementReferenceSelection.bounds(node)
             val text = node.optString("text", "").trim()
@@ -36,12 +39,11 @@ internal object ElementReferenceCandidates {
             if (small && cx in 0.1..0.9 && cy in 0.15..0.85) { score += 5; reasons.put("central-area") }
             if (node.optBoolean("clickable")) { score += 5; reasons.put("clickable") }
             // Look for a nearby wide text/button above the candidate, not a white-card node.
-            val anchors = visible.filter { other ->
-                val ob = ElementReferenceSelection.bounds(other)
+            val anchors = wideContent.asSequence().filter { (other, ob) ->
                 other.optInt("id") != node.optInt("id") && !other.optBoolean("textMissing") &&
                     ob.width() >= sw * 0.25 && ob.height() < sh * 0.25 &&
                     b.top - ob.bottom in 0..(sh * 0.25).toInt() && abs(ob.centerX() - b.centerX()) < sw * 0.2
-            }.sortedBy { b.top - ElementReferenceSelection.bounds(it).bottom }.take(8)
+            }.take(8).map { it.first }.toList()
             if (small && anchors.isNotEmpty()) { score += 15; reasons.put("below-wide-content") }
             JSONObject().put("nodeId", node.getInt("id")).put("score", score).put("reasons", reasons)
                 .put("anchorNodeIds", JSONArray(anchors.map { it.getInt("id") }))

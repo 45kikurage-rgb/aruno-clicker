@@ -289,6 +289,8 @@ open class AutomationOverlayService : Service() {
         buttons.addView(closeButton, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginStart = buttonGap })
         val referenceButtons = LinearLayout(this)
         referenceButtons.addView(compactButton("要素確認", Color.rgb(15, 86, 95)).apply {
+            textSize = if (compactOverlay) 11f else 14f
+            setPadding(dp(3), 0, dp(3), 0)
             setOnClickListener {
                 val connection = jp.aruno.clicker.automation.ArunoAccessibilityService.instance
                 if (connection == null) Toast.makeText(this@AutomationOverlayService, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
@@ -296,6 +298,8 @@ open class AutomationOverlayService : Service() {
             }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         referenceButtons.addView(compactButton("参考データ送信", Color.rgb(15, 86, 95)).apply {
+            textSize = if (compactOverlay) 11f else 14f
+            setPadding(dp(3), 0, dp(3), 0)
             setOnClickListener { jp.aruno.clicker.automation.ElementReferenceUpload.send(this@AutomationOverlayService) }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         root.addView(referenceButtons)
