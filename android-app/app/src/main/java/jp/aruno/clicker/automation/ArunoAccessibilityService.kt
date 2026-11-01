@@ -668,7 +668,7 @@ class ArunoAccessibilityService : AccessibilityService() {
                 else launchTargetApp(activeConfig.targetPackage, resetTask = true)
                     .also { splashReadyForNextUrl = it }
             },
-            splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(fromSixth && splashBetweenUrls),
+            splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(splashBetweenUrls),
             dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
             canContinue = { urlRunnerDeviceReady() },

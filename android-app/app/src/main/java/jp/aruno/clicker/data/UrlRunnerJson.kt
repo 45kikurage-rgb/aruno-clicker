@@ -8,7 +8,7 @@ package jp.aruno.clicker.data
  * 対応する JSON は object / array / string / number / boolean / null のみ。
  */
 object UrlRunnerJson {
-    /** サーバーへ送る形式（schemaVersion 3）。expectedConfigVersion は任意で付ける。 */
+    /** サーバーへ送る形式（schemaVersion 4）。expectedConfigVersion は任意で付ける。 */
     fun encodeRequest(config: UrlRunnerConfig, expectedConfigVersion: Long?): String {
         val fields = mutableListOf<String>()
         fields += "\"urls\":" + encodeStringArray(config.urls)
@@ -17,7 +17,8 @@ object UrlRunnerJson {
         fields += "\"loopMode\":\"${config.loopMode.name}\""
         fields += "\"waitFromForeground\":" + config.waitFromForeground
         fields += "\"startIndex\":" + config.startIndex
-        fields += "\"schemaVersion\":3"
+        fields += "\"schemaVersion\":4"
+        fields += "\"playbackLayout\":2"
         if (expectedConfigVersion != null) {
             fields += "\"expectedConfigVersion\":" + expectedConfigVersion
         }
@@ -35,7 +36,9 @@ object UrlRunnerJson {
         fields += "\"startIndex\":" + config.startIndex
         fields += "\"configVersion\":" + config.configVersion
         fields += "\"updatedAt\":" + encodeString(config.updatedAt)
-        fields += "\"schemaVersion\":3"
+        fields += "\"schemaVersion\":4"
+        fields += "\"playbackLayout\":2"
+        fields += "\"layoutVersion\":2"
         return fields.joinToString(",", "{", "}")
     }
 
@@ -44,7 +47,14 @@ object UrlRunnerJson {
      * 形式が不正な場合は例外ではなく null を返す（呼び出し側は既存の保存済み設定を保持すること）。
      * ここでは件数・秒数などの業務検証は行わない（[UrlRunnerConfig.validate] の責務）。
      */
-    fun decodeConfig(json: String): UrlRunnerConfig? {
+    data class StoredConfig(val config: UrlRunnerConfig, val needsMigration: Boolean)
+
+    /** Remote responses must be v2; a v1 response is never treated as playable v2 data. */
+    fun decodeConfig(json: String): UrlRunnerConfig? = decode(json, local = false)?.config
+
+    fun decodeStoredConfig(json: String): StoredConfig? = decode(json, local = true)
+
+    private fun decode(json: String, local: Boolean): StoredConfig? {
         val root = runCatching { MiniJson.parse(json) }.getOrNull() as? JsonValue.Obj ?: return null
         val source = (root.values["config"] as? JsonValue.Obj) ?: root
         val urlsValue = source.values["urls"] as? JsonValue.Arr ?: return null
@@ -73,16 +83,30 @@ object UrlRunnerJson {
             is JsonValue.Num -> value.value.toIntOrNull() ?: return null
             else -> return null
         }
-        val schema = source.values["schemaVersion"]
-        if (schema !is JsonValue.Num || schema.value != "3") return null
-        return UrlRunnerConfig(
-            loopMode = loopMode, waitFromForeground = waitFromForeground, startIndex = startIndex,
-            urls = urls,
-            individualSeconds = individualSeconds,
+        val schema = (source.values["schemaVersion"] as? JsonValue.Num)?.value ?: return null
+        val marker = source.values["layoutVersion"]
+        if (local && marker != null && (marker !is JsonValue.Num || marker.value != "2")) return null
+        val legacy = local && schema == "3" && marker == null
+        if (legacy) {
+            // Validate the old envelope before dropping its five retired positions.
+            if (urls.size > 200 || individualSeconds.size != 5 ||
+                individualSeconds.any { it !in UrlRunnerLimits.MIN_SECONDS..UrlRunnerLimits.MAX_SECONDS } ||
+                startIndex < 0 || (urls.isNotEmpty() && startIndex >= urls.size)) return null
+        } else {
+            if (schema != "4" && !(local && schema == "3" && marker != null)) return null
+            val layout = source.values["playbackLayout"]
+            if (schema == "4" && (layout !is JsonValue.Num || layout.value != "2")) return null
+            if (individualSeconds.isNotEmpty() || startIndex != 0) return null
+        }
+        val config = UrlRunnerConfig(
+            loopMode = loopMode, waitFromForeground = waitFromForeground, startIndex = 0,
+            urls = if (legacy) urls.drop(5) else urls,
+            individualSeconds = emptyList(),
             commonSeconds = commonSeconds,
             configVersion = configVersion,
             updatedAt = updatedAt,
         )
+        return StoredConfig(config, local && (schema != "4" || marker == null))
     }
 
     private fun encodeStringArray(values: List<String>): String =

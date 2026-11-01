@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "operation": "test-and-stage-unsigned-code30",
+  "execute": false,
+  "publish": false,
+  "approved_application_source_commit": null,
+  "approval_reference": "2026-11-01 user requested code30 runner URL migration completion and existing-signer release. Run all unit regressions and compile one unsigned candidate; storage credentials are confined to a separate stage job. No signing, public route changes, database mutation, or new authentication in this workflow."
+}

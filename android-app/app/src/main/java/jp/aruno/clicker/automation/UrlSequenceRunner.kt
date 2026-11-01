@@ -116,7 +116,6 @@ class UrlSequenceRunnerCore(
     private val dailyViews: DailyVideoViews? = null,
     private val dailyLimit: Int = 2,
     private val routePreparer: UrlRoutePreparer? = null,
-    private val dailyLimitStartIndex: Int = 5,
     private val holdBlocked: () -> Boolean = { false },
 ) {
     /** 世代トークン。開始・停止のたびに進む。 */
@@ -239,9 +238,9 @@ class UrlSequenceRunnerCore(
                     finish("全${config.urls.size}枠の処理を完了しました（起動・表示失敗${skippedFailureCount}件をスキップ・動画の再生は未確認）")
                     return
                 }
-                if (dailyViews != null && config.urls.indices.any { it >= dailyLimitStartIndex && config.urls[it].isNotBlank() } &&
-                    config.urls.indices.none { it >= dailyLimitStartIndex && isEligible(it) }) {
-                    finish("本日の全動画が上限${dailyLimit}回に達したため終了しました。1〜5番は回数制限の対象外です")
+                if (dailyViews != null && config.urls.indices.any { config.urls[it].isNotBlank() } &&
+                    config.urls.indices.none { isEligible(it) }) {
+                    finish("本日の全動画が上限${dailyLimit}回に達したため終了しました")
                     return
                 }
                 index = 0
@@ -251,7 +250,7 @@ class UrlSequenceRunnerCore(
                 return
             }
             val candidate = config.urls[index]
-            val count = try { if (candidate.isBlank() || index < dailyLimitStartIndex) 0 else dailyViews?.count(candidate) ?: 0 }
+            val count = try { if (candidate.isBlank()) 0 else dailyViews?.count(candidate) ?: 0 }
                 catch (_: Exception) { fail(gen, "当日の回数を読み取れないため停止しました"); return }
             if (candidate.isNotBlank() && (dailyViews == null || count < dailyLimit)) break
             report(UrlRunnerPhase.OPENING, index, 0, 0,
@@ -328,7 +327,7 @@ class UrlSequenceRunnerCore(
         if (!checkCanContinue(gen)) return
         val config = snapshot ?: return
         val history = dailyViews
-        if (history != null && index >= dailyLimitStartIndex) {
+        if (history != null) {
             val recorded = runCatching { history.recordStart(config.urls[index], dailyLimit) }.getOrDefault(false)
             if (!recorded) {
                 fail(gen, "当日の回数を保存できないか上限に達したため停止しました")
@@ -362,7 +361,7 @@ class UrlSequenceRunnerCore(
             waitTotalSeconds = totalSeconds,
             waitElapsedSeconds = elapsedSeconds,
             message = "${index + 1}番目のURLを開きました（動画の再生は未確認）" +
-                (if (dailyViews != null && index >= dailyLimitStartIndex) " 本日${currentDailyCount}/${dailyLimit}回（途中停止も含む）" else "") +
+                (if (dailyViews != null) " 本日${currentDailyCount}/${dailyLimit}回（途中停止も含む）" else "") +
                 " ${elapsedSeconds}秒経過 / あと${totalSeconds - elapsedSeconds}秒",
         )
         if (elapsedSeconds >= totalSeconds) {
@@ -381,7 +380,7 @@ class UrlSequenceRunnerCore(
             openCurrent(gen)
             return
         }
-        // First populated slot (normally #6) opens directly. Following slots
+        // First populated slot (normally #1) opens directly. Following slots
         // need a fresh normal TikTok Lite launch before their deep links.
         // Do not splash for an empty slot or after the final STOP-mode URL.
         val next = ((index + 1) until config.urls.size)
@@ -504,8 +503,9 @@ class UrlSequenceRunnerCore(
 
     private fun isEligible(slot: Int): Boolean {
         val url = snapshot?.urls?.getOrNull(slot).orEmpty()
-        return url.isNotBlank() && (slot < dailyLimitStartIndex ||
-            (dailyViews?.let { history -> runCatching { history.count(url) < dailyLimit }.getOrDefault(false) } ?: true))
+        return url.isNotBlank() && (dailyViews?.let { history ->
+            runCatching { history.count(url) < dailyLimit }.getOrDefault(false)
+        } ?: true)
     }
 
     private fun report(

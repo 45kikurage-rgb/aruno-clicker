@@ -46,8 +46,8 @@ object ControlContract {
         val intent = Intent(action)
             .setClassName(context.packageName, AUTOMATION_SERVICE)
             .putExtra(EXTRA_SOURCE, EXTRA_SOURCE_UI)
-            .putExtra(EXTRA_START_FROM_SIXTH, fromSixth)
-            .putExtra(EXTRA_SPLASH_BETWEEN_URLS, fromSixth && splashBetweenUrls)
+            .putExtra(EXTRA_START_FROM_SIXTH, false)
+            .putExtra(EXTRA_SPLASH_BETWEEN_URLS, splashBetweenUrls)
         startMode?.let { intent.putExtra(EXTRA_START_MODE, it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)

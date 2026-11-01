@@ -25,7 +25,7 @@ class UrlRunnerStoreTest {
 
     private fun config(marker: String, version: Long = 1L) = UrlRunnerConfig(
         urls = listOf("https://lite.tiktok.com/t/$marker/"),
-        individualSeconds = listOf(5, 6, 7, 8, 9),
+        individualSeconds = emptyList(),
         commonSeconds = 10,
         configVersion = version,
         updatedAt = "2026-10-27T00:00:00.000Z",

@@ -166,7 +166,7 @@ class AccessibilityOverlayController(
         val buttonHeight = dp(if (compactOverlay) 48 else 56)
         val splashPanel = SplashControls(service) { onSplashSettingsChanged() }
         splashControls = splashPanel
-        val sixthButton = compactButton("6番目以降再生", Color.rgb(15, 116, 54)).apply {
+        val sixthButton = compactButton("1番から再生", Color.rgb(15, 116, 54)).apply {
             textSize = if (compactOverlay) 12f else 16f
             setOnClickListener {
                 if (!AutomationRuntime.snapshot().requested) onStartFromSixth(splashPreferences.isEnabled())

@@ -112,7 +112,7 @@ class UrlListEditState(private val onChanged: () -> Unit = {}) {
         commonSecondsText = config.commonSeconds.toString()
         loopMode = config.loopMode
         waitFromForeground = config.waitFromForeground
-        startNumberText = (config.startIndex + 1).toString()
+        startNumberText = "1"
         onChanged()
     }
 
@@ -124,7 +124,7 @@ class UrlListEditState(private val onChanged: () -> Unit = {}) {
      */
     fun applyPaste(text: String, mode: PasteMode): PasteReport {
         val extraction = UrlExtractor.extractDetailed(text)
-        // The first five positions are always edited individually; bulk paste only touches 6+.
+        // Every new position is a playable URL; paste starts at the first slot.
         if (mode == PasteMode.REPLACE) {
             for (index in UrlRunnerLimits.INDIVIDUAL_COUNT until slots.size) slots[index] = ""
         }
@@ -163,7 +163,7 @@ class UrlListEditState(private val onChanged: () -> Unit = {}) {
         val individual = individualSecondsText.mapIndexed { index, text ->
             parseSecondsField(text, "${index + 1}番の秒数", errors)
         }
-        val common = parseSecondsField(commonSecondsText, "6番以降の共通秒数", errors)
+        val common = parseSecondsField(commonSecondsText, "全URLの共通秒数", errors)
         return SecondsParseResult(
             individualSeconds = if (errors.isEmpty()) individual.map { it!! } else null,
             commonSeconds = if (errors.isEmpty()) common else null,
@@ -197,13 +197,8 @@ class UrlListEditState(private val onChanged: () -> Unit = {}) {
         val seconds = parseSeconds()
         issues += seconds.errors
         if (!seconds.isValid) return null
-        val startNumber = startNumberText.toIntOrNull()
-        if (startNumber == null || startNumber !in 1..effectiveUrls().size.coerceAtLeast(1)) {
-            issues += "開始番号は1〜最後の登録位置の範囲で指定してください"
-            return null
-        }
         val config = UrlRunnerConfig(
-            loopMode = loopMode, waitFromForeground = waitFromForeground, startIndex = startNumber - 1,
+            loopMode = loopMode, waitFromForeground = waitFromForeground, startIndex = 0,
             urls = effectiveUrls(),
             individualSeconds = seconds.individualSeconds!!,
             commonSeconds = seconds.commonSeconds!!,

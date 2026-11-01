@@ -146,7 +146,7 @@ open class AutomationOverlayService : Service() {
             AutomationRuntime.stop(this, "ユーザー補助をONにしてから動画スタートを押してください")
             Toast.makeText(this@AutomationOverlayService, "ユーザー補助をONにしてください", Toast.LENGTH_LONG).show()
         } else if (source != AutomationContract.SOURCE_SCHEDULE) {
-            service.startUrlRunnerSequence(fromSixth, fromSixth && splashBetweenUrls)
+            service.startUrlRunnerSequence(fromSixth, splashBetweenUrls)
         }
         refreshOverlay()
     }
@@ -269,7 +269,7 @@ open class AutomationOverlayService : Service() {
         val buttonHeight = dp(if (compactOverlay) 48 else 56)
         val splashPanel = SplashControls(this) { ArunoAccessibilityService.instance?.updateUrlRunnerSplashSettings() }
         splashControls = splashPanel
-        val sixthButton = compactButton("6番目以降再生", Color.rgb(15, 116, 54)).apply {
+        val sixthButton = compactButton("1番から再生", Color.rgb(15, 116, 54)).apply {
             textSize = if (compactOverlay) 12f else 16f
             setOnClickListener {
                 requestStart(

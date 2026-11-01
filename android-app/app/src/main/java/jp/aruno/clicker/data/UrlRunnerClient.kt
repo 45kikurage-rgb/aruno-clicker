@@ -18,7 +18,7 @@ data class UrlRunnerSyncResult(
 )
 
 /**
- * URLランナー一式の送受信（新エンドポイント /v1/url-runner、schemaVersion 3）。
+ * URLランナー一式の送受信（新エンドポイント /v2/url-runner、schemaVersion 4）。
  *
  * 既存 [RemoteConfigClient] の流儀を踏襲する:
  * - エンドポイントは https のみ・userinfo 不可で検証する。
@@ -55,7 +55,7 @@ class UrlRunnerClient(
                 if (remote.urls.isEmpty() && remote.configVersion <= 0L) {
                     throw UrlRunnerRequestException("サーバーにURL設定がまだ登録されていません")
                 }
-                val issues = remote.validate()
+                val issues = remote.storageIssues()
                 if (issues.isNotEmpty()) {
                     throw UrlRunnerRequestException("サーバーの設定に問題があります: ${issues.first().message}")
                 }
@@ -66,7 +66,7 @@ class UrlRunnerClient(
                     latest.remoteAdminKey != settings.remoteAdminKey) {
                     throw UrlRunnerRequestException("通信中に接続設定が変わったため反映しませんでした。もう一度操作してください")
                 }
-                if (remote.validate().isNotEmpty()) throw UrlRunnerRequestException("サーバーの設定が不正です")
+                if (remote.storageIssues().isNotEmpty()) throw UrlRunnerRequestException("サーバーの設定が不正です")
                 UrlRunnerSyncResult(
                     success = true,
                     action = UrlRunnerSyncAction.DOWNLOAD,
@@ -102,7 +102,7 @@ class UrlRunnerClient(
                 UrlRunnerSyncAction.PUBLISH, "管理キーは英数字8文字で入力してください",
             )
         }
-        val issues = config.validate()
+        val issues = config.storageIssues()
         if (issues.isNotEmpty()) {
             return@withContext failure(
                 UrlRunnerSyncAction.PUBLISH,
@@ -136,7 +136,7 @@ class UrlRunnerClient(
                     latest.remoteAdminKey != settings.remoteAdminKey) {
                     throw UrlRunnerRequestException("通信中に接続設定が変わったため反映しませんでした。もう一度操作してください")
                 }
-                if (remote.validate().isNotEmpty()) throw UrlRunnerRequestException("サーバーの設定が不正です")
+                if (remote.storageIssues().isNotEmpty()) throw UrlRunnerRequestException("サーバーの設定が不正です")
                 UrlRunnerSyncResult(
                     success = true,
                     action = UrlRunnerSyncAction.PUBLISH,

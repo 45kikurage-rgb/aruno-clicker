@@ -44,15 +44,18 @@ data class UrlRunnerSaveResult(
  * （本キーへ触れるのは、手順2で検証済みの内容を手順3で移すときだけ）。
  */
 class UrlRunnerStore(private val storage: UrlRunnerStorage) {
-    fun load(): UrlRunnerLoadResult {
+    fun load(): UrlRunnerLoadResult = synchronized(LOCK) { loadLocked() }
+
+    private fun loadLocked(): UrlRunnerLoadResult {
         val raw = storage.read(KEY_CURRENT) ?: return UrlRunnerLoadResult(
             UrlRunnerLoadResult.Status.EMPTY, null, "保存済み設定はありません",
         )
-        val config = UrlRunnerJson.decodeConfig(raw)
+        val decoded = UrlRunnerJson.decodeStoredConfig(raw)
             ?: return UrlRunnerLoadResult(
                 UrlRunnerLoadResult.Status.CORRUPT, null, "保存済み設定の形式が不正です",
             )
-        val issues = config.validate()
+        val config = decoded.config
+        val issues = config.storageIssues()
         if (issues.isNotEmpty()) {
             return UrlRunnerLoadResult(
                 UrlRunnerLoadResult.Status.CORRUPT,
@@ -60,14 +63,27 @@ class UrlRunnerStore(private val storage: UrlRunnerStorage) {
                 "保存済み設定に問題があります: ${issues.first().message}",
             )
         }
+        if (decoded.needsMigration) {
+            // The new list and its layoutVersion marker are in the same AtomicFile
+            // image. A failed migration never exposes the retired URLs for playback.
+            val saved = save(config)
+            if (!saved.success) return UrlRunnerLoadResult(
+                UrlRunnerLoadResult.Status.CORRUPT, null, "URL番号の移行を保存できませんでした。再試行してください",
+            )
+        }
+        if (config.urls.none { it.isNotBlank() }) return UrlRunnerLoadResult(
+            UrlRunnerLoadResult.Status.EMPTY, config, "再生するURLがありません。データをダウンロードしてください",
+        )
         return UrlRunnerLoadResult(UrlRunnerLoadResult.Status.OK, config)
     }
 
     /** 動画スタート用: 正常に保存された設定だけを返す（壊れたデータでは開始しない）。 */
-    fun loadForStart(): UrlRunnerConfig? = load().config
+    fun loadForStart(): UrlRunnerConfig? = load().takeIf { it.status == UrlRunnerLoadResult.Status.OK }?.config
 
-    fun save(candidate: UrlRunnerConfig): UrlRunnerSaveResult {
-        val issues = candidate.validate()
+    fun save(candidate: UrlRunnerConfig): UrlRunnerSaveResult = synchronized(LOCK) { saveLocked(candidate) }
+
+    private fun saveLocked(candidate: UrlRunnerConfig): UrlRunnerSaveResult {
+        val issues = candidate.storageIssues()
         if (issues.isNotEmpty()) {
             return UrlRunnerSaveResult(false, "保存しませんでした: ${issues.first().message}")
         }
@@ -105,6 +121,7 @@ class UrlRunnerStore(private val storage: UrlRunnerStorage) {
     }
 
     companion object {
+        private val LOCK = Any()
         const val KEY_CURRENT = "url_runner_config_json"
         const val KEY_PENDING = "url_runner_config_pending_json"
     }

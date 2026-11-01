@@ -153,7 +153,7 @@ fun ArunoClickerApp(
             !accessibilityGranted -> homeNotice = "ユーザー補助設定を開き、Aru-TikerをONにしてください"
             else -> {
                 homeNotice = null
-                startUrlRunnerAutomation(fromSixth, fromSixth && withSplash)
+                startUrlRunnerAutomation(fromSixth, withSplash)
             }
         }
     }

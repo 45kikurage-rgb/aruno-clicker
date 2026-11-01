@@ -28,28 +28,28 @@ class ControlContractTest {
         assertEquals(ControlContract.ACTION_START, intent.action)
         assertEquals(app.packageName, intent.component!!.packageName)
         assertEquals(ControlContract.AUTOMATION_SERVICE, intent.component!!.className)
-        assertTrue(intent.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, false))
+        assertFalse(intent.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
     }
     @Test fun explicitSixthSplashChoicesAreDistinctOneRunCommands() {
         val app = RuntimeEnvironment.getApplication()
         ControlContract.startUrlRunner(app, fromSixth = true, splashBetweenUrls = true)
         val withSplash = shadowOf(app).nextStartedService
-        assertTrue(withSplash.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, false))
+        assertFalse(withSplash.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
         assertTrue(withSplash.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, false))
         ControlContract.startUrlRunner(app, fromSixth = true, splashBetweenUrls = false)
         val withoutSplash = shadowOf(app).nextStartedService
-        assertTrue(withoutSplash.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, false))
+        assertFalse(withoutSplash.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
         assertFalse(withoutSplash.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, true))
     }
 
-    @Test fun normalStartCannotAccidentallyInheritSixthSplashFlag() {
+    @Test fun splashChoiceNoLongerDependsOnObsoleteSixthFlag() {
         val app = RuntimeEnvironment.getApplication()
         ControlContract.startUrlRunner(app, fromSixth = true, splashBetweenUrls = true)
         shadowOf(app).nextStartedService
         ControlContract.startUrlRunner(app, fromSixth = false, splashBetweenUrls = true)
         val normal = shadowOf(app).nextStartedService
         assertFalse(normal.getBooleanExtra(ControlContract.EXTRA_START_FROM_SIXTH, true))
-        assertFalse(normal.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, true))
+        assertTrue(normal.getBooleanExtra(ControlContract.EXTRA_SPLASH_BETWEEN_URLS, false))
     }
 
     @Test fun normalStartDoesNotInheritSixthSelection() {
