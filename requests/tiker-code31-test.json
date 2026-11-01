@@ -1,1 +1,8 @@
-{"schema":1,"operation":"test-and-stage-unsigned-code31","execute":false,"publish":false,"approved_application_source_commit":null,"approval_reference":"2026-11-01 user requested all recent-card cleanup with horizontal/vertical and two-front-card support, confirmed-empty gate before next URL, and production distribution using the existing signer."}
+{
+  "schema": 1,
+  "operation": "test-and-stage-unsigned-code31",
+  "execute": true,
+  "publish": false,
+  "approved_application_source_commit": "442cb6ee3363d6cfb6b2ac0dc59aa10cda30e66b",
+  "approval_reference": "2026-11-01 user requested all recent-card cleanup with horizontal/vertical and two-front-card support, confirmed-empty gate before next URL, and production distribution using the existing signer."
+}
