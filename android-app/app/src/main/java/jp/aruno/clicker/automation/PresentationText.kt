@@ -25,8 +25,11 @@ object UrlRunnerOverlayCountdown {
         sessionRemaining: String,
         secondsToNext: Int?,
         hasNext: Boolean,
+        preparing: Boolean = false,
     ): String = if (!isRunner) {
         "経過 $elapsed  /  残り $sessionRemaining"
+    } else if (preparing) {
+        "経過 $elapsed\n履歴カードを削除・確認しています"
     } else if (secondsToNext != null) {
         "経過 $elapsed\n" + if (hasNext) {
             "次の動画まであと${secondsToNext.coerceAtLeast(0)}秒"

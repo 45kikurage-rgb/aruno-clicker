@@ -673,7 +673,9 @@ class ArunoAccessibilityService : AccessibilityService() {
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
             routePreparer = jp.aruno.clicker.data.RecentsCleanupStore(this).load().let { settings ->
                 if (!settings.enabled) null else RecentsCleaner(
-                    AndroidRecentsPort(this, handler, ::currentScreenBounds, ::urlRunnerDeviceReady),
+                    AndroidRecentsPort(this, handler, ::currentScreenBounds) {
+                        urlRunnerDeviceReady() && AutomationRuntime.snapshot().requested
+                    },
                     settings.layout,
                 ) { message -> AutomationRuntime.markWaiting(this, message) }
             },

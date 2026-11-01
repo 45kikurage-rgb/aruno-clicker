@@ -139,7 +139,7 @@ fun UrlRunnerHomeScreen(
                     onClick = { jp.aruno.clicker.automation.PopupDiagnostics.share(context) },
                     enabled = !isRunning,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                ) { Text("×解除の診断を共有") }
+                ) { Text("動作診断を共有") }
             }
             item {
                 OutlinedButton(

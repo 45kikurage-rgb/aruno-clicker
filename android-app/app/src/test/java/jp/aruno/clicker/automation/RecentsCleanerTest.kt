@@ -6,14 +6,19 @@ import org.junit.Test
 
 class RecentsCleanerTest {
     private class Queue : DelayScheduler {
-        data class Entry(val task: () -> Unit, var cancelled: Boolean = false)
+        data class Entry(val at: Long, val task: () -> Unit, var cancelled: Boolean = false)
+        var now = 0L
         val entries = mutableListOf<Entry>()
         override fun schedule(delayMs: Long, task: () -> Unit): ScheduledTask {
-            val entry = Entry(task); entries += entry
+            val entry = Entry(now + delayMs, task); entries += entry
             return ScheduledTask { entry.cancelled = true }
         }
         override fun cancelAll() = entries.clear()
-        fun one() { if (entries.isNotEmpty()) entries.removeAt(0).let { if (!it.cancelled) it.task() } }
+        fun one() {
+            entries.filterNot { it.cancelled }.minByOrNull { it.at }?.let { next ->
+                entries.remove(next); now = next.at; next.task()
+            } ?: entries.clear()
+        }
         fun drain() { var n = 0; while (entries.isNotEmpty()) { check(n++ < 1000); one() } }
     }
     private class Port(count: Int = 5) : RecentsPort {
@@ -74,11 +79,11 @@ class RecentsCleanerTest {
     }
     @Test fun successfulGestureWithoutRemovalFailsAndDoesNotReportEmpty() {
         val port = Port(2).apply { stuck = true }
-        assertEquals(false, run(port)); assertEquals(3, port.actions.size); assertEquals(0, port.homes)
+        assertEquals(false, run(port)); assertEquals(3, port.actions.size); assertEquals(1, port.homes)
     }
     @Test fun missingTreeAfterLastSwipeIsNotSuccess() {
         val port = Port(1).apply { unknownAfterLast = true }
-        assertEquals(false, run(port)); assertEquals(0, port.homes)
+        assertEquals(false, run(port)); assertEquals(1, port.homes)
     }
     @Test fun lastSwipeReturningHomeRequiresReopeningEmptyOverview() {
         val port = Port(1).apply { autoHome = true }
@@ -128,5 +133,21 @@ class RecentsCleanerTest {
         assertFalse(RecentsEmptyEvidence.verified(false, true, true, 0, true))
         assertFalse(RecentsEmptyEvidence.verified(true, true, true, 0, false))
         assertFalse(RecentsEmptyEvidence.verified(true, true, true, 2, true))
+    }
+
+    @Test fun missingGestureCallbackStopsAtDeadlineInsteadOfFreezingPreparation() {
+        val port = Port().apply { delayGesture = true }; val queue = Queue(); var result: Boolean? = null
+        val cleaner = RecentsCleaner(port, RecentsLayout.VERTICAL)
+        cleaner.prepare(queue, { true }) { result = it }; queue.drain()
+        assertEquals(false, result); assertTrue(queue.now <= 3400L)
+        assertTrue(cleaner.failureMessage()!!.contains("応答がありません"))
+        port.pending!!(true); queue.drain(); assertEquals(1, port.actions.size)
+    }
+    @Test fun unknownWindowStopsQuicklyWithItsActualReasonAndReturnsHome() {
+        val port = Port().apply { unknownReads = 100 }; val queue = Queue(); var result: Boolean? = null
+        val cleaner = RecentsCleaner(port, RecentsLayout.VERTICAL)
+        cleaner.prepare(queue, { true }) { result = it }; queue.drain()
+        assertEquals(false, result); assertTrue(queue.now < 7000L); assertEquals(1, port.homes)
+        assertTrue(cleaner.failureMessage()!!.contains("要素を取得できません"))
     }
 }

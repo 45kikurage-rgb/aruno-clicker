@@ -31,6 +31,37 @@ internal object PopupOverlayAvoidance {
         return true
     }
 
+    /** Remove float input/occlusion only for one short gesture; restoration is idempotent. */
+    fun suspendTouches(): (() -> Unit)? {
+        data class State(val view: View, val params: WindowManager.LayoutParams, val flags: Int, val visibility: Int, val alpha: Float)
+        val states = overlays.toMap().filterKeys { it.isAttachedToWindow }.map { (view, params) ->
+            State(view, params, params.flags, view.visibility, view.alpha)
+        }
+        var restored = false
+        val restore = {
+            if (!restored) {
+                restored = true
+                states.forEach { state ->
+                    state.params.flags = state.flags
+                    state.view.alpha = state.alpha
+                    state.view.visibility = state.visibility
+                    if (state.view.isAttachedToWindow) runCatching {
+                        state.view.context.getSystemService(WindowManager::class.java).updateViewLayout(state.view, state.params)
+                    }
+                }
+            }
+        }
+        return try {
+            states.forEach { state ->
+                state.params.flags = state.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                state.view.alpha = 0f
+                state.view.visibility = View.INVISIBLE
+                state.view.context.getSystemService(WindowManager::class.java).updateViewLayout(state.view, state.params)
+            }
+            restore
+        } catch (_: Exception) { restore(); null }
+    }
+
     private fun boundsOf(view: View): Rect? {
         if (!view.isAttachedToWindow || view.width <= 0 || view.height <= 0) return null
         val xy = IntArray(2); view.getLocationOnScreen(xy)

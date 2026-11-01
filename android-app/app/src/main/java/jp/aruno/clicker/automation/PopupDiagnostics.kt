@@ -17,14 +17,14 @@ internal object PopupDiagnostics {
     fun share(context: Context) {
         val file = folder(context).listFiles()?.maxByOrNull { it.name }
         if (file == null) {
-            Toast.makeText(context, "ポップアップの記録はまだありません", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "動作診断の記録はまだありません", Toast.LENGTH_LONG).show()
             return
         }
         val uri = FileProvider.getUriForFile(context, context.packageName + ".popup-diagnostics", file)
         val intent = Intent(Intent.ACTION_SEND).setType("application/json")
             .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            .apply { clipData = android.content.ClipData.newRawUri("ポップアップ診断", uri) }
-        runCatching { context.startActivity(Intent.createChooser(intent, "×解除の診断を共有")) }
+            .apply { clipData = android.content.ClipData.newRawUri("動作診断", uri) }
+        runCatching { context.startActivity(Intent.createChooser(intent, "動作診断を共有")) }
             .onFailure { Toast.makeText(context, "共有先を開けませんでした", Toast.LENGTH_LONG).show() }
     }
 }
