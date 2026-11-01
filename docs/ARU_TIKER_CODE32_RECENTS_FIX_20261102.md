@@ -1,0 +1,7 @@
+# Aru-Tiker code32 recents preparation fix
+
+User physical-device report (2026-11-02): all tested devices remained in recents at URL NO.2 preparation. Code31's 272 software tests and publication did not constitute successful OEM acceptance. Exact device node dumps are not yet available, so the triggering per-device condition is not proven.
+
+Fixes: enumerate interactive windows instead of trusting only the active root; ignore own overlays and accept known task classes/headers/dismiss actions in addition to resource IDs; retain usable card bounds in partially available trees, while never treating an incomplete tree as empty. Position fallback and recognized clear-all action are limited to positively identified overview surfaces. Restore float touch/visibility after each short gesture on a separate handler, including cancellation or missing callbacks. Stop with a concrete reason and locally saved diagnostic after bounded unknown-window/gesture waits. Show cleanup progress rather than saying the next video is opening. No automatic Gift-page navigation.
+
+All-card empty confirmation remains mandatory before the next URL. Default cleanup OFF, existing device selection, package, signer, URL migration, counters, popup behavior and server contracts are retained. Diagnostics contain window owners/resource IDs/classes and structural counts, not task text or URLs; share remains manual via 動作診断を共有. No backend/DB change. Software and public-byte verification will be recorded separately from actual phone acceptance.

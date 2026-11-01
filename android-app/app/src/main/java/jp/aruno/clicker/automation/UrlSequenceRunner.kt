@@ -270,7 +270,7 @@ class UrlSequenceRunnerCore(
                     preparer.prepare(tasks, { checkCanContinue(gen) }) { ready ->
                         tasks.schedule(0) prepared@{
                             if (!checkCanContinue(gen) || preparation != preparationToken || phase != UrlRunnerPhase.PREPARING_ROUTE) return@prepared
-                            if (!ready) fail(gen, "次のURL前の準備を確認できないため停止しました。履歴削除がONの場合は履歴画面と縦・横の設定を確認してください")
+                            if (!ready) fail(gen, preparer.failureMessage() ?: "次のURL前の準備を確認できないため停止しました。履歴画面と縦・横の設定を確認してください")
                             else launchCurrent(gen)
                         }
                     }

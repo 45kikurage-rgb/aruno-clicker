@@ -23,6 +23,7 @@ interface GiftHomePort {
 /** The runner owns the pausable scheduler and cancels it on stop/lock/unbind. */
 fun interface UrlRoutePreparer {
     fun prepare(scheduler: DelayScheduler, active: () -> Boolean, done: (Boolean) -> Unit)
+    fun failureMessage(): String? = null
 }
 
 /** Bounded navigation, never clicks rewards, ads, or redemption buttons.

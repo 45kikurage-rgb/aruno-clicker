@@ -334,7 +334,7 @@ class AccessibilityOverlayController(
         val showUrl = state.requested && state.urlRunnerActive && state.urlRunnerIndex >= 0
         val statusTitle = if (showUrl) "URL NO.${state.urlRunnerIndex + 1} " +
             (if (state.urlRunnerPaused) "一時停止" else if (state.urlRunnerPreparing) "準備" else "再生") else fallbackTitle
-        val statusDetail = state.popupNotice.ifBlank { if (showUrl && !state.urlRunnerPreparing) "" else fallbackDetail }
+        val statusDetail = state.popupNotice.ifBlank { if (showUrl && state.urlRunnerPreparing) state.message else if (showUrl) "" else fallbackDetail }
         statusTitleText?.apply {
             text = statusTitle
             maxLines = 1
@@ -353,7 +353,7 @@ class AccessibilityOverlayController(
             val remaining = if (state.endsAtElapsed == Long.MAX_VALUE) "停止まで" else formatDuration(state.remainingMs)
             UrlRunnerOverlayCountdown.render(
                 state.urlRunnerActive, formatDuration(state.elapsedMs), remaining,
-                state.urlRunnerSecondsToNext, state.urlRunnerHasNext,
+                state.urlRunnerSecondsToNext, state.urlRunnerHasNext, state.urlRunnerPreparing,
             )
         } else {
             "経過 --:--:--  /  残り --:--:--"
