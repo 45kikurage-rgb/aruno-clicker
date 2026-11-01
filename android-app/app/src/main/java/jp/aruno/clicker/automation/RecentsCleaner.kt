@@ -82,3 +82,10 @@ internal class RecentsCleaner(
         post(900L) { check() }
     }
 }
+
+/** Empty words in launcher settings or search history cannot authorize playback. */
+internal object RecentsEmptyEvidence {
+    fun verified(explicitEmpty: Boolean, overview: Boolean, emptyMessageId: Boolean,
+                 cardCount: Int, complete: Boolean): Boolean =
+        complete && cardCount == 0 && explicitEmpty && (overview || emptyMessageId)
+}

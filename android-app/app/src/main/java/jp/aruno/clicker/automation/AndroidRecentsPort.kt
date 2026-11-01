@@ -35,6 +35,7 @@ internal class AndroidRecentsPort(
         var overview = false
         var home = false
         var explicitEmpty = false
+        var emptyMessageId = false
         while (queue.isNotEmpty() && visited++ < 2500) {
             val node = queue.removeFirst()
             if (node.packageName?.toString() != owner) continue
@@ -43,7 +44,10 @@ internal class AndroidRecentsPort(
                 if (id in OVERVIEW_IDS) overview = true
                 if (id in HOME_IDS) home = true
                 val label = sequenceOf(node.text, node.contentDescription).mapNotNull { it?.toString()?.trim() }
-                if (label.any { it.lowercase() in EMPTY_LABELS }) explicitEmpty = true
+                if (label.any { it.lowercase() in EMPTY_LABELS }) {
+                    explicitEmpty = true
+                    if (id in EMPTY_IDS) emptyMessageId = true
+                }
                 val rect = Rect().also(node::getBoundsInScreen)
                 if (id in CARD_IDS && rect.intersect(screen) && rect.width() >= screen.width() * .18f &&
                     rect.height() >= screen.height() * .10f && rect.height() < screen.height() * .96f) {
@@ -73,7 +77,7 @@ internal class AndroidRecentsPort(
             }
             RecentCard(labels.joinToString("|").hashCode().toString(), rect.left, rect.top, rect.right, rect.bottom)
         })
-        if (explicitEmpty && (overview || !home)) return RecentsScreen(RecentsSurface.EMPTY)
+        if (RecentsEmptyEvidence.verified(explicitEmpty, overview, emptyMessageId, leaves.size, complete)) return RecentsScreen(RecentsSurface.EMPTY)
         if (home && !overview) return RecentsScreen(RecentsSurface.HOME)
         return RecentsScreen(RecentsSurface.UNKNOWN)
     }
@@ -111,6 +115,7 @@ internal class AndroidRecentsPort(
         private val CARD_IDS = setOf("task_view", "taskview", "task", "task_card", "task_container", "recent_task", "recent_app", "recents_card", "recents_task_view")
         private val OVERVIEW_IDS = setOf("recents_view", "recentsview", "overview_panel", "recents_container", "recents", "recent_apps", "task_stack_view", "recents_view_container")
         private val HOME_IDS = setOf("workspace", "hotseat", "launcher_workspace", "desktop", "cell_layout")
-        private val EMPTY_LABELS = setOf("最近使ったアプリはありません", "最近使用したアプリはありません", "最近のアプリはありません", "最近使用したアプリなし", "最近使ったアプリなし", "履歴はありません", "履歴がありません", "履歴なし", "最近のアイテムはありません", "no recent items", "no recent apps", "no recent applications", "nothing here yet", "すべてクリアしました")
+        private val EMPTY_IDS = setOf("empty_message", "empty_text", "empty_view", "recents_empty_view", "empty_recents_view", "no_recent_apps", "empty_state_message")
+        private val EMPTY_LABELS = setOf("最近使ったアプリはありません", "最近使ったアプリがありません", "最近使用したアプリがありません", "最近使用したアプリはありません", "最近のアプリはありません", "最近使用したアプリなし", "最近使ったアプリなし", "履歴はありません", "履歴がありません", "履歴なし", "最近のアイテムはありません", "no recent items", "no recent apps", "no recent applications", "nothing here yet", "すべてクリアしました")
     }
 }

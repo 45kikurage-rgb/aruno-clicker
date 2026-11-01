@@ -116,4 +116,17 @@ class RecentsCleanerTest {
         port.surface = RecentsSurface.EMPTY; queue.one(); queue.one(); assertNull(result)
         queue.drain(); assertEquals(true, result)
     }
+
+    @Test fun launcherHistoryTextOutsideOverviewIsNotEmptyRecentAppsEvidence() {
+        assertFalse(RecentsEmptyEvidence.verified(true, false, false, 0, true))
+    }
+    @Test fun knownEmptyOverviewOrDedicatedEmptyMessageIsEvidence() {
+        assertTrue(RecentsEmptyEvidence.verified(true, true, false, 0, true))
+        assertTrue(RecentsEmptyEvidence.verified(true, false, true, 0, true))
+    }
+    @Test fun absentLabelsMissingTreeOrRemainingCardsNeverProveEmpty() {
+        assertFalse(RecentsEmptyEvidence.verified(false, true, true, 0, true))
+        assertFalse(RecentsEmptyEvidence.verified(true, true, true, 0, false))
+        assertFalse(RecentsEmptyEvidence.verified(true, true, true, 2, true))
+    }
 }
