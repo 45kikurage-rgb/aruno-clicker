@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "operation": "test-and-stage-unsigned-code31",
-  "execute": true,
+  "execute": false,
   "publish": false,
   "approved_application_source_commit": "54337c0a0960f4a2a26dc902b7d24c493580c8f2",
   "approval_reference": "2026-11-01 user requested all recent-card cleanup with horizontal/vertical and two-front-card support, confirmed-empty gate before next URL, and production distribution using the existing signer."
