@@ -1,5 +1,12 @@
 # ARUNO CLICKER
 
+## Aru-Tiker 0.6.15 / code32 (2026-11-02)
+
+Published: https://download.aruno-id.com/tiker / APK: https://download.aruno-id.com/apk/aru-tiker-code32.apk . Addresses the user's report that every tested device remained in recents during URL NO.2 preparation after code31. Reads interactive windows and OEM card evidence, temporarily removes float touch interception during swipes, uses bounded callback/window waits, and shows the concrete preparation or failure reason. Explicit empty-history confirmation is still required before the next URL. No automatic Gift-page navigation.
+
+Final verification: 294 Android tests, independent existing-key restores, API26/28/35 signatures and exact public APK bytes passed. Window/float fixtures cover API28/35; actual phone improvement remains unverified. First verify a representative device. A failed run saves local structural diagnostics for manual sharing via 動作診断を共有. See [code32 release record](docs/ARU_TIKER_CODE32_RECENTS_FIX_20261102.md). Shared signing/distribution sources and receipts: [aruno-platform-ops code32](https://github.com/45kikurage-rgb/aruno-platform-ops/tree/feature/tiker-code32-20261102).
+
+
 ## Aru-Tiker 0.6.14 / code31 (2026-11-01)
 
 Published: https://download.aruno-id.com/tiker / APK: https://download.aruno-id.com/apk/aru-tiker-code31.apk . Adds per-device recent-card cleanup ON/OFF (default OFF) and horizontal/vertical selection. Vertical two-front-card histories are re-read after each leftward swipe; horizontal cards swipe upward. The next URL opens only after explicit empty-history confirmation. Unknown or stuck cards stop the run. Code30 URL migration, counters, popup references and settings are retained.
