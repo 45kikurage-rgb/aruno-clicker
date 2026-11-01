@@ -101,6 +101,9 @@ fun UrlRunnerHomeScreen(
     val dailyStore = remember(context) { DailyVideoViewStore(context) }
     var dailyLimit by remember { mutableStateOf(dailyStore.limit()) }
     var dailyLimitError by remember { mutableStateOf(false) }
+    val recentsStore = remember(context) { jp.aruno.clicker.data.RecentsCleanupStore(context) }
+    var recentsSettings by remember { mutableStateOf(recentsStore.load()) }
+    var recentsError by remember { mutableStateOf(false) }
     val giftHomeStore = remember(context) { GiftHomeModeStore(context) }
     var giftHomeMode by remember { mutableStateOf(giftHomeStore.mode()) }
     var giftHomeError by remember { mutableStateOf(false) }
@@ -168,6 +171,35 @@ fun UrlRunnerHomeScreen(
                     color = MatrixTextMuted,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+            item {
+                Text("次のURL前に履歴カードを全て削除", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(true, false).forEach { enabled ->
+                        OutlinedButton(onClick = {
+                            val value = recentsSettings.copy(enabled = enabled)
+                            recentsError = !recentsStore.save(value)
+                            if (!recentsError) recentsSettings = value
+                        }, enabled = !isRunning, modifier = Modifier.weight(1f).height(48.dp)) {
+                            Text((if (recentsSettings.enabled == enabled) "選択中：" else "") + if (enabled) "ON" else "OFF")
+                        }
+                    }
+                }
+                Text("履歴表示（この端末）", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    jp.aruno.clicker.data.RecentsLayout.entries.forEach { layout ->
+                        OutlinedButton(onClick = {
+                            val value = recentsSettings.copy(layout = layout)
+                            recentsError = !recentsStore.save(value)
+                            if (!recentsError) recentsSettings = value
+                        }, enabled = !isRunning, modifier = Modifier.weight(1f).height(48.dp)) {
+                            Text((if (recentsSettings.layout == layout) "選択中：" else "") + layout.label)
+                        }
+                    }
+                }
+                Text(if (recentsError) "保存できませんでした。もう一度選んでください。"
+                    else "横は上へ、縦は左へスワイプします。縦の2枚表示にも対応。全アプリの履歴を削除し、空になった確認後に次のURLを開きます。確認できなければ停止します。",
+                    style = MaterialTheme.typography.bodySmall, color = if (recentsError) DangerRed else MatrixTextMuted)
             }
             item {
                 Text("全URLの当日上限（この端末）", fontWeight = FontWeight.Bold)

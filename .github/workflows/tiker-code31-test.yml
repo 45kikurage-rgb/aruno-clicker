@@ -1,0 +1,125 @@
+name: Aru-Tiker code31 complete unit regressions and private unsigned candidate
+on:
+  push:
+    branches: [feature/tiker-code31-20261101]
+    paths: [requests/tiker-code31-test.json]
+permissions: {contents: read}
+concurrency: {group: tiker-code31-candidate, cancel-in-progress: false}
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.request.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 0}
+      - id: request
+        name: Validate the source pin before building
+        run: |
+          python - <<'PY'
+          import json,os,re,subprocess
+          q=json.load(open('requests/tiker-code31-test.json'))
+          assert q['schema']==1 and q['operation']=='test-and-stage-unsigned-code31' and type(q['execute']) is bool
+          assert q['publish'] is False and q['approval_reference']
+          if q['execute']:
+            assert re.fullmatch('[a-f0-9]{40}',q['approved_application_source_commit'])
+            subprocess.run(['git','diff','--exit-code',q['approved_application_source_commit'],'HEAD','--','android-app'],check=True)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('enabled='+str(q['execute']).lower()+'\n')
+          PY
+  test:
+    needs: authorize
+    if: needs.authorize.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: All unit regressions and unsigned release without signing or storage credentials
+        working-directory: android-app
+        run: gradle --no-daemon --console=plain testAtlasDebugUnitTest assembleAtlasRelease
+      - name: Check complete reports and pin exact unsigned candidate
+        run: |
+          python - <<'PY'
+          import json,pathlib,hashlib,os,xml.etree.ElementTree as E
+          totals={k:0 for k in ('tests','failures','errors','skipped')}
+          reports=list(pathlib.Path('android-app/app/build/test-results').rglob('TEST-*.xml'))
+          assert reports
+          for p in reports:
+            e=E.parse(p).getroot()
+            for k in totals:totals[k]+=int(e.attrib.get(k,0))
+          assert totals['tests']>=269 and all(totals[k]==0 for k in ('failures','errors','skipped')),totals
+          p=pathlib.Path('android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk')
+          raw=p.read_bytes();sha=hashlib.sha256(raw).hexdigest();prefix='signing-candidates/tiker/code31/'+sha+'/'
+          facts={'schema':1,'application_id':'jp.aruno.clicker','version_code':31,'version_name':'0.6.14','source_commit':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'sha256':sha,'bytes':len(raw),'tests':totals,'unsigned_key':prefix+'unsigned.apk','verification_key':prefix+'verification.json','published':False}
+          pathlib.Path('code31-unsigned-facts.json').write_text(json.dumps(facts,indent=2));print(json.dumps(facts))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tiker-code31-unsigned-tests
+          path: |
+            code31-unsigned-facts.json
+            android-app/app/build/outputs/apk/atlas/release/
+            android-app/app/build/test-results/
+          retention-days: 30
+  stage:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: tiker-code31-unsigned-tests, path: candidate}
+      - name: Independently verify artifact bytes and reports before storage access
+        run: |
+          python - <<'PY'
+          import json,pathlib,hashlib,os,xml.etree.ElementTree as E
+          base=pathlib.Path('candidate');q=json.loads((base/'code31-unsigned-facts.json').read_text())
+          assert q['source_commit']==os.environ['GITHUB_SHA'] and q['run_id']==os.environ['GITHUB_RUN_ID'] and q['published'] is False
+          totals={k:0 for k in ('tests','failures','errors','skipped')}
+          reports=list((base/'android-app/app/build/test-results').rglob('TEST-*.xml'));assert reports
+          for p in reports:
+            e=E.parse(p).getroot()
+            for k in totals:totals[k]+=int(e.attrib.get(k,0))
+          assert totals==q['tests'] and totals['tests']>=269 and all(totals[k]==0 for k in ('failures','errors','skipped'))
+          p=base/'android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk'
+          assert hashlib.sha256(p.read_bytes()).hexdigest()==q['sha256'] and p.stat().st_size==q['bytes']
+          assert q['unsigned_key']=='signing-candidates/tiker/code31/'+q['sha256']+'/unsigned.apk'
+          assert q['verification_key']=='signing-candidates/tiker/code31/'+q['sha256']+'/verification.json'
+          PY
+      - name: Preserve only the verified private unsigned candidate and provenance
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+        run: |
+          set -euo pipefail
+          endpoint="https://02100d2235d6f7d7f893b4217b58b902.r2.cloudflarestorage.com"
+          key=$(python -c 'import json;print(json.load(open("candidate/code31-unsigned-facts.json"))["unsigned_key"])')
+          verification_key=$(python -c 'import json;print(json.load(open("candidate/code31-unsigned-facts.json"))["verification_key"])')
+          apk="candidate/android-app/app/build/outputs/apk/atlas/release/app-atlas-release-unsigned.apk"
+          aws s3 cp "$apk" "s3://aruno-clicker-download/$key" --endpoint-url "$endpoint" --no-progress --only-show-errors
+          aws s3 cp "s3://aruno-clicker-download/$key" candidate/readback.apk --endpoint-url "$endpoint" --no-progress --only-show-errors
+          cmp "$apk" candidate/readback.apk
+          python - <<'PY'
+          import json,pathlib,hashlib
+          p=pathlib.Path('candidate/code31-unsigned-facts.json');q=json.loads(p.read_text());q['private_readback_verified']=True
+          out=pathlib.Path('code31-verification.json');out.write_text(json.dumps(q,indent=2))
+          receipt={**q,'verification_sha256':hashlib.sha256(out.read_bytes()).hexdigest()}
+          pathlib.Path('code31-unsigned-stage-receipt.json').write_text(json.dumps(receipt,indent=2));print(json.dumps(receipt))
+          PY
+          aws s3 cp code31-verification.json "s3://aruno-clicker-download/$verification_key" --endpoint-url "$endpoint" --no-progress --only-show-errors
+          aws s3 cp "s3://aruno-clicker-download/$verification_key" candidate/verification-readback.json --endpoint-url "$endpoint" --no-progress --only-show-errors
+          cmp code31-verification.json candidate/verification-readback.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tiker-code31-unsigned-private-stage
+          path: |
+            code31-verification.json
+            code31-unsigned-stage-receipt.json
+          retention-days: 30

@@ -671,6 +671,12 @@ class ArunoAccessibilityService : AccessibilityService() {
             splashEveryLinks = jp.aruno.clicker.data.SplashFrequencyStore(this).selectedFrequency(splashBetweenUrls),
             dailyViews = jp.aruno.clicker.data.DailyVideoViewStore(this),
             dailyLimit = jp.aruno.clicker.data.DailyVideoViewStore(this).limit(),
+            routePreparer = jp.aruno.clicker.data.RecentsCleanupStore(this).load().let { settings ->
+                if (!settings.enabled) null else RecentsCleaner(
+                    AndroidRecentsPort(this, handler, ::currentScreenBounds, ::urlRunnerDeviceReady),
+                    settings.layout,
+                ) { message -> AutomationRuntime.markWaiting(this, message) }
+            },
             canContinue = { urlRunnerDeviceReady() },
             holdBlocked = { dismissUrlRunnerPopupIfPresent() },
             foregroundChecker = UrlRunnerForegroundChecker(),

@@ -263,18 +263,18 @@ class UrlSequenceRunnerCore(
         if (preparer != null && hasOpenedUrl) {
             val preparation = ++preparationToken
             phase = UrlRunnerPhase.PREPARING_ROUTE
-            report(phase, index, 0, 0, "次のURL前にギフト→ホームを確認しています")
+            report(phase, index, 0, 0, "次のURL前の準備を確認しています")
             tasks.schedule(0) {
                 if (!checkCanContinue(gen)) return@schedule
                 runCatching {
                     preparer.prepare(tasks, { checkCanContinue(gen) }) { ready ->
                         tasks.schedule(0) prepared@{
                             if (!checkCanContinue(gen) || preparation != preparationToken || phase != UrlRunnerPhase.PREPARING_ROUTE) return@prepared
-                            if (!ready) fail(gen, "ギフト→ホームを確認できないため停止しました。フロートの位置や切替方法を確認してください")
+                            if (!ready) fail(gen, "次のURL前の準備を確認できないため停止しました。履歴削除がONの場合は履歴画面と縦・横の設定を確認してください")
                             else launchCurrent(gen)
                         }
                     }
-                }.onFailure { fail(gen, "ギフト→ホームの操作に失敗したため停止しました") }
+                }.onFailure { fail(gen, "次のURL前の準備に失敗したため停止しました") }
             }
         } else launchCurrent(gen)
     }
