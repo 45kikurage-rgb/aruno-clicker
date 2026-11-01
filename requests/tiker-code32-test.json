@@ -1,1 +1,8 @@
-{"schema":1,"operation":"test-and-stage-unsigned-code32","execute":false,"publish":false,"approved_application_source_commit":null,"approval_reference":"2026-11-02 user reported all devices stuck in recents during code31 URL2 preparation. Fix window selection, OEM recognition, float touch interception and bounded failure reporting, retain empty-history confirmation and existing signer/data."}
+{
+  "schema": 1,
+  "operation": "test-and-stage-unsigned-code32",
+  "execute": true,
+  "publish": false,
+  "approved_application_source_commit": "5bec59c691c5aa88867adfbe7686b0d14e3bfdf7",
+  "approval_reference": "2026-11-02 user reported all devices stuck in recents during code31 URL2 preparation. Fix window selection, OEM recognition, float touch interception and bounded failure reporting, retain empty-history confirmation and existing signer/data."
+}
