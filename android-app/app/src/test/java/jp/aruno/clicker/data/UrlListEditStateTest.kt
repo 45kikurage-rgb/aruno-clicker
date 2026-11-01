@@ -17,34 +17,34 @@ class UrlListEditStateTest {
         assertEquals(10, report10.appliedCount)
         assertEquals(0, report10.excessCount)
         assertEquals(10, state.filledCount())
-        assertEquals("https://lite.tiktok.com/t/P10/", state.slotAt(14))
-        assertEquals("", state.slotAt(15))
+        assertEquals("https://lite.tiktok.com/t/P10/", state.slotAt(9))
+        assertEquals("", state.slotAt(10))
 
         val report11 = state.applyPaste(pasteText(11), PasteMode.REPLACE)
         assertEquals(11, report11.appliedCount)
-        // 11件目は16番へ入る。
-        assertEquals("https://lite.tiktok.com/t/P11/", state.slotAt(15))
+        // 11件目は11番へ入る。
+        assertEquals("https://lite.tiktok.com/t/P11/", state.slotAt(10))
     }
 
     @Test
     fun pasteBoundaries20And21() {
         val state = UrlListEditState()
         state.applyPaste(pasteText(21), PasteMode.REPLACE)
-        assertEquals("https://lite.tiktok.com/t/P20/", state.slotAt(24))
-        assertEquals("https://lite.tiktok.com/t/P21/", state.slotAt(25))
+        assertEquals("https://lite.tiktok.com/t/P20/", state.slotAt(19))
+        assertEquals("https://lite.tiktok.com/t/P21/", state.slotAt(20))
         assertEquals(21, state.filledCount())
     }
 
     @Test
-    fun paste195FillsSlots6To200And196ReportsExcess() {
+    fun paste195FillsSlots1To195And196ReportsExcess() {
         val state = UrlListEditState()
         repeat(5) { state.setSlot(it, "https://lite.tiktok.com/t/FIXED${it + 1}/") }
         val report195 = state.applyPaste(pasteText(195), PasteMode.REPLACE)
         assertEquals(195, report195.appliedCount)
         assertEquals(0, report195.excessCount)
-        assertEquals("https://lite.tiktok.com/t/FIXED1/", state.slotAt(0))
-        assertEquals("https://lite.tiktok.com/t/P195/", state.slotAt(199))
-        assertEquals(200, state.filledCount())
+        assertEquals("https://lite.tiktok.com/t/P1/", state.slotAt(0))
+        assertEquals("https://lite.tiktok.com/t/P195/", state.slotAt(194))
+        assertEquals(195, state.filledCount())
 
         val report196 = state.applyPaste(pasteText(196), PasteMode.REPLACE)
         assertEquals(195, report196.appliedCount)
@@ -60,14 +60,13 @@ class UrlListEditStateTest {
         state.applyPaste(pasteText(3), PasteMode.REPLACE)
         val appendReport = state.applyPaste("https://lite.tiktok.com/t/ADD/", PasteMode.APPEND)
         assertEquals(1, appendReport.appliedCount)
-        assertEquals("https://lite.tiktok.com/t/ADD/", state.slotAt(8))
-        assertEquals(5, state.filledCount())
+        assertEquals("https://lite.tiktok.com/t/ADD/", state.slotAt(3))
+        assertEquals(4, state.filledCount())
 
         state.applyPaste("https://lite.tiktok.com/t/NEW/", PasteMode.REPLACE)
-        assertEquals(2, state.filledCount())
-        assertEquals("https://lite.tiktok.com/t/FIXED/", state.slotAt(0))
-        assertEquals("https://lite.tiktok.com/t/NEW/", state.slotAt(5))
-        assertEquals("", state.slotAt(6))
+        assertEquals(1, state.filledCount())
+        assertEquals("https://lite.tiktok.com/t/NEW/", state.slotAt(0))
+        assertEquals("", state.slotAt(1))
     }
 
     @Test
@@ -104,26 +103,25 @@ class UrlListEditStateTest {
     @Test
     fun secondsParsingReportsEveryBadField() {
         val state = UrlListEditState()
-        state.individualSecondsText[0] = "abc"
-        state.individualSecondsText[1] = "0"
-        state.commonSecondsText = "3601"
-        val result = state.parseSeconds()
-        assertEquals(false, result.isValid)
-        assertEquals(3, result.errors.size)
+        for (value in listOf("abc", "0", "3601")) {
+            state.commonSecondsText = value
+            val result = state.parseSeconds()
+            assertEquals(false, result.isValid)
+            assertEquals(1, result.errors.size)
+        }
     }
 
     @Test
     fun buildConfigSucceedsWithValidState() {
         val state = UrlListEditState()
         state.applyPaste(pasteText(7), PasteMode.REPLACE)
-        state.individualSecondsText[0] = "3"
         state.commonSecondsText = "44"
         val issues = mutableListOf<String>()
         val config = state.buildConfig(issues = issues)
         assertNotNull(config)
         assertTrue(issues.isEmpty())
-        assertEquals(12, config!!.urls.size)
-        assertEquals(3, config.secondsFor(0))
+        assertEquals(7, config!!.urls.size)
+        assertEquals(44, config.secondsFor(0))
         assertEquals(44, config.secondsFor(6))
     }
 
@@ -131,13 +129,13 @@ class UrlListEditStateTest {
     fun loadFromRestoresSavedConfig() {
         val saved = UrlRunnerConfig(
             urls = listOf("https://lite.tiktok.com/t/S1/", "https://lite.tiktok.com/t/S2/"),
-            individualSeconds = listOf(1, 2, 3, 4, 5),
+            individualSeconds = emptyList(),
             commonSeconds = 6,
         )
         val state = UrlListEditState()
         state.loadFrom(saved)
         assertEquals(saved.urls, state.effectiveUrls())
-        assertEquals("3", state.individualSecondsText[2])
+        assertTrue(state.individualSecondsText.isEmpty())
         assertEquals("6", state.commonSecondsText)
     }
 }

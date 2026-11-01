@@ -66,7 +66,6 @@ class UrlSequenceRunnerTest {
         dailyViews: DailyVideoViews? = null,
         dailyLimit: Int = 2,
         routePreparer: UrlRoutePreparer? = null,
-        dailyLimitStartIndex: Int = 0,
         holdBlocked: () -> Boolean = { false },
     ) {
         var allowed = true
@@ -101,7 +100,6 @@ class UrlSequenceRunnerTest {
             dailyViews = dailyViews,
             dailyLimit = dailyLimit,
             routePreparer = routePreparer,
-            dailyLimitStartIndex = dailyLimitStartIndex,
             holdBlocked = holdBlocked,
         )
     }
@@ -143,9 +141,9 @@ class UrlSequenceRunnerTest {
     }
 
     @Test fun sixthStartOpensTargetImmediatelyAndNeverInsertsFirstUrl() {
-        val c = config(7).copy(startIndex = 5)
+        val c = config(7, common = 5).copy(startIndex = 5)
         val history = MemoryViews()
-        val h = Harness(dailyLimitStartIndex = 5, dailyViews = history)
+        val h = Harness(dailyViews = history)
         h.runner.start(c)
         assertEquals(listOf(c.urls[5]), h.opened)
         assertEquals(1, history.count(c.urls[5]))
@@ -161,21 +159,21 @@ class UrlSequenceRunnerTest {
         assertEquals(2, h.opened.size)
     }
 
-    @Test fun firstFiveIgnoreOldCountsAndNeverWriteHistory() {
+    @Test fun firstFiveNowRespectExistingCountsAndNeverReplayCappedUrls() {
         val c = config(5)
         val history = MemoryViews().also { it.writable = false }
         c.urls.forEach { history.counts[it] = 3 }
-        val h = Harness(dailyLimitStartIndex = 5, dailyViews = history)
+        val h = Harness(dailyViews = history)
         h.runner.start(c);h.scheduler.advanceBy(15_000)
-        assertEquals(c.urls, h.opened)
+        assertTrue(h.opened.isEmpty())
         c.urls.forEach { assertEquals(3, history.count(it)) }
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
     }
 
     @Test fun sixthStartPauseStopAndLockNeverInsertFirstUrlOrOpenAfterCancellation() {
         for (stop in listOf(true, false)) {
-            val c = config(7).copy(startIndex = 5)
-            val h = Harness(dailyLimitStartIndex = 5)
+            val c = config(7, common = 5).copy(startIndex = 5)
+            val h = Harness()
             h.runner.start(c); h.scheduler.advanceBy(1_000); h.runner.togglePause()
             h.scheduler.advanceBy(60_000)
             assertEquals(listOf(c.urls[5]), h.opened)
@@ -188,9 +186,9 @@ class UrlSequenceRunnerTest {
     }
 
     @Test fun sixthStartDoesNotRequireFirstUrlAndCappedVideoSkipsDirectlyToNext() {
-        val c = config(7).copy(startIndex = 5)
+        val c = config(7, common = 5).copy(startIndex = 5)
         for (missing in listOf(true, false)) {
-            val h = Harness(failUrls = setOf(c.urls[0]), dailyLimitStartIndex = 5)
+            val h = Harness(failUrls = setOf(c.urls[0]))
             h.runner.start(if (missing) c.copy(urls = c.urls.toMutableList().also { it[0] = "" }) else c)
             assertEquals(listOf(c.urls[5]), h.opened)
             h.scheduler.advanceBy(10_000)
@@ -198,20 +196,19 @@ class UrlSequenceRunnerTest {
             assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
         }
         val history = MemoryViews().also { it.counts[c.urls[5]] = 2 }
-        val h = Harness(dailyLimitStartIndex = 5, dailyViews = history)
+        val h = Harness(dailyViews = history)
         h.runner.start(c)
         assertEquals(listOf(c.urls[6]), h.opened)
         assertEquals(0, history.count(c.urls[0]))
     }
 
-    @Test fun loopFinishesWhenVideosCappedEvenThoughUtilityLinksAreUnlimited() {
+    @Test fun loopCapsEveryUrlIncludingTheFirstFive() {
         val c = config(6).copy(startIndex = 5)
         val history = MemoryViews()
-        val h = Harness(dailyLimitStartIndex = 5,
-            dailyViews = history, loopMode = LoopMode.LOOP)
+        val h = Harness(dailyViews = history, loopMode = LoopMode.LOOP)
         h.runner.start(c);h.scheduler.advanceBy(100_000)
         assertEquals(2, history.count(c.urls[5]))
-        assertEquals(0, history.count(c.urls[0]))
+        assertEquals(2, history.count(c.urls[0]))
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
     }
 
@@ -334,11 +331,9 @@ class UrlSequenceRunnerTest {
 
     private fun config(
         count: Int,
-        individual: List<Int> = listOf(3, 3, 3, 3, 3),
-        common: Int = 5,
+        common: Int = 3,
     ) = UrlRunnerConfig(
         urls = (1..count).map { "https://lite.tiktok.com/t/U$it/" },
-        individualSeconds = individual,
         commonSeconds = common,
     )
 
@@ -386,7 +381,7 @@ class UrlSequenceRunnerTest {
     @Test fun pauseFreezesNinetySecondHoldAndResumeDoesNotCountAnotherView() {
         val history = MemoryViews()
         val h = Harness(dailyViews = history)
-        val c = config(2, individual = List(5) { 90 })
+        val c = config(2, common = 90)
         h.runner.start(c)
         h.scheduler.advanceBy(30_000)
         h.runner.togglePause()
@@ -462,13 +457,13 @@ class UrlSequenceRunnerTest {
     }
 
     @Test
-    fun opensInOrderWithIndividualThenCommonSeconds() {
+    fun opensInOrderWithCommonSecondsAtEveryPosition() {
         val harness = Harness()
         val config = config(7)
         assertEquals(UrlRunnerStartResult.Started, harness.runner.start(config))
         assertEquals(listOf(config.urls[0]), harness.opened)
 
-        // 1番目（個別3秒）: 3秒経過で次へ。
+        // 1番目（共通3秒）: 3秒経過で次へ。
         harness.scheduler.advanceBy(2_999)
         assertEquals(1, harness.opened.size)
         harness.scheduler.advanceBy(1)
@@ -478,18 +473,16 @@ class UrlSequenceRunnerTest {
         repeat(3) { harness.scheduler.advanceBy(3_000) }
         assertEquals(5, harness.opened.size)
 
-        // 5番目（個別3秒）が終わると6番目が開く。
+        // 5番目（共通3秒）が終わると6番目が開く。
         harness.scheduler.advanceBy(3_000)
         assertEquals(6, harness.opened.size)
 
-        // 6番目（0始まり5）は共通5秒。3秒では進まず、5秒で次へ。
-        harness.scheduler.advanceBy(3_000)
+        // New positions 6 and 7 use the same common duration as positions 1–5.
+        harness.scheduler.advanceBy(2_999)
         assertEquals(6, harness.opened.size)
-        harness.scheduler.advanceBy(2_000)
+        harness.scheduler.advanceBy(1)
         assertEquals(7, harness.opened.size)
-
-        // 最終（共通5秒）が終わると停止し、先頭へは戻らない（既定 STOP）。
-        harness.scheduler.advanceBy(5_000)
+        harness.scheduler.advanceBy(3_000)
         assertEquals(UrlRunnerPhase.FINISHED, harness.runner.phase)
         assertEquals(7, harness.opened.size)
         assertEquals(config.urls, harness.opened)
@@ -503,7 +496,7 @@ class UrlSequenceRunnerTest {
                 "", "https://lite.tiktok.com/t/second/", "", 
                 "https://lite.tiktok.com/t/fourth/", "",
             ),
-            individualSeconds = listOf(1, 1, 1, 1, 1),
+            commonSeconds = 1,
         )
         assertEquals(UrlRunnerStartResult.Started, h.runner.start(config))
         assertEquals(listOf(config.urls[1]), h.opened)
@@ -538,7 +531,7 @@ class UrlSequenceRunnerTest {
                 "https://lite.tiktok.com/t/first/", "", "",
                 "https://lite.tiktok.com/t/fourth/",
             ),
-            individualSeconds = listOf(1, 1, 1, 1, 1),
+            commonSeconds = 1,
         )
         h.runner.start(config)
         assertEquals(3, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.nextIndex)
@@ -554,7 +547,7 @@ class UrlSequenceRunnerTest {
         val h = Harness(loopMode = LoopMode.LOOP)
         val config = UrlRunnerConfig(
             urls = listOf("", "https://lite.tiktok.com/t/only/", ""),
-            individualSeconds = listOf(1, 1, 1, 1, 1),
+            commonSeconds = 1,
         )
         h.runner.start(config)
         assertEquals(1, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.nextIndex)
@@ -736,7 +729,7 @@ class UrlSequenceRunnerTest {
         val empty = harness.runner.start(UrlRunnerConfig(urls = emptyList()))
         assertTrue(empty is UrlRunnerStartResult.Invalid)
         val badSeconds = harness.runner.start(
-            config(1).copy(individualSeconds = listOf(0, 3, 3, 3, 3)),
+            config(1).copy(commonSeconds = 0),
         )
         assertTrue(badSeconds is UrlRunnerStartResult.Invalid)
         assertTrue(harness.opened.isEmpty())
@@ -751,7 +744,7 @@ class UrlSequenceRunnerTest {
         )
         val harness = Harness()
         harness.runner.start(
-            UrlRunnerConfig(urls = mutableUrls, individualSeconds = listOf(1, 1, 1, 1, 1), commonSeconds = 1),
+            UrlRunnerConfig(urls = mutableUrls, commonSeconds = 1),
         )
         // 開始後に元のリストを書き換えても、実行中の順序は固定されたまま。
         mutableUrls[1] = "https://lite.tiktok.com/t/CHANGED/"
@@ -765,7 +758,7 @@ class UrlSequenceRunnerTest {
     @Test
     fun loopModeLoopsOnlyWhenExplicitlySelected() {
         val harness = Harness(loopMode = LoopMode.LOOP)
-        val config = config(1, individual = listOf(1, 1, 1, 1, 1))
+        val config = config(1, common = 1)
         harness.runner.start(config)
         harness.scheduler.advanceBy(1_000)
         // LOOP では先頭へ戻る（既定の STOP との切替確認）。
@@ -776,7 +769,7 @@ class UrlSequenceRunnerTest {
     @Test
     fun finishedStatusDistinguishesOpenedFromPlayed() {
         val harness = Harness()
-        harness.runner.start(config(1, individual = listOf(1, 1, 1, 1, 1)))
+        harness.runner.start(config(1, common = 1))
         harness.scheduler.advanceBy(1_000)
         assertEquals(UrlRunnerPhase.FINISHED, harness.runner.phase)
         assertTrue(harness.statuses.last().message.contains("処理を完了"))
@@ -810,117 +803,117 @@ class UrlSequenceRunnerTest {
         assertEquals(config(3).urls[2], h.opened.last())
     }
 
-    private fun sixthModeConfig(): UrlRunnerConfig =
-        config(8, individual = List(5) { 1 }, common = 1).copy(startIndex = 5)
+    private fun firstModeConfig(): UrlRunnerConfig =
+        config(3, common = 1)
 
     @Test
-    fun sixthSplashModeOpensSixDirectlyThenSplashBeforeSevenAndEight() {
+    fun firstSplashModeOpensOneDirectlyThenSplashBeforeTwoAndThree() {
         val h = Harness(splashEveryLinks = 1)
-        val config = sixthModeConfig()
+        val config = firstModeConfig()
         h.runner.start(config)
-        assertEquals(listOf(config.urls[5]), h.opened)
+        assertEquals(listOf(config.urls[0]), h.opened)
         assertTrue(h.splashCalls.isEmpty())
         h.scheduler.advanceBy(999)
         assertTrue(h.splashCalls.isEmpty())
         h.scheduler.advanceBy(1)
         assertEquals(listOf("splash"), h.splashCalls)
         assertEquals(UrlRunnerPhase.RECOVERING, h.runner.phase)
-        assertEquals(listOf(config.urls[5]), h.opened)
+        assertEquals(listOf(config.urls[0]), h.opened)
         h.scheduler.advanceBy(1_799)
         assertEquals(1, h.opened.size)
         h.scheduler.advanceBy(1)
-        assertEquals(listOf(config.urls[5], config.urls[6]), h.opened)
+        assertEquals(listOf(config.urls[0], config.urls[1]), h.opened)
         assertEquals(
-            listOf("url:${config.urls[5]}", "splash", "url:${config.urls[6]}"),
+            listOf("url:${config.urls[0]}", "splash", "url:${config.urls[1]}"),
             h.order,
         )
         h.scheduler.advanceBy(1_000)
         assertEquals(2, h.splashCalls.size)
         assertEquals(2, h.opened.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(config.urls.slice(5..7), h.opened)
+        assertEquals(config.urls.slice(0..2), h.opened)
         h.scheduler.advanceBy(1_000)
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
         assertEquals(2, h.splashCalls.size)
     }
 
     @Test
-    fun sixthNoSplashModeOpensSixSevenEightImmediatelyAfterEachWait() {
+    fun firstNoSplashModeOpensOneTwoThreeImmediatelyAfterEachWait() {
         val h = Harness(splashEveryLinks = 0)
-        val config = sixthModeConfig()
+        val config = firstModeConfig()
         h.runner.start(config)
-        assertEquals(listOf(config.urls[5]), h.opened)
+        assertEquals(listOf(config.urls[0]), h.opened)
         h.scheduler.advanceBy(1_000)
-        assertEquals(listOf(config.urls[5], config.urls[6]), h.opened)
+        assertEquals(listOf(config.urls[0], config.urls[1]), h.opened)
         h.scheduler.advanceBy(1_000)
-        assertEquals(config.urls.slice(5..7), h.opened)
+        assertEquals(config.urls.slice(0..2), h.opened)
         h.scheduler.advanceBy(1_000)
         assertEquals(UrlRunnerPhase.FINISHED, h.runner.phase)
         assertTrue("No intentional splash in normal transitions", h.splashCalls.isEmpty())
     }
 
     @Test
-    fun splashModeSkipsBlankSevenAndSplashesOnlyBeforeEight() {
-        val config = sixthModeConfig().copy(urls = sixthModeConfig().urls.toMutableList().apply { this[6] = "" })
+    fun splashModeSkipsBlankTwoAndSplashesOnlyBeforeThree() {
+        val config = firstModeConfig().copy(urls = firstModeConfig().urls.toMutableList().apply { this[1] = "" })
         val h = Harness(splashEveryLinks = 1)
         h.runner.start(config)
-        assertEquals(listOf(config.urls[5]), h.opened)
+        assertEquals(listOf(config.urls[0]), h.opened)
         h.scheduler.advanceBy(1_000)
         assertEquals(1, h.splashCalls.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(listOf(config.urls[5], config.urls[7]), h.opened)
-        assertTrue(h.statuses.any { it.index == 6 && it.message.contains("空欄") })
-        assertEquals(7, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.index)
+        assertEquals(listOf(config.urls[0], config.urls[2]), h.opened)
+        assertTrue(h.statuses.any { it.index == 1 && it.message.contains("空欄") })
+        assertEquals(2, h.statuses.last { it.phase == UrlRunnerPhase.HOLDING }.index)
     }
 
     @Test
     fun explicitStopDuringNormalSplashPreventsNextUrl() {
-        val config = sixthModeConfig()
+        val config = firstModeConfig()
         val h = Harness(splashEveryLinks = 1)
         h.runner.start(config)
         h.scheduler.advanceBy(1_000)
         assertEquals(1, h.splashCalls.size)
         h.runner.stop()
         h.scheduler.advanceBy(30_000)
-        assertEquals(listOf(config.urls[5]), h.opened)
+        assertEquals(listOf(config.urls[0]), h.opened)
         assertEquals(UrlRunnerPhase.STOPPED, h.runner.phase)
     }
 
     @Test
     fun lockDuringNormalSplashPreventsNextUrl() {
-        val config = sixthModeConfig()
+        val config = firstModeConfig()
         val h = Harness(splashEveryLinks = 1)
         h.runner.start(config)
         h.scheduler.advanceBy(1_000)
         h.allowed = false
         h.scheduler.advanceBy(1_800)
-        assertEquals(listOf(config.urls[5]), h.opened)
+        assertEquals(listOf(config.urls[0]), h.opened)
         assertEquals(UrlRunnerPhase.FAILED, h.runner.phase)
     }
 
     @Test
     fun intentionalSplashModeDoesNotDoubleSplashAfterFailedUrlRecovery() {
-        val config = sixthModeConfig()
+        val config = firstModeConfig()
         val h = Harness(
             splashEveryLinks = 1,
-            failUrls = setOf(config.urls[5]),
+            failUrls = setOf(config.urls[0]),
         )
         h.runner.start(config)
         assertEquals(UrlRunnerPhase.SKIPPED, h.runner.phase)
         h.scheduler.advanceBy(650)
         assertEquals(1, h.splashCalls.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(listOf(config.urls[6]), h.opened)
+        assertEquals(listOf(config.urls[1]), h.opened)
         assertEquals(1, h.splashCalls.size)
         h.scheduler.advanceBy(1_000)
         assertEquals(2, h.splashCalls.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(listOf(config.urls[6], config.urls[7]), h.opened)
+        assertEquals(listOf(config.urls[1], config.urls[2]), h.opened)
     }
 
     @Test
     fun oneRunSplashModeLoopsThroughExistingConfiguredOrder() {
-        val config = sixthModeConfig().copy(loopMode = LoopMode.LOOP)
+        val config = firstModeConfig().copy(loopMode = LoopMode.LOOP)
         val h = Harness(loopMode = LoopMode.LOOP, splashEveryLinks = 1)
         h.runner.start(config)
         h.scheduler.advanceBy(1_000 + 1_800)
@@ -935,64 +928,64 @@ class UrlSequenceRunnerTest {
 
     @Test
     fun splashFrequencyTwoRunsEveryTwoSuccessfulVideosNotBeforeSecond() {
-        val config = sixthModeConfig().copy(urls=(1..10).map { "https://lite.tiktok.com/t/slot$it/" })
+        val config = firstModeConfig().copy(urls=(1..5).map { "https://lite.tiktok.com/t/slot$it/" })
         val h = Harness(splashEveryLinks = 2)
         h.runner.start(config)
-        assertEquals(listOf(config.urls[5]),h.opened)
+        assertEquals(listOf(config.urls[0]),h.opened)
         h.scheduler.advanceBy(1_000)
-        assertEquals(listOf(config.urls[5],config.urls[6]),h.opened)
+        assertEquals(listOf(config.urls[0],config.urls[1]),h.opened)
         assertTrue(h.splashCalls.isEmpty())
         h.scheduler.advanceBy(1_000)
         assertEquals(1,h.splashCalls.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(config.urls.slice(5..7),h.opened)
+        assertEquals(config.urls.slice(0..2),h.opened)
         h.scheduler.advanceBy(1_000)
-        assertEquals(config.urls.slice(5..8),h.opened)
+        assertEquals(config.urls.slice(0..3),h.opened)
         assertEquals(1,h.splashCalls.size)
         h.scheduler.advanceBy(1_000)
         assertEquals(2,h.splashCalls.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(config.urls.slice(5..9),h.opened)
+        assertEquals(config.urls.slice(0..4),h.opened)
     }
 
     @Test
-    fun splashFrequencyThreeStartsAtSixAndOpensNineAfterSingleSplash() {
-        val config = sixthModeConfig().copy(urls=(1..10).map { "https://lite.tiktok.com/t/slot$it/" })
+    fun splashFrequencyThreeStartsAtOneAndOpensFourAfterSingleSplash() {
+        val config = firstModeConfig().copy(urls=(1..5).map { "https://lite.tiktok.com/t/slot$it/" })
         val h = Harness(splashEveryLinks = 3)
         h.runner.start(config)
         h.scheduler.advanceBy(3_000)
-        assertEquals(config.urls.slice(5..7),h.opened)
+        assertEquals(config.urls.slice(0..2),h.opened)
         assertEquals(listOf("splash"),h.splashCalls)
         h.scheduler.advanceBy(1_800)
-        assertEquals(config.urls.slice(5..8),h.opened)
+        assertEquals(config.urls.slice(0..3),h.opened)
         h.scheduler.advanceBy(2_000)
         assertEquals(1,h.splashCalls.size)
     }
 
     @Test
     fun splashFrequencyFiveWithOnlyFourVideoSlotsNeverLaunchesSplash() {
-        val config = sixthModeConfig().copy(urls=(1..9).map { "https://lite.tiktok.com/t/slot$it/" })
+        val config = firstModeConfig().copy(urls=(1..4).map { "https://lite.tiktok.com/t/slot$it/" })
         val h = Harness(splashEveryLinks = 5)
         h.runner.start(config)
         h.scheduler.advanceBy(4_000)
-        assertEquals(config.urls.slice(5..8),h.opened)
+        assertEquals(config.urls.slice(0..3),h.opened)
         assertEquals(UrlRunnerPhase.FINISHED,h.runner.phase)
         assertTrue(h.splashCalls.isEmpty())
     }
 
     @Test
     fun splashFrequencyTwoResetsCounterAfterFailedLinkRecovery() {
-        val config = sixthModeConfig().copy(urls=(1..10).map { "https://lite.tiktok.com/t/slot$it/" })
-        val h = Harness(splashEveryLinks = 2,failUrls=setOf(config.urls[6]))
+        val config = firstModeConfig().copy(urls=(1..5).map { "https://lite.tiktok.com/t/slot$it/" })
+        val h = Harness(splashEveryLinks = 2,failUrls=setOf(config.urls[1]))
         h.runner.start(config)
         h.scheduler.advanceBy(1_000)
         assertEquals(UrlRunnerPhase.SKIPPED,h.runner.phase)
         h.scheduler.advanceBy(650)
         assertEquals(1,h.splashCalls.size)
         h.scheduler.advanceBy(1_800)
-        assertEquals(listOf(config.urls[5],config.urls[7]),h.opened)
+        assertEquals(listOf(config.urls[0],config.urls[2]),h.opened)
         h.scheduler.advanceBy(1_000)
-        assertEquals(config.urls.slice(7..8).last(),h.opened.last())
+        assertEquals(config.urls.slice(2..3).last(),h.opened.last())
         assertEquals(1,h.splashCalls.size)
         h.scheduler.advanceBy(1_000)
         assertEquals(2,h.splashCalls.size)

@@ -10,7 +10,7 @@ class UrlRunnerConfigTest {
 
     private fun config(
         count: Int,
-        individual: List<Int> = listOf(11, 12, 13, 14, 15),
+        individual: List<Int> = emptyList(),
         common: Int = 99,
     ) = UrlRunnerConfig(
         urls = (0 until count).map(::url),
@@ -19,10 +19,10 @@ class UrlRunnerConfigTest {
     )
 
     @Test
-    fun secondsForUsesIndividualForFirstFiveAndCommonAfter() {
+    fun secondsForUsesCommonForEveryPlayablePosition() {
         val config = config(8)
-        assertEquals(11, config.secondsFor(0))
-        assertEquals(15, config.secondsFor(4))
+        assertEquals(99, config.secondsFor(0))
+        assertEquals(99, config.secondsFor(4))
         assertEquals(99, config.secondsFor(5))
         assertEquals(99, config.secondsFor(7))
     }
@@ -34,10 +34,10 @@ class UrlRunnerConfigTest {
     }
 
     @Test
-    fun boundary200IsValidAnd201IsTooMany() {
+    fun boundary195IsValidAnd196IsTooMany() {
         assertTrue(config(120).validate().isEmpty()) // old saved datasets remain valid
-        assertTrue(config(200).validate().isEmpty())
-        val issues = config(201).validate()
+        assertTrue(config(195).validate().isEmpty())
+        val issues = config(196).validate()
         assertTrue(issues.any { it.code == UrlRunnerIssue.TOO_MANY_URLS })
     }
 
@@ -87,17 +87,17 @@ class UrlRunnerConfigTest {
             config(1, common = 3601).validate()
                 .any { it.code == UrlRunnerIssue.SECONDS_OUT_OF_RANGE },
         )
-        assertTrue(config(1, individual = listOf(1, 3600, 10, 10, 10), common = 3600).validate().isEmpty())
+        assertTrue(config(1, common = 3600).validate().isEmpty())
     }
 
     @Test
     fun endpointDerivation() {
         assertEquals(
-            "https://aruno-clicker-config.45kikurage.workers.dev/v1/url-runner",
+            "https://aruno-clicker-config.45kikurage.workers.dev/v2/url-runner",
             UrlRunnerEndpoint.derive("https://aruno-clicker-config.45kikurage.workers.dev/v1/config"),
         )
         assertEquals(
-            "https://example.com/v1/url-runner",
+            "https://example.com/v2/url-runner",
             UrlRunnerEndpoint.derive("https://example.com/"),
         )
         assertNull(UrlRunnerEndpoint.derive("http://example.com/v1/config"))

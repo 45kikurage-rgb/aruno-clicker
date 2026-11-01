@@ -1,5 +1,12 @@
 # ARUNO CLICKER
 
+## Aru-Tiker 0.6.14 / code31 (2026-11-01)
+
+Published: https://download.aruno-id.com/tiker / APK: https://download.aruno-id.com/apk/aru-tiker-code31.apk . Adds per-device recent-card cleanup ON/OFF (default OFF) and horizontal/vertical selection. Vertical two-front-card histories are re-read after each leftward swipe; horizontal cards swipe upward. The next URL opens only after explicit empty-history confirmation. Unknown or stuck cards stop the run. Code30 URL migration, counters, popup references and settings are retained.
+
+Final Android regressions: 272 passed. Existing signer restored independently from both private repositories; API26/28/35 signatures and public APK bytes verified. Actual phone update, two-card gestures and playback remain unverified. See [code31 release record](docs/ARU_TIKER_CODE31_RECENTS_20261101.md). Shared distribution/signing sources and receipts are in [aruno-platform-ops code31](https://github.com/45kikurage-rgb/aruno-platform-ops/tree/feature/tiker-code31-20261101).
+
+
 ## Aru-Tiker 0.6.11 / code28 (2026-10-29)
 
 Published: https://download.aruno-id.com/tiker . Removes automatic URL1 insertion and the three-second preparation delay before URL6+. Sixth-position starts open URL6 directly; popup handling, settings, daily counts, waits, pause/stop and optional splash are retained. Final 230 tests passed; existing signer and public APK bytes verified. Physical operation remains unverified. See [code28 record](docs/ARU_TIKER_CODE28_DIRECT_URL_20261029.md).

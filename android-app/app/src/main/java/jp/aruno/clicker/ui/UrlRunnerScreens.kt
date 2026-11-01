@@ -56,7 +56,7 @@ import jp.aruno.clicker.data.GiftHomeModeStore
  * URLランナーの画面群。
  *
  * 起動画面のボタン構成は管理端末モード（remoteAdminMode）で決まる:
- * - 全端末: ユーザー補助設定、通常スタート、6番目からスタート、データダウンロード。
+ * - 全端末: ユーザー補助設定、通常スタート、1番からスタート、データダウンロード。
  * - メイン端末（管理モードON）: 上記＋「設定」。
  * flavor（通常版/ver.S/シェア版）では出し分けしない。
  * 実行中の停止は既存どおりフロート／通知／この画面の「停止する」から行う。
@@ -101,6 +101,9 @@ fun UrlRunnerHomeScreen(
     val dailyStore = remember(context) { DailyVideoViewStore(context) }
     var dailyLimit by remember { mutableStateOf(dailyStore.limit()) }
     var dailyLimitError by remember { mutableStateOf(false) }
+    val recentsStore = remember(context) { jp.aruno.clicker.data.RecentsCleanupStore(context) }
+    var recentsSettings by remember { mutableStateOf(recentsStore.load()) }
+    var recentsError by remember { mutableStateOf(false) }
     val giftHomeStore = remember(context) { GiftHomeModeStore(context) }
     var giftHomeMode by remember { mutableStateOf(giftHomeStore.mode()) }
     var giftHomeError by remember { mutableStateOf(false) }
@@ -170,7 +173,36 @@ fun UrlRunnerHomeScreen(
                 )
             }
             item {
-                Text("6番以降の当日上限（この端末）", fontWeight = FontWeight.Bold)
+                Text("次のURL前に履歴カードを全て削除", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(true, false).forEach { enabled ->
+                        OutlinedButton(onClick = {
+                            val value = recentsSettings.copy(enabled = enabled)
+                            recentsError = !recentsStore.save(value)
+                            if (!recentsError) recentsSettings = value
+                        }, enabled = !isRunning, modifier = Modifier.weight(1f).height(48.dp)) {
+                            Text((if (recentsSettings.enabled == enabled) "選択中：" else "") + if (enabled) "ON" else "OFF")
+                        }
+                    }
+                }
+                Text("履歴表示（この端末）", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    jp.aruno.clicker.data.RecentsLayout.entries.forEach { layout ->
+                        OutlinedButton(onClick = {
+                            val value = recentsSettings.copy(layout = layout)
+                            recentsError = !recentsStore.save(value)
+                            if (!recentsError) recentsSettings = value
+                        }, enabled = !isRunning, modifier = Modifier.weight(1f).height(48.dp)) {
+                            Text((if (recentsSettings.layout == layout) "選択中：" else "") + layout.label)
+                        }
+                    }
+                }
+                Text(if (recentsError) "保存できませんでした。もう一度選んでください。"
+                    else "横は上へ、縦は左へスワイプします。縦の2枚表示にも対応。全アプリの履歴を削除し、空になった確認後に次のURLを開きます。確認できなければ停止します。",
+                    style = MaterialTheme.typography.bodySmall, color = if (recentsError) DangerRed else MatrixTextMuted)
+            }
+            item {
+                Text("全URLの当日上限（この端末）", fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(2, 3).forEach { value ->
                         OutlinedButton(
@@ -185,15 +217,15 @@ fun UrlRunnerHomeScreen(
                 }
                 Text(
                     if (dailyLimitError) "保存できませんでした。もう一度選んでください。"
-                    else "1〜5番は上限対象外。6番以降は途中停止も1回に含み、日本時間0時に切り替わります。",
+                    else "すべてのURLは途中停止も1回に含み、日本時間0時に切り替わります。",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (dailyLimitError) DangerRed else MatrixTextMuted,
                 )
             }
             item {
-                Text("6番以降：対象URLを直接開きます", fontWeight = FontWeight.Bold)
+                Text("全URL：対象URLを直接開きます", fontWeight = FontWeight.Bold)
                 Text(
-                    "6番から開始すると6番URLへ進みます。途中に1番URLを挟む処理と3秒待機はありません。",
+                    "1番から順番に再生します。途中に別の固定URLを挟む処理や3秒待機はありません。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MatrixTextMuted,
                 )
@@ -286,7 +318,7 @@ fun UrlRunnerHomeScreen(
                     enabled = !isRunning,
                     modifier = Modifier.fillMaxWidth().height(62.dp),
                     shape = RoundedCornerShape(17.dp),
-                ) { Text("6番以降から開始\nスプラッシュあり", fontWeight = FontWeight.Bold) }
+                ) { Text("1番から開始\nスプラッシュあり", fontWeight = FontWeight.Bold) }
             }
             item {
                 OutlinedButton(
@@ -294,7 +326,7 @@ fun UrlRunnerHomeScreen(
                     enabled = !isRunning,
                     modifier = Modifier.fillMaxWidth().height(62.dp),
                     shape = RoundedCornerShape(17.dp),
-                ) { Text("6番以降から開始\nスプラッシュなし", fontWeight = FontWeight.Bold) }
+                ) { Text("1番から開始\nスプラッシュなし", fontWeight = FontWeight.Bold) }
             }
             item {
                 OutlinedButton(
@@ -379,27 +411,13 @@ fun UrlRunnerSettingsScreen(
                     Text("URL入力（現在${editState.filledCount()}件）", fontWeight = FontWeight.Bold)
                 }
             }
-            // 秒数入力欄: 1〜5番は個別、6番以降は共通
-            item { SectionTitle("待機秒数（URLを開いてから次へ進むまで）") }
-            for (index in 0 until UrlRunnerLimits.INDIVIDUAL_COUNT) {
-                item {
-                    OutlinedTextField(
-                        value = editState.individualSecondsText[index],
-                        onValueChange = { editState.setIndividualSeconds(index, it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("${index + 1}番") },
-                        suffix = { Text("秒") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                }
-            }
+            item { SectionTitle("待機秒数（すべてのURLで共通）") }
             item {
                 OutlinedTextField(
                     value = editState.commonSecondsText,
                     onValueChange = { editState.commonSecondsText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("6番以降（共通）") },
+                    label = { Text("全URL（共通）") },
                     suffix = { Text("秒") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -426,13 +444,7 @@ fun UrlRunnerSettingsScreen(
                     Text(if (editState.waitFromForeground) "計時：前面表示の確認から" else "計時：URLの起動要求から")
                 }
             }
-            item {
-                OutlinedTextField(value = editState.startNumberText,
-                    onValueChange = { editState.startNumberText = it },
-                    label = { Text("開始番号（再スタート時もここから）") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            }
+            item { Text("再生・再スタートは1番から開始します。") }
             // 最下部: データ送信ボタン
             item {
                 Button(
@@ -501,21 +513,7 @@ fun UrlInputScreen(
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { SectionTitle("1〜5番：個別URL指定") }
-            for (number in 1..UrlRunnerLimits.INDIVIDUAL_COUNT) {
-                item(key = "individual-url-$number") {
-                    OutlinedTextField(
-                        value = editState.slotAt(number - 1),
-                        onValueChange = { editState.setSlot(number - 1, it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("$number 番の動画URL") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    )
-                }
-            }
-            item { SectionTitle("6〜200番：URLをまとめて貼り付け") }
-            // 一括貼り付けは6番以降だけ。1〜5番は保持する。
+            item { SectionTitle("1〜195番：URLをまとめて貼り付け") }
             item {
                 OutlinedTextField(
                     value = pasteText,
@@ -530,7 +528,7 @@ fun UrlInputScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp),
-                    label = { Text("URL一覧を貼り付け（6番以降へ順番に追加）") },
+                    label = { Text("URL一覧を貼り付け（1番から順番に追加）") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -538,11 +536,11 @@ fun UrlInputScreen(
                     Button(
                         onClick = { report = editState.applyPaste(pasteText, PasteMode.APPEND) },
                         modifier = Modifier.weight(1f),
-                    ) { Text("6番以降に追記") }
+                    ) { Text("URLを追記") }
                     OutlinedButton(
                         onClick = { report = editState.applyPaste(pasteText, PasteMode.REPLACE) },
                         modifier = Modifier.weight(1f),
-                    ) { Text("6番以降を置換") }
+                    ) { Text("URL一覧を置換") }
                 }
                 report?.let { current ->
                     Text(
@@ -569,10 +567,10 @@ fun UrlInputScreen(
                     }
                 }
             }
-            // 6〜200番は10件単位で確認・個別修正も可能。
-            item { SectionTitle("6〜200番の確認・修正（現在${editState.filledCount()}件入力済み）") }
+            // 1〜195番は10件単位で確認・個別修正も可能。
+            item { SectionTitle("1〜195番の確認・修正（現在${editState.filledCount()}件入力済み）") }
             item {
-                Text("URLがない番号は実行時に自動スキップします。1〜5番は上部で個別指定してください。",
+                Text("URLがない番号は実行時に自動スキップします。",
                     style = MaterialTheme.typography.bodySmall, color = MatrixTextMuted)
             }
             item {

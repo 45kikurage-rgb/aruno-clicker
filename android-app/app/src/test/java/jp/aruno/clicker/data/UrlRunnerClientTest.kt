@@ -64,4 +64,21 @@ class UrlRunnerClientTest {
         assertFalse(result.success)
         assertFalse(contacted)
     }
+    @Test fun v2EndpointIsUsedWithoutFallbackAndV1ResponsesAreRejected() = runBlocking {
+        prepare()
+        val repository = UrlRunnerRepository(app)
+        assertTrue(repository.save(good).success)
+        val contacted = mutableListOf<String>()
+        val failed = UrlRunnerClient(app) { url ->
+            contacted += url.toString()
+            Reply(404, "{}")
+        }.download()
+        assertFalse(failed.success)
+        assertEquals(listOf("https://server.example/v2/url-runner"), contacted)
+        assertEquals(good, repository.loadForStart())
+        val legacy = UrlRunnerJson.encodeConfig(good).replace("\"schemaVersion\":4", "\"schemaVersion\":3")
+        assertFalse(UrlRunnerClient(app) { Reply(200, legacy) }.download().success)
+        assertEquals(good, repository.loadForStart())
+    }
+
 }

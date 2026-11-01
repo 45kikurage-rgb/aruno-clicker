@@ -7,7 +7,7 @@ import java.net.URI
  *
  * このファイルは Android API に依存しない純粋ロジックのみで構成し、
  * JVM 単体テストから直接検証できるようにしている。
- * サーバー（Cloudflare Worker の /v1/url-runner、schemaVersion 3）と
+ * サーバー（Cloudflare Worker の /v2/url-runner、schemaVersion 4）と
  * 同じ検証規則をここに集約する。規則を変える場合は Worker 側と必ず揃えること。
  */
 
@@ -23,13 +23,13 @@ enum class LoopMode {
 /** URLランナーに関する制限値・初期値の集約場所。秒数の初期値と上限もここだけを変える。 */
 object UrlRunnerLimits {
     /** URL一覧の最大件数。 */
-    const val MAX_URLS = 200
+    const val MAX_URLS = 195
 
     /** 1件のURLの最大文字数（既存 RemoteConfigClient / Worker と同じ）。 */
     const val MAX_URL_LENGTH = 2048
 
-    /** 個別秒数を指定できる件数（1〜5番）。 */
-    const val INDIVIDUAL_COUNT = 5
+    /** 互換JSONの個別秒数配列は常に空。 */
+    const val INDIVIDUAL_COUNT = 0
 
     /** 秒数の最小値（推奨案）。 */
     const val MIN_SECONDS = 1
@@ -83,16 +83,14 @@ data class UrlRunnerIssue(
  * 順序付きURL一覧＋秒数の一式。
  *
  * @param urls 先頭から順に開くURL（重複は保持する。検証で勝手に削除しない）
- * @param individualSeconds 1〜5番それぞれの指定秒数（要素数は [UrlRunnerLimits.INDIVIDUAL_COUNT] 固定）
- * @param commonSeconds 6番以降の共通指定秒数
+ * @param individualSeconds 互換フィールド。空配列のみ（要素数は [UrlRunnerLimits.INDIVIDUAL_COUNT] 固定）
+ * @param commonSeconds 全URLの共通指定秒数
  * @param configVersion サーバー側の楽観ロック用バージョン。未保存・未取得は 0
  * @param updatedAt サーバーが付けた更新時刻（ISO 8601）。ローカルのみの場合は空文字
  */
 data class UrlRunnerConfig(
     val urls: List<String> = emptyList(),
-    val individualSeconds: List<Int> = List(UrlRunnerLimits.INDIVIDUAL_COUNT) {
-        UrlRunnerLimits.DEFAULT_INDIVIDUAL_SECONDS
-    },
+    val individualSeconds: List<Int> = emptyList(),
     val commonSeconds: Int = UrlRunnerLimits.DEFAULT_COMMON_SECONDS,
     val configVersion: Long = 0L,
     val updatedAt: String = "",
@@ -100,15 +98,18 @@ data class UrlRunnerConfig(
     val waitFromForeground: Boolean = true,
     val startIndex: Int = 0,
 ) {
-    /** 0始まりの位置に対する待機秒数。0〜4は個別秒数、5以降は共通秒数を返す。 */
+    /** All playable URLs use the same duration, including the new first five. */
     fun secondsFor(index: Int): Int {
         require(index >= 0) { "index must be >= 0" }
-        return if (index < UrlRunnerLimits.INDIVIDUAL_COUNT) {
-            individualSeconds.getOrElse(index) { commonSeconds }
-        } else {
-            commonSeconds
-        }
+        return commonSeconds
     }
+
+    /** Empty remote lists may be saved to prevent replaying stale cached URLs. */
+    fun storageIssues(): List<UrlRunnerIssue> = validate().filterNot {
+        it.code == UrlRunnerIssue.URLS_EMPTY
+    } + if (startIndex == 0) emptyList() else listOf(
+        UrlRunnerIssue("START_INDEX", "再生は1番から開始します"),
+    )
 
     /** 開始・送信・保存の前に必ず通す検証。問題を全件返す（最初の1件で止めない）。 */
     fun validate(): List<UrlRunnerIssue> {
@@ -149,7 +150,7 @@ data class UrlRunnerConfig(
         if (commonSeconds !in UrlRunnerLimits.MIN_SECONDS..UrlRunnerLimits.MAX_SECONDS) {
             issues += UrlRunnerIssue(
                 UrlRunnerIssue.SECONDS_OUT_OF_RANGE,
-                "6番以降の共通秒数は${UrlRunnerLimits.MIN_SECONDS}〜${UrlRunnerLimits.MAX_SECONDS}秒で指定してください（現在${commonSeconds}秒）",
+                "全URLの共通秒数は${UrlRunnerLimits.MIN_SECONDS}〜${UrlRunnerLimits.MAX_SECONDS}秒で指定してください（現在${commonSeconds}秒）",
             )
         }
         return issues
@@ -215,11 +216,11 @@ data class UrlRunnerConfig(
 }
 
 /**
- * 既存の設定同期URL（…/v1/config）から URLランナー用エンドポイント（…/v1/url-runner）を導く。
+ * 既存の設定同期URL（…/v1/config）から URLランナー用エンドポイント（…/v2/url-runner）を導く。
  * 導けない形式は null を返し、呼び出し側は通信を行わない。
  */
 object UrlRunnerEndpoint {
-    const val PATH = "/v1/url-runner"
+    const val PATH = "/v2/url-runner"
     private const val LEGACY_PATH = "/v1/config"
 
     fun derive(remoteServerUrl: String): String? {
@@ -230,6 +231,7 @@ object UrlRunnerEndpoint {
         if (uri.host.isNullOrBlank() || uri.userInfo != null) return null
         val path = uri.path.orEmpty().trimEnd('/')
         val basePath = when {
+            path.endsWith("/v1/url-runner") -> path.removeSuffix("/v1/url-runner")
             path.endsWith(LEGACY_PATH) -> path.removeSuffix(LEGACY_PATH)
             path.endsWith(PATH) -> return value.trimEnd('/')
             path.isEmpty() -> ""
