@@ -78,7 +78,9 @@ internal class AndroidRecentsPort(
             RecentCard(labels.joinToString("|").hashCode().toString(), rect.left, rect.top, rect.right, rect.bottom)
         })
         if (RecentsEmptyEvidence.verified(explicitEmpty, overview, emptyMessageId, leaves.size, complete)) return RecentsScreen(RecentsSurface.EMPTY)
-        if (home && !overview) return RecentsScreen(RecentsSurface.HOME)
+        // Custom HOME apps (including ARUNO HOME) need not expose workspace/hotseat IDs.
+        // HOME is never enough to prove deletion: the cleaner must reopen and observe explicit EMPTY.
+        if ((home || owner in launchers) && !overview) return RecentsScreen(RecentsSurface.HOME)
         return RecentsScreen(RecentsSurface.UNKNOWN)
     }
     override fun dismiss(card: RecentCard, layout: RecentsLayout, alternate: Boolean, done: (Boolean) -> Unit) {
