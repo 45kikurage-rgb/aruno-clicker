@@ -1,0 +1,57 @@
+name: Plan ARUNO Android CI tier (no emulator)
+on:
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+      tier:
+        required: true
+        type: string
+      target_api:
+        required: false
+        type: number
+        default: 0
+      approval_reference:
+        required: false
+        type: string
+        default: ''
+      approved_source_sha:
+        required: false
+        type: string
+        default: ''
+    outputs:
+      matrix:
+        description: Selected Android API include matrix; empty for lightweight
+        value: ${{ jobs.plan.outputs.matrix }}
+      tier:
+        description: Validated verification tier
+        value: ${{ jobs.plan.outputs.tier }}
+      emulator_count:
+        description: Number of planned emulator jobs
+        value: ${{ jobs.plan.outputs.emulator_count }}
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.choose.outputs.matrix }}
+      tier: ${{ steps.choose.outputs.tier }}
+      emulator_count: ${{ steps.choose.outputs.emulator_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Validate tier before emulator jobs; no signing or publishing
+        id: choose
+        env:
+          CI_APP: ${{ inputs.app }}
+          CI_TIER: ${{ inputs.tier }}
+          CI_API: ${{ inputs.target_api }}
+          CI_APPROVAL: ${{ inputs.approval_reference }}
+          CI_SOURCE_SHA: ${{ inputs.approved_source_sha }}
+        run: >-
+          python3 ci/ci_tier_plan.py
+          --app "$CI_APP" --tier "$CI_TIER" --target-api "$CI_API"
+          --approval-reference "$CI_APPROVAL" --approved-source-sha "$CI_SOURCE_SHA"
