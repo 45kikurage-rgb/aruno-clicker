@@ -1,0 +1,19 @@
+name: Validate ARUNO CI stage gates
+on:
+  pull_request:
+    paths:
+      - 'ci/ci_tier_plan.py'
+      - 'ci/test_ci_tier_plan.py'
+      - '.github/workflows/aruno-ci-plan.yml'
+      - '.github/workflows/ci-tier-tests.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Verify all three tiers and reject unapproved full matrices
+        run: python3 -m unittest discover -s ci -p test_ci_tier_plan.py -v

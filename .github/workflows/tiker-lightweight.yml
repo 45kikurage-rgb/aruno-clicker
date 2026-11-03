@@ -1,0 +1,22 @@
+name: Aru-Tiker lightweight Android unit tests (no emulator)
+on:
+  pull_request:
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/tiker-lightweight.yml'
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Run unit regressions only, no unsigned release build or signing
+        working-directory: android-app
+        run: gradle --no-daemon --console=plain testAtlasDebugUnitTest
