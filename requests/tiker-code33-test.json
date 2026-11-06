@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "operation": "test-and-stage-unsigned-code33",
+  "execute": true,
+  "publish": false,
+  "tier": "full",
+  "approved_application_source_commit": "3227669f4f2923d322b2f0bb204d4928fb2c2e22",
+  "approval_reference": "2026-11-06 user: ふたつのアプリの改修、本番反映してください"
+}
