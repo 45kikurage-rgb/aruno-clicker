@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">ARUNO CLICKER</string>
+    <string name="tiker_app_update">アプリ更新</string>
+    <string name="tiker_update_open_failed">ブラウザを開けませんでした。</string>
     <string name="accessibility_service_description">TikTok Lite の画面を設定に沿って自動操作します。</string>
 </resources>

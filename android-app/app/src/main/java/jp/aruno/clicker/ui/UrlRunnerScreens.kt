@@ -1,5 +1,6 @@
 package jp.aruno.clicker.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,10 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import jp.aruno.clicker.BuildConfig
 import jp.aruno.clicker.R
 import jp.aruno.clicker.data.PasteMode
 import jp.aruno.clicker.data.PasteReport
@@ -65,6 +68,8 @@ import jp.aruno.clicker.data.GiftHomeModeStore
 private val accessibilityEventFormatter = DateTimeFormatter
     .ofPattern("M/d HH:mm", Locale.JAPAN)
     .withZone(ZoneId.of("Asia/Tokyo"))
+
+private const val TIKER_UPDATE_PAGE = "https://download.aruno-id.com/tiker"
 
 private fun formatAccessibilityEventTime(timestamp: Long): String =
     runCatching { accessibilityEventFormatter.format(Instant.ofEpochMilli(timestamp)) }
@@ -98,6 +103,7 @@ fun UrlRunnerHomeScreen(
     onTestGiftHome: () -> Unit,
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val dailyStore = remember(context) { DailyVideoViewStore(context) }
     var dailyLimit by remember { mutableStateOf(dailyStore.limit()) }
     var dailyLimitError by remember { mutableStateOf(false) }
@@ -121,6 +127,20 @@ fun UrlRunnerHomeScreen(
                             onLongClick = onOpenLegacySettings,
                         ),
                     )
+                },
+                actions = {
+                    if (!BuildConfig.IS_VER_S) {
+                        TextButton(
+                            onClick = {
+                                try {
+                                    uriHandler.openUri(TIKER_UPDATE_PAGE)
+                                } catch (_: IllegalArgumentException) {
+                                    Toast.makeText(context, R.string.tiker_update_open_failed, Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            enabled = !isRunning,
+                        ) { Text(stringResource(R.string.tiker_app_update)) }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MatrixBlack),
             )
