@@ -1,0 +1,1 @@
+{"devDependencies":{"wrangler":"^4.0.0"},"engines":{"node":">=20"},"name":"aruno-home-layout","private":true,"scripts":{"deploy":"wrangler deploy --config wrangler.toml","dev":"wrangler dev --config wrangler.toml","test":"node --test"},"type":"module","version":"1.0.0"}
