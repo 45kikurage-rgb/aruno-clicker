@@ -8,7 +8,7 @@ Aruno-Home/T の HOME 画面（4×4＝16マス）をサイトで変更できる�
 
 - `GET /v1/home-layout` — 配置データ（JSON）を返す。アプリが「画面更新」で取得する。認証なし。
 - `PUT /v1/home-layout` — 配置データを保存する。管理認証が必要。`expectedRevision` による競合検出あり。
-- `GET /home` — スマホ向け編集画面。未認証の場合は管理キーの入力画面。
+- `GET /home` — スマホ向け編集画面（タイル方式）。未認証の場合は管理キーの入力画面。
 - `POST /home/login` — 管理キーで認証し、長期 Cookie（約400日）を発行する。一度認証した端末では以後ずっと認証済み。
 - `GET /healthz` — 死活確認。
 
@@ -20,6 +20,17 @@ Aruno-Home/T の HOME 画面（4×4＝16マス）をサイトで変更できる�
 
 ## データ
 
+- 配置データは形式 v2（タイル方式、2026-11-20）です。各タイルが一意の
+  id を持ち、16マス（slots）と配置外タイル（pool）で構成されます。
+  v1 形式で保存されたデータは、読み込み時に自動で v2 へ変換されます。
+- 部品の種類：アプリ起動／コピー／リンク（Web）／アプリダウンロード／
+  アプリ更新／設定／せり上がりメニュー／Wi-Fi／機内モード／ラベル／空白。
+- 編集画面はタイル方式です：16マスを上部に固定表示し、タイルを作って
+  機能と紐づけ（アプリ・文字列・URL）を設定し、ドラッグまたはタップで
+  配置します。アプリの紐づけはアプリ名の一覧から選べます。
+- サイトのフォントは「コーポレート・ロゴ（ラウンド）Bold」
+  （LOGOTYPE.JP、SIL Open Font License 1.1）を woff2 化し、
+  `assets/corporate-logo-rounded-bold.woff2` を CDN 経由で読み込みます。
 - D1 は aruno-clicker-config と同じデータベースを使い、この Worker は
   自分のテーブル `home_layout_config` / `home_layout_history` だけを使います。
 - 初期データ（`migrations/0001_home_layout.sql` の seed）は、code36 の
