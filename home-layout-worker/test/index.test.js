@@ -16,7 +16,13 @@ class Statement {
     }
     return null;
   }
-  async run() { return { success: true, meta: { changes: 1 } }; }
+  async run() {
+    if (this.sql.includes("INSERT OR IGNORE INTO home_layout_config") && !this.db.layout) {
+      this.db.layout = JSON.parse(this.params[0]);
+      this.db.layoutJson = this.params[0];
+    }
+    return { success: true, meta: { changes: 1 } };
+  }
 }
 
 class MemoryD1 {
@@ -91,6 +97,17 @@ test("GET /v1/home-layout returns the stored layout", async () => {
   assert.equal(body.revision, 1);
   assert.equal(body.slots.length, 16);
   assert.equal(body.slots[0].title, "争奪戦");
+});
+
+test("GET on an empty database seeds the initial layout at runtime", async () => {
+  const env = { DB: new MemoryD1({ adminKeyHash: await sha256Hex(ADMIN_KEY) }) };
+  const res = await worker.fetch(req("/v1/home-layout"), env);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.revision, 1);
+  assert.equal(body.slots.length, 16);
+  assert.equal(body.slots[11].kind, "menu");
+  assert.equal(body.slots[11].items.length, 4);
 });
 
 test("PUT without authentication is rejected", async () => {

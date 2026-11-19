@@ -41,10 +41,14 @@ Aruno-Home/T の HOME 画面（4×4＝16マス）をサイトで変更できる�
 
 GitHub Actions の `Deploy ARUNO home layout Worker`（手動実行）を使います。
 
-1. `wrangler d1 migrations apply`（home_layout テーブルの作成と初期データ投入）
-2. `npm test`
-3. `wrangler deploy`
-4. `/healthz` と `/v1/home-layout` の確認
+1. `npm test`
+2. `wrangler deploy`
+3. `/healthz` と `/v1/home-layout` の確認
+
+テーブル作成と初期データ投入は、Worker が初回アクセス時に D1 バインディング
+経由で自動で行います（aruno-clicker-config Worker の実行時スキーマ確保と
+同じ方式）。そのため、デプロイ側に D1 API へのアクセス権は不要です。
+`migrations/0001_home_layout.sql` は同じ内容を SQL として残した参照用です。
 
 ## テスト
 
