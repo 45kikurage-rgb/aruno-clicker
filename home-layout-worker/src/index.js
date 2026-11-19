@@ -14,6 +14,7 @@
 
 import { validateLayout, LAYOUT_VERSION } from "./layout.js";
 import { editorHtml, loginHtml } from "./editor.js";
+import { SEED_LAYOUT_JSON, SEED_UPDATED_AT } from "./seed.js";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const COOKIE_NAME = "home_admin";
@@ -52,8 +53,40 @@ async function route(request, env) {
   return jsonResponse({ error: { code: "not_found", message: "Not found" } }, 404);
 }
 
+// The tables and the seed row are ensured at runtime (same pattern as the
+// aruno-clicker-config Worker's ensureLatestSchema), so deploying this
+// Worker does not need D1 API access from CI — the D1 binding is enough.
+const schemaReadyByDatabase = new WeakMap();
+
+async function ensureHomeLayoutSchema(env) {
+  const db = env.DB;
+  let ready = schemaReadyByDatabase.get(db);
+  if (!ready) {
+    ready = (async () => {
+      await db.exec(
+        "CREATE TABLE IF NOT EXISTS home_layout_config (id INTEGER PRIMARY KEY CHECK (id = 1), layout_json TEXT NOT NULL, revision INTEGER NOT NULL CHECK (revision >= 1), updated_at TEXT NOT NULL, update_id TEXT NOT NULL DEFAULT '')",
+      );
+      await db.exec(
+        "CREATE TABLE IF NOT EXISTS home_layout_history (revision INTEGER PRIMARY KEY, layout_json TEXT NOT NULL, updated_at TEXT NOT NULL)",
+      );
+      await db.prepare(
+        "INSERT OR IGNORE INTO home_layout_config (id, layout_json, revision, updated_at, update_id) VALUES (1, ?, 1, ?, 'initial')",
+      ).bind(SEED_LAYOUT_JSON, SEED_UPDATED_AT).run();
+      await db.exec(
+        "INSERT OR IGNORE INTO home_layout_history (revision, layout_json, updated_at) SELECT revision, layout_json, updated_at FROM home_layout_config WHERE id = 1",
+      );
+    })().catch((error) => {
+      schemaReadyByDatabase.delete(db);
+      throw error;
+    });
+    schemaReadyByDatabase.set(db, ready);
+  }
+  await ready;
+}
+
 async function getLayout(request, env) {
   requireDb(env);
+  await ensureHomeLayoutSchema(env);
   const row = await readLayoutRow(env);
   if (!row) {
     return jsonResponse({ error: { code: "not_initialized", message: "Layout is not initialized yet" } }, 404);
@@ -63,6 +96,7 @@ async function getLayout(request, env) {
 
 async function updateLayout(request, env) {
   requireDb(env);
+  await ensureHomeLayoutSchema(env);
   if (!(await isAuthenticated(request, env))) {
     return jsonResponse({ error: { code: "unauthorized", message: "Admin authentication is required" } }, 401);
   }
