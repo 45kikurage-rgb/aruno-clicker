@@ -1,52 +1,61 @@
 {
-  "v": 1,
+  "v": 2,
   "revision": 1,
   "updatedAt": "2026-11-19T00:00:00.000Z",
   "slots": [
     {
+      "id": "s0",
       "kind": "web",
       "title": "争奪戦",
       "icon": "honey",
       "url": "https://aruno-clicker-config.45kikurage.workers.dev/tiker/link/1"
     },
     {
+      "id": "s1",
       "kind": "web",
       "title": "QR",
       "icon": "qr",
       "url": "https://aruno-clicker-config.45kikurage.workers.dev/tiker/link/2"
     },
     {
+      "id": "s2",
       "kind": "web",
       "title": "豚",
       "icon": "pig",
       "url": "https://aruno-clicker-config.45kikurage.workers.dev/tiker/link/3"
     },
     {
+      "id": "s3",
       "kind": "airplane",
       "title": "機内モード",
       "icon": "airplane"
     },
     {
+      "id": "s4",
       "kind": "app",
       "title": "Google Play",
       "pkg": "com.android.vending"
     },
     {
+      "id": "s5",
       "kind": "app",
       "title": "LINE",
       "pkg": "jp.naver.line.android"
     },
     {
+      "id": "s6",
       "kind": "app",
       "title": "TikTok Lite",
       "pkg": "com.ss.android.ugc.tiktok.lite"
     },
     {
+      "id": "s7",
       "kind": "app",
       "title": "Aru-Tiker",
       "pkg": "jp.aruno.clicker"
     },
     {
+      "id": "s8",
       "kind": "web",
       "title": "Chrome",
       "icon": "pkg:com.android.chrome",
@@ -54,27 +63,30 @@
       "browser": "com.android.chrome"
     },
     {
+      "id": "s9",
       "kind": "app",
       "title": "捨てメアド",
       "pkg": "air.kukulive.mailnow"
     },
     {
+      "id": "s10",
       "kind": "settings",
       "title": "設定",
       "icon": "settings"
     },
     {
+      "id": "s11",
       "kind": "menu",
       "title": "各更新",
       "icon": "updates",
       "items": [
         {
-          "kind": "updateApp",
+          "kind": "update",
           "title": "開発者プログラム更新",
           "pkg": "com.google.android.gms"
         },
         {
-          "kind": "updateApp",
+          "kind": "update",
           "title": "TikTok Lite更新",
           "pkg": "com.ss.android.ugc.tiktok.lite"
         },
@@ -84,19 +96,21 @@
           "icon": "storage"
         },
         {
-          "kind": "updateApp",
+          "kind": "update",
           "title": "Chrome更新",
           "pkg": "com.android.chrome"
         }
       ]
     },
     {
+      "id": "s12",
       "kind": "copy",
       "title": "ID",
       "icon": "copy",
       "copyType": "deviceId"
     },
     {
+      "id": "s13",
       "kind": "copy",
       "title": "コピー",
       "icon": "copy",
@@ -104,6 +118,7 @@
       "text": "adad333#"
     },
     {
+      "id": "s14",
       "kind": "copy",
       "title": "リンク",
       "icon": "copy",
@@ -111,9 +126,11 @@
       "url": "https://lightweight-links.pages.dev/b6t9wh3cy5kr.html"
     },
     {
+      "id": "s15",
       "kind": "wifi",
       "title": "Wi-Fi",
       "icon": "wifi"
     }
-  ]
+  ],
+  "pool": []
 }

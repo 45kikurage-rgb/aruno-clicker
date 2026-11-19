@@ -1,85 +1,129 @@
 // Editor and login pages for the Aruno-Home/T HOME layout site.
-// Smartphone-first: a 4x4 grid preview on top, one slot editor below,
-// and a sticky save bar. Vanilla JS, no external assets.
+// Tile-based editor (decided 2026-11-20): a sticky 4x4 grid on top, a
+// pool of unplaced tiles below, and a tile editor panel. Tiles are
+// created first, given one function (kind) and its binding (app / text /
+// URL), then dragged or tapped into the 16 slots. Vanilla JS.
+//
+// Site font: "コーポレート・ロゴ（ラウンド）Bold" (LOGOTYPE.JP,
+// SIL Open Font License 1.1), converted to woff2 and served from the
+// repo via CDN. Falls back to rounded system fonts while unavailable.
 
-const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage"];
+const FONT_URL = "https://cdn.jsdelivr.net/gh/45kikurage-rgb/aruno-clicker@main/home-layout-worker/assets/corporate-logo-rounded-bold.woff2";
+
+const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag"];
 const ICON_GLYPHS = {
   honey: "🍯", qr: "▦", pig: "🐷", airplane: "✈", live: "●", tiker: "📱",
   mail: "✉", settings: "⚙", updates: "⟳", id: "ID", copy: "⧉", link: "🔗",
-  wifi: "📶", storage: "💾",
+  wifi: "📶", storage: "💾", tag: "🏷",
 };
-const SLOT_KINDS = [
-  ["app", "アプリ起動"], ["web", "Webショートカット"], ["copy", "コピー"],
-  ["settings", "設定"], ["menu", "せり上がりメニュー"], ["wifi", "Wi-Fi"],
-  ["airplane", "機内モード"], ["blank", "空白"],
+const TILE_KINDS = [
+  ["app", "アプリ起動"], ["copy", "コピー"], ["web", "リンク"],
+  ["download", "ダウンロード"], ["update", "アプリ更新"], ["settings", "設定"],
+  ["menu", "せり上がり"], ["wifi", "Wi-Fi"], ["airplane", "機内モード"], ["label", "ラベル"],
 ];
 const ITEM_KINDS = [
-  ["updateApp", "アプリ更新"], ["storage", "ストレージ埋め"], ["web", "URLを開く"],
-  ["app", "アプリ起動"], ["copy", "コピー"],
+  ["update", "アプリ更新"], ["app", "アプリ起動"], ["storage", "スト埋め"],
+  ["web", "リンク"], ["copy", "コピー"],
+];
+// Apps the user picks by name; the package name is filled in automatically.
+// Anything not listed can still be entered as a raw package name.
+const APP_CATALOG = [
+  ["LINE", "jp.naver.line.android"],
+  ["TikTok Lite", "com.ss.android.ugc.tiktok.lite"],
+  ["Chrome", "com.android.chrome"],
+  ["Google Play", "com.android.vending"],
+  ["捨てメアド", "air.kukulive.mailnow"],
+  ["Aru-Tiker", "jp.aruno.clicker"],
+  ["Google開発者サービス", "com.google.android.gms"],
+  ["Gmail", "com.google.android.gm"],
+  ["YouTube", "com.google.android.youtube"],
 ];
 
 const PAGE_CSS = `
+  @font-face { font-family: "CorpLogoRounded"; src: url("${FONT_URL}") format("woff2"); font-display: swap; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: sans-serif; background: #f3f6f5; color: #1c2b26; }
-  header { position: sticky; top: 0; z-index: 5; background: #193b47; color: #fff;
+  body { margin: 0; font-family: "CorpLogoRounded", "Hiragino Maru Gothic ProN", "M PLUS Rounded 1c", sans-serif;
+         background: #f3f6f5; color: #1c2b26; }
+  header { position: sticky; top: 0; z-index: 6; background: #193b47; color: #fff;
            padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
-  header .title { font-size: 17px; font-weight: 700; flex: 1; }
+  header .title { font-size: 17px; flex: 1; }
   header .meta { font-size: 12px; opacity: .85; }
   button { font: inherit; cursor: pointer; }
-  #saveBtn { background: #2e9e6b; color: #fff; border: 0; border-radius: 8px;
-             padding: 10px 18px; font-weight: 700; }
-  #saveBtn:disabled { background: #8fb8a5; }
-  main { padding: 12px; max-width: 560px; margin: 0 auto; }
+  #saveBtn { background: #2e9e6b; color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; }
+  #saveBtn:disabled { opacity: .5; }
+  main { padding: 10px 12px 40px; max-width: 560px; margin: 0 auto; }
+  .secttl { font-size: 12px; color: #5a6d66; margin: 12px 2px 6px; letter-spacing: .04em; }
+  .gridbox { position: sticky; top: 54px; z-index: 5; background: #f3f6f5; padding: 4px 0 8px; }
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .cell { background: #fff; border: 2px solid #c4d2cc; border-radius: 10px;
-          min-height: 74px; padding: 6px 4px; text-align: center; cursor: pointer; }
-  .cell.sel { border-color: #2e9e6b; background: #e7f4ec; }
-  .cell .glyph { font-size: 22px; line-height: 1.2; }
-  .cell .name { font-size: 12px; margin-top: 2px; word-break: break-all; }
-  .cell .kind { font-size: 10px; color: #5a6a64; }
-  .panel { background: #fff; border: 1px solid #c4d2cc; border-radius: 10px;
-           padding: 12px; margin-top: 14px; }
-  .panel h2 { font-size: 15px; margin: 0 0 10px; }
-  label { display: block; font-size: 13px; margin: 10px 0 4px; color: #35534a; }
-  input[type=text], select { width: 100%; padding: 10px; font-size: 16px;
-    border: 1px solid #b9c6c1; border-radius: 8px; background: #fff; }
-  .row { display: flex; gap: 8px; }
-  .row > * { flex: 1; }
-  .mini { background: #eef3f1; border: 1px solid #b9c6c1; border-radius: 8px; padding: 8px; }
-  .itemCard { border: 1px solid #c4d2cc; border-radius: 8px; padding: 10px; margin-top: 10px; }
-  .itemBtns { display: flex; gap: 6px; margin-top: 8px; }
-  .itemBtns button, .addBtn { background: #eef3f1; border: 1px solid #b9c6c1;
-    border-radius: 6px; padding: 7px 10px; font-size: 13px; }
-  .danger { color: #b03030; }
-  .menuPreview { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
-  .menuPreview .mcell { background: #eef3f1; border-radius: 8px; padding: 10px 6px;
-    text-align: center; font-size: 13px; }
-  .note { font-size: 12px; color: #5a6a64; line-height: 1.6; }
-  #status { margin: 10px 2px; font-size: 14px; min-height: 20px; }
-  .err { color: #b03030; } .ok { color: #2e7d5f; }
-  form.login { max-width: 420px; margin: 40px auto; padding: 0 16px; }
-  form.login .panel { margin-top: 0; }
-  form.login button { width: 100%; margin-top: 14px; background: #193b47; color: #fff;
-    border: 0; border-radius: 8px; padding: 12px; font-weight: 700; }
+  .slot { border: 1.5px dashed #b9c6c1; border-radius: 12px; min-height: 66px;
+          display: flex; align-items: center; justify-content: center; color: #7a8d86; font-size: 11px; }
+  .slot.over { border-color: #2e9e6b; background: #e2f2ea; }
+  .tile { border: 1.5px solid #c3d0cb; background: #fff; border-radius: 12px; min-height: 66px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+          padding: 5px 3px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+          text-align: center; width: 100%; }
+  .tile .ic { font-size: 22px; line-height: 1.1; }
+  .tile .lb { font-size: 11px; line-height: 1.15; word-break: break-all; }
+  .tile .kd { font-size: 9px; color: #7a8d86; }
+  .tile.sel { border-color: #2e9e6b; box-shadow: 0 0 0 2px #2e9e6b; }
+  .pool { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .newtile { border: 1.5px dashed #2e9e6b; color: #2e9e6b; background: transparent; border-radius: 12px;
+             min-height: 66px; font-size: 13px; font-family: inherit; }
+  .clone { position: fixed; z-index: 50; pointer-events: none; opacity: .92;
+           box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .panel { margin-top: 12px; border: 1.5px solid #c3d0cb; border-radius: 14px; background: #fff; padding: 12px; }
+  .panel h3 { margin: 0 0 8px; font-size: 15px; }
+  .fnrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .fn { border: 1.5px solid #c3d0cb; background: #eef3f1; color: #1c2b26; border-radius: 999px;
+        padding: 6px 10px; font-size: 12px; font-family: inherit; }
+  .fn.on { border-color: #2e9e6b; color: #2e9e6b; background: #e2f2ea; }
+  .fld { margin-bottom: 8px; }
+  .fld label { display: block; font-size: 11px; color: #5a6d66; margin-bottom: 3px; }
+  .fld input, .fld select { width: 100%; padding: 9px; border: 1.5px solid #c3d0cb; border-radius: 8px;
+        background: #fff; color: #1c2b26; font-size: 14px; font-family: inherit; }
+  .prow { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .pbtn { border: 1.5px solid #c3d0cb; background: #eef3f1; color: #1c2b26; border-radius: 10px;
+          padding: 8px 12px; font-size: 13px; font-family: inherit; }
+  .pbtn.danger { color: #c22; border-color: #c22; }
+  .hint { font-size: 11px; color: #5a6d66; margin-top: 6px; line-height: 1.5; }
+  .msg { font-size: 13px; color: #2e9e6b; min-height: 18px; margin-top: 8px; }
+  .msg.err { color: #c22; }
+  .rise { border: 1.5px solid #c3d0cb; border-radius: 14px 14px 0 0; background: #eef3f1; padding: 10px; margin-bottom: 10px; }
+  .rise .cap { font-size: 11px; color: #5a6d66; margin-bottom: 6px; text-align: center; }
+  .riseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .ritem { border: 1.5px solid #c3d0cb; background: #fff; border-radius: 10px; padding: 8px 6px;
+           font-size: 12px; text-align: center; color: #1c2b26; font-family: inherit; cursor: pointer; }
+  .ritem.sel { border-color: #2e9e6b; box-shadow: 0 0 0 2px #2e9e6b; }
+  .ritem small { display: block; font-size: 9px; color: #7a8d86; }
+  .additem { border: 1.5px dashed #2e9e6b; color: #2e9e6b; background: transparent; border-radius: 10px;
+             padding: 8px 6px; font-size: 12px; font-family: inherit; cursor: pointer; }
+  .login { max-width: 400px; margin: 60px auto; padding: 0 16px; }
+  .login .card { background: #fff; border: 1.5px solid #c3d0cb; border-radius: 14px; padding: 20px; }
+  .login h3 { margin-top: 0; }
+  .login .err { color: #c22; font-size: 13px; }
 `;
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
 
 export function loginHtml(message) {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ホーム画面変更 - 認証</title><style>${PAGE_CSS}</style></head>
+<title>ホーム画面の配置 - ログイン</title><style>${PAGE_CSS}</style></head>
 <body>
-<form class="login" method="post" action="/home/login">
-  <div class="panel">
-    <h2>ホーム画面変更サイト</h2>
-    <p class="note">編集は認証済み端末でのみ行えます。管理キーを入力してください。
-    一度認証すると、この端末では以後ずっと認証済みとして扱われます。</p>
-    ${message ? `<p class="err">${escapeHtml(message)}</p>` : ""}
-    <label for="key">管理キー</label>
-    <input type="text" id="key" name="key" autocomplete="off" required>
-    <button type="submit">認証する</button>
-  </div>
-</form>
+<div class="login"><div class="card">
+  <h3>ホーム画面の配置</h3>
+  <p class="hint">編集は認証済み端末でのみ行えます。管理キーを入力してください。一度認証すると、この端末では以後ずっと認証済みとして扱われます。</p>
+  ${message ? `<p class="err">${escapeHtml(message)}</p>` : ""}
+  <form method="post" action="/home/login">
+    <div class="fld"><label for="key">管理キー</label><input type="password" id="key" name="key" autocomplete="current-password" required></div>
+    <button class="pbtn" type="submit" style="width:100%">ログイン</button>
+  </form>
+</div></div>
 </body></html>`;
 }
 
@@ -87,329 +131,298 @@ export function editorHtml() {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ホーム画面変更</title><style>${PAGE_CSS}</style></head>
+<title>ホーム画面の配置</title><style>${PAGE_CSS}</style></head>
 <body>
 <header>
-  <div>
-    <div class="title">ホーム画面変更</div>
-    <div class="meta" id="meta">読み込み中…</div>
-  </div>
+  <div class="title">ホーム画面の配置</div>
+  <div class="meta" id="meta">読み込み中…</div>
   <button id="saveBtn" type="button">保存</button>
 </header>
 <main>
-  <div id="status"></div>
-  <div class="grid" id="grid"></div>
-  <div class="panel" id="editor"></div>
-  <p class="note">保存すると revision が上がります。各端末では Aruno-Home/T の
-  「画面更新」を押すと、この配置に変わります。コピー部品のアイコンは紙2枚に
-  統一され、何をコピーするかは表示名で表します。</p>
-  <form method="post" action="/home/logout">
-    <button type="submit" class="mini">この端末の認証を解除（ログアウト）</button>
-  </form>
+  <div class="gridbox">
+    <div class="secttl">ホーム画面（16マス）― タイルをドラッグで移動、タップで編集</div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="secttl">配置外のタイル（ここへドラッグで外せる）</div>
+  <div class="pool" id="pool"></div>
+  <div id="panelBox"></div>
+  <div class="msg" id="msg"></div>
+  <p class="hint">タイルを作り、機能と紐づけ（アプリ・文字列・URL）を設定して、16マスへ配置します。編集はその場でタイルに反映され、「保存」を押すと全端末へ配る配置データとして保存されます。</p>
+  <form method="post" action="/home/logout"><button class="pbtn" type="submit">ログアウト</button></form>
 </main>
 <script>
-"use strict";
 var ICONS = ${JSON.stringify(ICONS)};
-var GLYPHS = ${JSON.stringify(ICON_GLYPHS)};
-var SLOT_KINDS = ${JSON.stringify(SLOT_KINDS)};
+var ICON_GLYPHS = ${JSON.stringify(ICON_GLYPHS)};
+var TILE_KINDS = ${JSON.stringify(TILE_KINDS)};
 var ITEM_KINDS = ${JSON.stringify(ITEM_KINDS)};
-var state = { revision: 0, updatedAt: "", slots: [], selected: 0 };
-var $grid = document.getElementById("grid");
-var $editor = document.getElementById("editor");
-var $meta = document.getElementById("meta");
-var $status = document.getElementById("status");
-var $save = document.getElementById("saveBtn");
+var APP_CATALOG = ${JSON.stringify(APP_CATALOG)};
+var KINDNAME = {}; TILE_KINDS.forEach(function (p) { KINDNAME[p[0]] = p[1]; });
+var ITEMKINDNAME = {}; ITEM_KINDS.forEach(function (p) { ITEMKINDNAME[p[0]] = p[1]; });
+var S = { tiles: {}, slots: [], pool: [], sel: null, selItem: -1, rev: 0, seq: 1 };
+var grid = document.getElementById('grid'), poolEl = document.getElementById('pool'),
+    panelBox = document.getElementById('panelBox'), msg = document.getElementById('msg'),
+    meta = document.getElementById('meta'), saveBtn = document.getElementById('saveBtn');
 
-function esc(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
+function glyph(t) {
+  if (t.kind === 'app') return '📱';
+  if (t.kind === 'download') return '⬇';
+  if (t.kind === 'update') return '⟳';
+  if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
+  return ICON_GLYPHS[t.icon] || '▦';
+}
+function kindLabel(t) {
+  if (t.kind === 'menu') return 'せり上がり ' + (t.items ? t.items.length : 0) + '件';
+  return KINDNAME[t.kind] || '';
+}
+function tileEl(tid) {
+  var t = S.tiles[tid]; if (!t) return null;
+  var d = document.createElement('div');
+  d.className = 'tile' + (S.sel === tid ? ' sel' : ''); d.dataset.tid = tid;
+  d.innerHTML = '<div class="ic">' + glyph(t) + '</div><div class="lb">' + esc(t.title) + '</div><div class="kd">' + esc(kindLabel(t)) + '</div>';
+  return d;
+}
+function locOf(tid) {
+  var i = S.slots.indexOf(tid); if (i >= 0) return { where: 'slot', idx: i };
+  var j = S.pool.indexOf(tid); if (j >= 0) return { where: 'pool', idx: j };
+  return null;
+}
+function render() {
+  grid.innerHTML = ''; poolEl.innerHTML = '';
+  S.slots.forEach(function (tid, i) {
+    if (tid && S.tiles[tid]) grid.appendChild(tileEl(tid));
+    else { var s = document.createElement('div'); s.className = 'slot'; s.dataset.slot = i; s.textContent = 'あき'; grid.appendChild(s); }
   });
+  S.pool.forEach(function (tid) { if (S.tiles[tid]) poolEl.appendChild(tileEl(tid)); });
+  var nb = document.createElement('button'); nb.className = 'newtile'; nb.type = 'button'; nb.textContent = '＋ タイルを作る';
+  nb.addEventListener('click', createTile); poolEl.appendChild(nb);
+  meta.textContent = 'revision ' + S.rev;
+  renderPanel();
 }
-function glyph(slot) {
-  if (!slot || slot.kind === "blank") return "·";
-  if (slot.kind === "app") return "📱";
-  if (slot.kind === "copy") return GLYPHS.copy;
-  var icon = slot.icon || "";
-  if (icon.indexOf("pkg:") === 0) return "📱";
-  return GLYPHS[icon] || "▢";
+function catalogFieldHtml(currentPkg) {
+  var opts = '<option value="">アプリ名から選ぶ…</option>';
+  APP_CATALOG.forEach(function (p) { opts += '<option value="' + esc(p[1]) + '"' + (p[1] === currentPkg ? ' selected' : '') + '>' + esc(p[0]) + '</option>'; });
+  return '<div class="fld"><label>アプリ名から選ぶ（パッケージ名が自動で入ります）</label><select class="catalogSel">' + opts + '</select></div>' +
+    '<div class="fld"><label>パッケージ名</label><input class="pkgInput" value="' + esc(currentPkg || '') + '" placeholder="jp.naver.line.android"></div>';
 }
-function kindLabel(list, kind) {
-  for (var i = 0; i < list.length; i++) if (list[i][0] === kind) return list[i][1];
-  return kind;
-}
-function setStatus(msg, ok) {
-  $status.innerHTML = msg ? '<span class="' + (ok ? "ok" : "err") + '">' + esc(msg) + "</span>" : "";
-}
-function renderMeta() {
-  $meta.textContent = "rev " + state.revision + (state.updatedAt ? " / " + state.updatedAt.replace("T", " ").slice(0, 16) : "");
-}
-function renderGrid() {
-  $grid.innerHTML = "";
-  state.slots.forEach(function (slot, i) {
-    var d = document.createElement("div");
-    d.className = "cell" + (i === state.selected ? " sel" : "");
-    d.innerHTML = '<div class="glyph">' + glyph(slot) + '</div>' +
-      '<div class="name">' + esc(slot.kind === "blank" ? "（空白）" : slot.title || "") + "</div>" +
-      '<div class="kind">' + esc(kindLabel(SLOT_KINDS, slot.kind)) + "</div>";
-    d.addEventListener("click", function () { state.selected = i; renderGrid(); renderEditor(); });
-    $grid.appendChild(d);
-  });
-}
-function options(list, value) {
-  return list.map(function (pair) {
-    return '<option value="' + pair[0] + '"' + (pair[0] === value ? " selected" : "") + ">" + pair[1] + "</option>";
-  }).join("");
-}
-function iconSelect(id, value, allowEmpty) {
-  var html = '<select id="' + id + '">';
-  if (allowEmpty) html += '<option value="">（なし）</option>';
-  ICONS.forEach(function (icon) {
-    html += '<option value="' + icon + '"' + (icon === value ? " selected" : "") + ">" + icon + "</option>";
-  });
-  html += '<option value="__pkg__"' + (value && value.indexOf("pkg:") === 0 ? " selected" : "") + ">アプリのアイコン（パッケージ指定）</option>";
-  html += "</select>";
-  var pkg = value && value.indexOf("pkg:") === 0 ? value.slice(4) : "";
-  html += '<input type="text" id="' + id + 'Pkg" placeholder="パッケージ名（アイコン用）" value="' + esc(pkg) + '"' +
-    (value && value.indexOf("pkg:") === 0 ? "" : ' style="display:none"') + ">";
+function iconFieldHtml(t) {
+  var isPkg = t.icon && t.icon.indexOf('pkg:') === 0;
+  var opts = ICONS.map(function (id) { return '<option value="' + id + '"' + (!isPkg && t.icon === id ? ' selected' : '') + '>' + (ICON_GLYPHS[id] || '') + ' ' + id + '</option>'; }).join('');
+  opts += '<option value="__pkg"' + (isPkg ? ' selected' : '') + '>アプリのアイコンを使う</option>';
+  var html = '<div class="fld"><label>アイコン</label><select id="f_icon">' + opts + '</select></div>';
+  if (isPkg) html += '<div class="fld"><label>アイコンのアプリ（パッケージ名）</label><input id="f_iconpkg" value="' + esc(t.icon.slice(4)) + '"></div>';
   return html;
 }
-function readIcon(id) {
-  var sel = document.getElementById(id);
-  if (!sel) return undefined;
-  if (sel.value === "__pkg__") {
-    var pkg = document.getElementById(id + "Pkg").value.trim();
-    return pkg ? "pkg:" + pkg : "";
+function renderPanel() {
+  panelBox.innerHTML = '';
+  if (!S.sel || !S.tiles[S.sel]) return;
+  var t = S.tiles[S.sel], loc = locOf(S.sel);
+  var p = document.createElement('div'); p.className = 'panel';
+  var fnHtml = TILE_KINDS.map(function (pr) { return '<button class="fn' + (t.kind === pr[0] ? ' on' : '') + '" data-k="' + pr[0] + '">' + pr[1] + '</button>'; }).join('');
+  var fields = '<div class="fld"><label>表示名</label><input id="f_title" value="' + esc(t.title || '') + '"></div>';
+  if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update') {
+    fields += catalogFieldHtml(t.pkg);
+    if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
   }
-  return sel.value;
-}
-function wireIcon(id) {
-  var sel = document.getElementById(id);
-  if (!sel) return;
-  sel.addEventListener("change", function () {
-    var input = document.getElementById(id + "Pkg");
-    if (input) input.style.display = sel.value === "__pkg__" ? "" : "none";
-  });
-}
-function copyFields(prefix, obj) {
-  var html = '<label>コピー内容の種類</label><select id="' + prefix + 'CopyType">' +
-    [["text", "固定文字列"], ["url", "URL"], ["deviceId", "端末ID"]].map(function (p) {
-      return '<option value="' + p[0] + '"' + (p[0] === (obj.copyType || "text") ? " selected" : "") + ">" + p[1] + "</option>";
-    }).join("") + "</select>";
-  html += '<div id="' + prefix + 'TextWrap"><label>コピーする文字列</label>' +
-    '<input type="text" id="' + prefix + 'Text" value="' + esc(obj.text || "") + '"></div>';
-  html += '<div id="' + prefix + 'UrlWrap"><label>コピーするURL</label>' +
-    '<input type="text" id="' + prefix + 'Url" value="' + esc(obj.url || "") + '"></div>';
-  return html;
-}
-function wireCopy(prefix) {
-  var sel = document.getElementById(prefix + "CopyType");
-  if (!sel) return;
-  var update = function () {
-    document.getElementById(prefix + "TextWrap").style.display = sel.value === "text" ? "" : "none";
-    document.getElementById(prefix + "UrlWrap").style.display = sel.value === "url" ? "" : "none";
-  };
-  sel.addEventListener("change", update);
-  update();
-}
-function readCopy(prefix, out) {
-  out.copyType = document.getElementById(prefix + "CopyType").value;
-  delete out.text; delete out.url;
-  if (out.copyType === "text") out.text = document.getElementById(prefix + "Text").value;
-  if (out.copyType === "url") out.url = document.getElementById(prefix + "Url").value;
-}
-function renderEditor() {
-  var i = state.selected;
-  var slot = state.slots[i];
-  var html = "<h2>マス " + (i + 1) + " の編集</h2>";
-  html += '<label>部品の種類</label><select id="fKind">' + options(SLOT_KINDS, slot.kind) + "</select>";
-  if (slot.kind !== "blank") {
-    html += '<label>表示名</label><input type="text" id="fTitle" value="' + esc(slot.title || "") + '">';
+  if (t.kind === 'web') {
+    fields += '<div class="fld"><label>URL</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
+    fields += '<div class="fld"><label>開くブラウザ</label><select id="f_browser"><option value="">指定なし</option><option value="com.android.chrome"' + (t.browser ? ' selected' : '') + '>Chrome</option></select></div>';
+    fields += iconFieldHtml(t);
   }
-  if (slot.kind === "app") {
-    html += '<label>パッケージ名</label><input type="text" id="fPkg" value="' + esc(slot.pkg || "") + '">';
-    html += '<p class="note">アイコンはそのアプリのものが自動で表示されます。</p>';
-  } else if (slot.kind === "web") {
-    html += '<label>アイコン</label>' + iconSelect("fIcon", slot.icon || "link", false);
-    html += '<label>開くURL</label><input type="text" id="fUrl" value="' + esc(slot.url || "") + '">';
-    html += '<label>開くブラウザ（任意。Chrome固定など）</label><input type="text" id="fBrowser" placeholder="例：com.android.chrome" value="' + esc(slot.browser || "") + '">';
-  } else if (slot.kind === "copy") {
-    html += '<p class="note">アイコンは紙2枚（コピー）に統一されます。表示名に何をコピーするか書いてください。</p>';
-    html += copyFields("f", slot);
-  } else if (slot.kind === "menu") {
-    html += '<label>アイコン</label>' + iconSelect("fIcon", slot.icon || "updates", false);
-    html += '<div id="menuItems"></div>';
-    html += '<div class="menuPreview" id="menuPreview"></div>';
-    html += '<button type="button" class="addBtn" id="addItem">＋ 項目を追加（最大8）</button>';
-  } else if (slot.kind !== "blank") {
-    html += '<label>アイコン</label>' + iconSelect("fIcon", slot.icon || "", false);
-    if (slot.kind === "settings") html += '<p class="note">設定部品は削除できません（種類を変えると、そのマスは設定でなくなります。設定部品が1つもない配置は保存できません）。</p>';
+  if (t.kind === 'copy') {
+    fields += '<div class="fld"><label>コピーの種類</label><select id="f_ctype">' +
+      '<option value="text"' + (t.copyType === 'text' ? ' selected' : '') + '>文字列</option>' +
+      '<option value="url"' + (t.copyType === 'url' ? ' selected' : '') + '>URL</option>' +
+      '<option value="deviceId"' + (t.copyType === 'deviceId' ? ' selected' : '') + '>端末ID</option></select></div>';
+    if (t.copyType === 'text') fields += '<div class="fld"><label>コピーする文字列</label><input id="f_text" value="' + esc(t.text || '') + '"></div>';
+    if (t.copyType === 'url') fields += '<div class="fld"><label>コピーするURL</label><input id="f_curl" value="' + esc(t.url || '') + '"></div>';
+    if (t.copyType === 'deviceId') fields += '<div class="hint">端末ごとのID文字列をコピーします。内容の入力は不要です。</div>';
+    fields += '<div class="hint">アイコンはコピー（紙2枚）に統一されます。何をコピーするかは表示名で表してください。</div>';
   }
-  $editor.innerHTML = html;
-  document.getElementById("fKind").addEventListener("change", function (e) {
-    collectSlot();
-    var kind = e.target.value;
-    var next = { kind: kind };
-    if (kind === "copy") { next.title = "コピー"; next.copyType = "text"; next.text = ""; }
-    if (kind === "menu") { next.title = "各更新"; next.icon = "updates"; next.items = [{ kind: "storage", title: "70%スト埋め", icon: "storage" }]; }
-    if (kind === "settings") { next.title = "設定"; next.icon = "settings"; }
-    if (kind === "wifi") { next.title = "Wi-Fi"; next.icon = "wifi"; }
-    if (kind === "airplane") { next.title = "機内モード"; next.icon = "airplane"; }
-    state.slots[state.selected] = next;
-    renderGrid(); renderEditor();
-  });
-  wireIcon("fIcon");
-  wireCopy("f");
-  if (slot.kind === "menu") renderMenuItems();
-}
-function renderMenuItems() {
-  var slot = state.slots[state.selected];
-  var wrap = document.getElementById("menuItems");
-  var html = "";
-  slot.items.forEach(function (item, idx) {
-    html += '<div class="itemCard"><b>項目 ' + (idx + 1) + "</b>" +
-      '<label>動作の種類</label><select id="iKind' + idx + '">' + options(ITEM_KINDS, item.kind) + "</select>" +
-      '<label>表示名</label><input type="text" id="iTitle' + idx + '" value="' + esc(item.title || "") + '">';
-    if (item.kind === "updateApp" || item.kind === "app") {
-      html += '<label>パッケージ名</label><input type="text" id="iPkg' + idx + '" value="' + esc(item.pkg || "") + '">';
-    } else if (item.kind === "web") {
-      html += '<label>開くURL</label><input type="text" id="iUrl' + idx + '" value="' + esc(item.url || "") + '">';
-    } else if (item.kind === "copy") {
-      html += copyFields("i" + idx, item);
-    }
-    if (item.kind !== "copy") {
-      html += '<label>アイコン（任意）</label>' + iconSelect("iIcon" + idx, item.icon || "", true);
-    }
-    html += '<div class="itemBtns">' +
-      '<button type="button" data-act="up" data-idx="' + idx + '">↑ 上へ</button>' +
-      '<button type="button" data-act="down" data-idx="' + idx + '">↓ 下へ</button>' +
-      '<button type="button" class="danger" data-act="del" data-idx="' + idx + '">削除</button></div></div>';
-  });
-  wrap.innerHTML = html;
-  slot.items.forEach(function (item, idx) {
-    document.getElementById("iKind" + idx).addEventListener("change", function (e) {
-      collectSlot();
-      var s = state.slots[state.selected];
-      var next = { kind: e.target.value, title: s.items[idx].title || "" };
-      if (next.kind === "storage") { next.icon = "storage"; }
-      if (next.kind === "copy") { next.copyType = "text"; next.text = ""; }
-      s.items[idx] = next;
-      renderMenuItems(); renderMenuPreview();
-    });
-    wireIcon("iIcon" + idx);
-    wireCopy("i" + idx);
-  });
-  wrap.querySelectorAll("button[data-act]").forEach(function (b) {
-    b.addEventListener("click", function () {
-      collectSlot();
-      var s = state.slots[state.selected];
-      var idx = Number(b.dataset.idx);
-      if (b.dataset.act === "del") s.items.splice(idx, 1);
-      if (b.dataset.act === "up" && idx > 0) { var t = s.items[idx - 1]; s.items[idx - 1] = s.items[idx]; s.items[idx] = t; }
-      if (b.dataset.act === "down" && idx < s.items.length - 1) { var u = s.items[idx + 1]; s.items[idx + 1] = s.items[idx]; s.items[idx] = u; }
-      renderMenuItems(); renderMenuPreview();
-    });
-  });
-  var add = document.getElementById("addItem");
-  add.disabled = slot.items.length >= 8;
-  add.addEventListener("click", function () {
-    collectSlot();
-    var s = state.slots[state.selected];
-    if (s.items.length >= 8) return;
-    s.items.push({ kind: "updateApp", title: "", pkg: "" });
-    renderMenuItems(); renderMenuPreview();
-  });
-  renderMenuPreview();
-}
-function renderMenuPreview() {
-  var slot = state.slots[state.selected];
-  var pv = document.getElementById("menuPreview");
-  if (!pv) return;
-  pv.innerHTML = slot.items.map(function (item) {
-    return '<div class="mcell">' + esc(item.title || "（無題）") + "</div>";
-  }).join("");
-}
-function collectSlot() {
-  var kindSel = document.getElementById("fKind");
-  if (!kindSel) return;
-  var slot = state.slots[state.selected];
-  var kind = kindSel.value;
-  var next = { kind: kind };
-  if (kind === "blank") { state.slots[state.selected] = next; return; }
-  next.title = document.getElementById("fTitle").value;
-  if (kind === "app") {
-    next.pkg = document.getElementById("fPkg").value.trim();
-  } else if (kind === "web") {
-    next.icon = readIcon("fIcon");
-    next.url = document.getElementById("fUrl").value.trim();
-    var browser = document.getElementById("fBrowser").value.trim();
-    if (browser) next.browser = browser;
-  } else if (kind === "copy") {
-    readCopy("f", next);
-  } else if (kind === "menu") {
-    next.icon = readIcon("fIcon");
-    next.items = slot.items.map(function (item, idx) {
-      var out = { kind: document.getElementById("iKind" + idx).value, title: document.getElementById("iTitle" + idx).value };
-      if (out.kind === "updateApp" || out.kind === "app") out.pkg = document.getElementById("iPkg" + idx).value.trim();
-      else if (out.kind === "web") out.url = document.getElementById("iUrl" + idx).value.trim();
-      else if (out.kind === "copy") readCopy("i" + idx, out);
-      if (out.kind !== "copy") {
-        var icon = readIcon("iIcon" + idx);
-        if (icon) out.icon = icon;
+  if (t.kind === 'settings' || t.kind === 'wifi' || t.kind === 'airplane' || t.kind === 'label') fields += iconFieldHtml(t);
+  var menuHtml = '';
+  if (t.kind === 'menu') {
+    fields += iconFieldHtml(t);
+    t.items = t.items || [];
+    var itemsHtml = t.items.map(function (it, i) {
+      return '<button class="ritem' + (S.selItem === i ? ' sel' : '') + '" data-i="' + i + '">' + esc(it.title) + '<small>' + esc(ITEMKINDNAME[it.kind] || '') + '</small></button>';
+    }).join('');
+    if (t.items.length < 8) itemsHtml += '<button class="additem" id="i_add">＋ 項目を足す</button>';
+    menuHtml = '<div class="secttl">せり上がりの中身（最大8件・2列）</div>' +
+      '<div class="rise"><div class="cap">▲ 端末では下からせり上がります</div><div class="riseGrid">' + itemsHtml + '</div></div>';
+    if (S.selItem >= 0 && t.items[S.selItem]) {
+      var it = t.items[S.selItem];
+      var ifn = ITEM_KINDS.map(function (pr) { return '<button class="fn' + (it.kind === pr[0] ? ' on' : '') + '" data-ik="' + pr[0] + '">' + pr[1] + '</button>'; }).join('');
+      menuHtml += '<div class="secttl">項目の編集</div><div class="fnrow">' + ifn + '</div>' +
+        '<div class="fld"><label>表示名</label><input id="i_title" value="' + esc(it.title || '') + '"></div>';
+      if (it.kind === 'app' || it.kind === 'update') {
+        menuHtml += catalogFieldHtml(it.pkg).replace(/class="catalogSel"/g, 'class="catalogSel" id="i_catalog"').replace(/class="pkgInput"/g, 'class="pkgInput" id="i_pkg"');
+        if (it.kind === 'update') menuHtml += '<div class="fld"><label>更新ページのURL（空ならストア画面）</label><input id="i_url" value="' + esc(it.url || '') + '" placeholder="https://…"></div>';
       }
-      return out;
-    });
-  } else {
-    next.icon = readIcon("fIcon");
-  }
-  state.slots[state.selected] = next;
-}
-$save.addEventListener("click", function () {
-  collectSlot();
-  $save.disabled = true;
-  setStatus("保存中…", true);
-  fetch("/v1/home-layout", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expectedRevision: state.revision, layout: { v: 1, slots: state.slots } }),
-  }).then(function (res) {
-    return res.json().then(function (data) { return { status: res.status, data: data }; });
-  }).then(function (r) {
-    $save.disabled = false;
-    if (r.status === 200) {
-      state.revision = r.data.revision;
-      state.updatedAt = r.data.updatedAt;
-      renderMeta();
-      setStatus("保存しました（rev " + r.data.revision + "）。各端末で「画面更新」を押すと反映されます。", true);
-    } else if (r.status === 409) {
-      setStatus("他の場所で更新されました。ページを再読み込みしてからやり直してください。", false);
-    } else if (r.status === 401) {
-      setStatus("認証が切れています。再読み込みしてください。", false);
+      if (it.kind === 'web') menuHtml += '<div class="fld"><label>URL</label><input id="i_url" value="' + esc(it.url || '') + '"></div>';
+      if (it.kind === 'copy') {
+        menuHtml += '<div class="fld"><label>コピーの種類</label><select id="i_ctype">' +
+          '<option value="text"' + (it.copyType === 'text' ? ' selected' : '') + '>文字列</option>' +
+          '<option value="url"' + (it.copyType === 'url' ? ' selected' : '') + '>URL</option>' +
+          '<option value="deviceId"' + (it.copyType === 'deviceId' ? ' selected' : '') + '>端末ID</option></select></div>';
+        if (it.copyType === 'text') menuHtml += '<div class="fld"><label>コピーする文字列</label><input id="i_text" value="' + esc(it.text || '') + '"></div>';
+        if (it.copyType === 'url') menuHtml += '<div class="fld"><label>コピーするURL</label><input id="i_curl" value="' + esc(it.url || '') + '"></div>';
+      }
+      if (it.kind === 'storage') menuHtml += '<div class="hint">端末のストレージ画面（スト埋め）を開きます。紐づけは不要です。</div>';
+      menuHtml += '<div class="prow"><button class="pbtn" id="i_up">← 前へ</button><button class="pbtn" id="i_down">次へ →</button><button class="pbtn danger" id="i_del">項目を削除</button></div>';
     } else {
-      setStatus("保存できませんでした：" + (r.data.error ? r.data.error.message : r.status), false);
+      menuHtml += '<div class="hint">項目をタップすると、その項目の機能と紐づけを編集できます。</div>';
     }
-  }).catch(function () {
-    $save.disabled = false;
-    setStatus("通信に失敗しました", false);
-  });
-});
-fetch("/v1/home-layout").then(function (res) { return res.json(); }).then(function (data) {
-  if (data && data.slots) {
-    state.revision = data.revision;
-    state.updatedAt = data.updatedAt;
-    state.slots = data.slots;
-  } else {
-    state.slots = [];
-    for (var i = 0; i < 16; i++) state.slots.push({ kind: "blank" });
-    state.slots[10] = { kind: "settings", title: "設定", icon: "settings" };
   }
-  renderMeta(); renderGrid(); renderEditor();
-}).catch(function () { setStatus("読み込みに失敗しました", false); });
+  p.innerHTML = '<h3>タイルの編集</h3><div class="secttl" style="margin-top:0">機能を選ぶ</div><div class="fnrow">' + fnHtml + '</div>' + fields + menuHtml +
+    '<div class="prow">' +
+    (loc && loc.where === 'slot' ? '<button class="pbtn" id="p_unplace">配置を外す</button>' : '') +
+    '<button class="pbtn danger" id="p_del">タイルを削除</button>' +
+    '<button class="pbtn" id="p_close">閉じる</button></div>';
+  panelBox.appendChild(p);
+  p.querySelectorAll('.fn[data-k]').forEach(function (b) { b.addEventListener('click', function () {
+    t.kind = b.dataset.k; S.selItem = -1;
+    if (t.kind === 'menu' && !t.items) t.items = [{ kind: 'update', title: '新しい項目', pkg: '' }];
+    if (t.kind === 'copy' && !t.copyType) t.copyType = 'text';
+    render();
+  }); });
+  function bind(id, obj, key, rerender) { var el = document.getElementById(id); if (el) el.addEventListener('input', function () { obj[key] = el.value; if (rerender) render(); else if (key === 'title') { var lb = document.querySelector('.tile[data-tid="' + S.sel + '"] .lb'); if (lb) lb.textContent = el.value; } }); }
+  bind('f_title', t, 'title'); bind('f_url', t, 'url'); bind('f_text', t, 'text'); bind('f_curl', t, 'url');
+  var pkgIn = p.querySelector('.pkgInput'); if (pkgIn) pkgIn.addEventListener('input', function () { t.pkg = pkgIn.value; });
+  var catSel = p.querySelector('.catalogSel'); if (catSel) catSel.addEventListener('change', function () { if (catSel.value) { t.pkg = catSel.value; render(); } });
+  var br = document.getElementById('f_browser'); if (br) br.addEventListener('change', function () { t.browser = br.value || undefined; });
+  var ct = document.getElementById('f_ctype'); if (ct) ct.addEventListener('change', function () { t.copyType = ct.value; render(); });
+  var ic = document.getElementById('f_icon'); if (ic) ic.addEventListener('change', function () { t.icon = ic.value === '__pkg' ? 'pkg:' : ic.value; render(); });
+  bind('f_iconpkg', t, 'iconpkg');
+  var ip = document.getElementById('f_iconpkg'); if (ip) ip.addEventListener('input', function () { t.icon = 'pkg:' + ip.value; });
+  p.querySelectorAll('.ritem').forEach(function (b) { b.addEventListener('click', function () { S.selItem = parseInt(b.dataset.i, 10); render(); }); });
+  var add = document.getElementById('i_add'); if (add) add.addEventListener('click', function () { t.items.push({ kind: 'update', title: '新しい項目', pkg: '' }); S.selItem = t.items.length - 1; render(); });
+  if (S.selItem >= 0 && t.items && t.items[S.selItem]) {
+    var it2 = t.items[S.selItem];
+    p.querySelectorAll('.fn[data-ik]').forEach(function (b) { b.addEventListener('click', function () { it2.kind = b.dataset.ik; if (it2.kind === 'copy' && !it2.copyType) it2.copyType = 'text'; render(); }); });
+    bind('i_title', it2, 'title', true); bind('i_url', it2, 'url'); bind('i_text', it2, 'text'); bind('i_curl', it2, 'url');
+    var ipkg = document.getElementById('i_pkg'); if (ipkg) ipkg.addEventListener('input', function () { it2.pkg = ipkg.value; });
+    var icat = document.getElementById('i_catalog'); if (icat) icat.addEventListener('change', function () { if (icat.value) { it2.pkg = icat.value; render(); } });
+    var ict = document.getElementById('i_ctype'); if (ict) ict.addEventListener('change', function () { it2.copyType = ict.value; render(); });
+    var up = document.getElementById('i_up'), dn = document.getElementById('i_down'), dl = document.getElementById('i_del');
+    if (up) up.addEventListener('click', function () { var i = S.selItem; if (i > 0) { var tmp = t.items[i - 1]; t.items[i - 1] = t.items[i]; t.items[i] = tmp; S.selItem = i - 1; render(); } });
+    if (dn) dn.addEventListener('click', function () { var i = S.selItem; if (i < t.items.length - 1) { var tmp = t.items[i + 1]; t.items[i + 1] = t.items[i]; t.items[i] = tmp; S.selItem = i + 1; render(); } });
+    if (dl) dl.addEventListener('click', function () { t.items.splice(S.selItem, 1); S.selItem = -1; render(); });
+  }
+  var un = document.getElementById('p_unplace'); if (un) un.addEventListener('click', function () { var L = locOf(S.sel); if (L && L.where === 'slot') { S.slots[L.idx] = null; S.pool.push(S.sel); } render(); });
+  document.getElementById('p_del').addEventListener('click', function () { var L = locOf(S.sel); if (L) { if (L.where === 'slot') S.slots[L.idx] = null; else S.pool.splice(L.idx, 1); } delete S.tiles[S.sel]; S.sel = null; S.selItem = -1; render(); });
+  document.getElementById('p_close').addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
+}
+function createTile() {
+  var id = 't' + Date.now().toString(36) + (S.seq++);
+  S.tiles[id] = { id: id, kind: 'app', title: '新しいタイル', pkg: '' };
+  S.pool.push(id); S.sel = id; S.selItem = -1; render();
+  panelBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function cleanItem(it) {
+  var o = { kind: it.kind, title: it.title };
+  if (it.kind === 'app') o.pkg = it.pkg || '';
+  if (it.kind === 'update') { o.pkg = it.pkg || ''; if (it.url) o.url = it.url; }
+  if (it.kind === 'web') o.url = it.url || '';
+  if (it.kind === 'copy') { o.copyType = it.copyType || 'text'; if (it.copyType === 'text') o.text = it.text || ''; if (it.copyType === 'url') o.url = it.url || ''; }
+  return o;
+}
+function cleanTile(t) {
+  var o = { id: t.id, kind: t.kind, title: t.title };
+  if (t.kind === 'app') o.pkg = t.pkg || '';
+  if (t.kind === 'download' || t.kind === 'update') { o.pkg = t.pkg || ''; if (t.url) o.url = t.url; }
+  if (t.kind === 'web') { o.icon = t.icon || 'link'; o.url = t.url || ''; if (t.browser) o.browser = t.browser; }
+  if (t.kind === 'copy') { o.copyType = t.copyType || 'text'; if (t.copyType === 'text') o.text = t.text || ''; if (t.copyType === 'url') o.url = t.url || ''; }
+  if (t.kind === 'settings' || t.kind === 'wifi' || t.kind === 'airplane' || t.kind === 'label') o.icon = t.icon || (t.kind === 'settings' ? 'settings' : t.kind === 'wifi' ? 'wifi' : t.kind === 'airplane' ? 'airplane' : 'tag');
+  if (t.kind === 'menu') { o.icon = t.icon || 'updates'; o.items = (t.items || []).map(cleanItem); }
+  return o;
+}
+function serialize() {
+  return { v: 2,
+    slots: S.slots.map(function (tid) { return tid && S.tiles[tid] ? cleanTile(S.tiles[tid]) : { kind: 'blank' }; }),
+    pool: S.pool.filter(function (tid) { return S.tiles[tid]; }).map(function (tid) { return cleanTile(S.tiles[tid]); }) };
+}
+saveBtn.addEventListener('click', function () {
+  saveBtn.disabled = true; setMsg('保存中…');
+  fetch('/v1/home-layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: S.rev, layout: serialize() }) })
+  .then(function (res) { return res.json().then(function (data) { return { status: res.status, data: data }; }); })
+  .then(function (r) {
+    saveBtn.disabled = false;
+    if (r.status === 200) { S.rev = r.data.revision; meta.textContent = 'revision ' + S.rev; setMsg('保存しました（revision ' + S.rev + '）。各端末の「画面更新」で反映されます。'); }
+    else if (r.status === 409) { setMsg('他の場所で更新されました。ページを読み直してください。', true); }
+    else setMsg('保存できませんでした: ' + (r.data && r.data.error ? r.data.error.message : r.status), true);
+  })
+  .catch(function () { saveBtn.disabled = false; setMsg('通信に失敗しました', true); });
+});
+function removeFromLoc(tid) { var L = locOf(tid); if (!L) return; if (L.where === 'slot') S.slots[L.idx] = null; else S.pool.splice(L.idx, 1); }
+function moveTile(tid, target) {
+  var src = locOf(tid); if (!src) return;
+  if (target.pool) { removeFromLoc(tid); S.pool.push(tid); return; }
+  var dst = locOf(target.tid); if (!dst) return;
+  if (dst.where === 'slot' && src.where === 'slot') { S.slots[dst.idx] = tid; S.slots[src.idx] = target.tid; }
+  else if (dst.where === 'slot') { S.slots[dst.idx] = tid; S.pool.splice(src.idx, 1); S.pool.push(target.tid); }
+  else if (src.where === 'slot') { S.pool[dst.idx] = tid; S.slots[src.idx] = target.tid; }
+  else { S.pool[dst.idx] = tid; S.pool[src.idx] = target.tid; }
+}
+var drag = null;
+document.addEventListener('pointerdown', function (e) {
+  var el = e.target.closest ? e.target.closest('.tile') : null;
+  if (el) { drag = { tid: el.dataset.tid, x0: e.clientX, y0: e.clientY, active: false, el: el, clone: null }; return; }
+  var slotEl = e.target.closest ? e.target.closest('.slot') : null;
+  if (slotEl && S.sel && S.tiles[S.sel]) { removeFromLoc(S.sel); S.slots[parseInt(slotEl.dataset.slot, 10)] = S.sel; render(); }
+});
+document.addEventListener('pointermove', function (e) {
+  if (!drag) return;
+  if (!drag.active && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 10) {
+    drag.active = true;
+    var r = drag.el.getBoundingClientRect();
+    var c = drag.el.cloneNode(true); c.className = 'tile clone';
+    c.style.width = r.width + 'px'; c.style.left = r.left + 'px'; c.style.top = r.top + 'px';
+    document.body.appendChild(c); drag.clone = c; drag.dx = e.clientX - r.left; drag.dy = e.clientY - r.top;
+    drag.el.style.opacity = '.35';
+  }
+  if (drag.active && drag.clone) {
+    drag.clone.style.left = (e.clientX - drag.dx) + 'px'; drag.clone.style.top = (e.clientY - drag.dy) + 'px';
+    document.querySelectorAll('.slot.over').forEach(function (s) { s.classList.remove('over'); });
+    var under = document.elementFromPoint(e.clientX, e.clientY);
+    var slotEl = under && under.closest ? under.closest('.slot') : null;
+    if (slotEl) slotEl.classList.add('over');
+  }
+});
+document.addEventListener('pointerup', function (e) {
+  if (!drag) return;
+  var d = drag; drag = null;
+  if (d.clone) d.clone.remove();
+  if (d.el) d.el.style.opacity = '';
+  document.querySelectorAll('.slot.over').forEach(function (s) { s.classList.remove('over'); });
+  if (!locOf(d.tid)) { render(); return; }
+  if (!d.active) {
+    if (S.sel && S.sel !== d.tid) moveTile(S.sel, { tid: d.tid });
+    else { S.sel = d.tid; S.selItem = -1; }
+    render(); return;
+  }
+  var under = document.elementFromPoint(e.clientX, e.clientY);
+  var slotEl = under && under.closest ? under.closest('.slot') : null;
+  var tileTarget = under && under.closest ? under.closest('.tile') : null;
+  var poolHit = under && under.closest ? under.closest('#pool') : null;
+  if (slotEl) { removeFromLoc(d.tid); S.slots[parseInt(slotEl.dataset.slot, 10)] = d.tid; }
+  else if (tileTarget && tileTarget.dataset.tid !== d.tid) moveTile(d.tid, { tid: tileTarget.dataset.tid });
+  else if (poolHit) moveTile(d.tid, { pool: true });
+  render();
+});
+fetch('/v1/home-layout').then(function (res) { return res.json(); }).then(function (data) {
+  S.rev = data.revision || 0;
+  S.tiles = {}; S.slots = []; S.pool = [];
+  (data.slots || []).forEach(function (t) {
+    if (t.kind === 'blank') { S.slots.push(null); return; }
+    S.tiles[t.id] = t; S.slots.push(t.id);
+  });
+  while (S.slots.length < 16) S.slots.push(null);
+  (data.pool || []).forEach(function (t) { S.tiles[t.id] = t; S.pool.push(t.id); });
+  render();
+}).catch(function () { setMsg('読み込みに失敗しました', true); });
 </script>
 </body></html>`;
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
 }

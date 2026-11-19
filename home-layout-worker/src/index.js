@@ -12,7 +12,7 @@
 // GitHub repo, so it must not be redeployed from the repo. This Worker
 // only adds its own tables (home_layout_config / home_layout_history).
 
-import { validateLayout, LAYOUT_VERSION } from "./layout.js";
+import { validateLayout, upgradeLayout, LAYOUT_VERSION } from "./layout.js";
 import { editorHtml, loginHtml } from "./editor.js";
 import { SEED_LAYOUT_JSON, SEED_UPDATED_AT } from "./seed.js";
 
@@ -91,7 +91,13 @@ async function getLayout(request, env) {
   if (!row) {
     return jsonResponse({ error: { code: "not_initialized", message: "Layout is not initialized yet" } }, 404);
   }
-  return jsonResponse(row.layout, 200, { "Cache-Control": "no-store, max-age=0" });
+  // Serve the current format: stored v1 layouts are upgraded in memory
+  // (the stored row is rewritten as v2 on the next successful PUT).
+  const upgraded = upgradeLayout(row.layout);
+  const layout = upgraded.ok
+    ? { ...upgraded.value, revision: row.layout.revision, updatedAt: row.layout.updatedAt }
+    : row.layout;
+  return jsonResponse(layout, 200, { "Cache-Control": "no-store, max-age=0" });
 }
 
 async function updateLayout(request, env) {
@@ -131,7 +137,7 @@ async function updateLayout(request, env) {
 
   const nextRevision = currentRevision + 1;
   const updatedAt = new Date().toISOString();
-  const stored = { v: LAYOUT_VERSION, revision: nextRevision, updatedAt, slots: validated.value.slots };
+  const stored = { v: LAYOUT_VERSION, revision: nextRevision, updatedAt, slots: validated.value.slots, pool: validated.value.pool };
   const layoutJson = JSON.stringify(stored);
   const updateId = `rev-${nextRevision}`;
 
