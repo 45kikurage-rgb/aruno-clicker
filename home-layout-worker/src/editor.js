@@ -143,8 +143,8 @@ export function editorHtml() {
   <div class="gridbox">
     <div class="secttl">ホーム画面（16マス）― タイルをドラッグで移動、タップで編集</div>
     <div class="grid" id="grid"></div>
+    <div style="display:flex; gap:6px; margin-top:6px"><button class="pbtn danger" id="delSelBtn" type="button" style="display:none">削除</button><button class="pbtn" id="closeSelBtn" type="button" style="display:none">閉じる</button></div>
   </div>
-  <div style="display:flex; gap:6px; margin-top:4px"><button class="pbtn danger" id="delSelBtn" type="button" style="display:none">削除</button><button class="pbtn" id="closeSelBtn" type="button" style="display:none">閉じる</button></div>
   <div class="secttl">配置外のタイル（ここへドラッグで外せる）</div>
   <div class="pool" id="pool"></div>
   <div id="panelBox"></div>
