@@ -194,6 +194,8 @@ test("login with the admin key sets a persistent cookie that authenticates the e
   assert.ok(html.includes("ホーム画面の配置"));
   assert.ok(html.includes("保存"));
   assert.ok(html.includes("タイルを作る"));
+  assert.ok(html.includes("closeSelBtn")); // close button for the selected tile's editor
+  assert.ok(html.includes("delSelBtn")); // delete button next to it
 });
 
 test("login with a wrong key is rejected and the editor stays locked", async () => {
@@ -239,6 +241,16 @@ test("validateLayout enforces the v2 format rules", () => {
   slots[1] = { id: "u1", kind: "update", title: "更新", pkg: "jp.naver.line.android" }; // URL optional
   slots[2] = { id: "l1", kind: "label", title: "見出し", icon: "tag" };
   assert.equal(validateLayout({ v: 2, slots }).ok, true); // new kinds
+
+  slots = base();
+  slots[0] = { id: "i1", kind: "install", title: "かんたんツール", pkg: "com.example.kantan", url: "https://example.com/app.apk" };
+  assert.equal(validateLayout({ v: 2, slots }).ok, true); // install with an APK URL
+  slots[0] = { id: "i1", kind: "install", title: "かんたんツール", pkg: "com.kantan.app", url: "https://example.com/app.apk", icon: "auto" };
+  const withIcon = validateLayout({ v: 2, slots });
+  assert.equal(withIcon.ok, true); // install may carry a built-in icon (tornado "auto")
+  assert.equal(withIcon.value.slots[0].icon, "auto");
+  slots[0] = { id: "i1", kind: "install", title: "かんたんツール", pkg: "com.example.kantan" };
+  assert.equal(validateLayout({ v: 2, slots }).ok, false); // install requires the APK URL
 
   slots = base();
   const dupPool = [{ id: "s0", kind: "label", title: "重複", icon: "tag" }];

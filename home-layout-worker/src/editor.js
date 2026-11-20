@@ -10,15 +10,15 @@
 
 const FONT_URL = "https://cdn.jsdelivr.net/gh/45kikurage-rgb/aruno-clicker@main/home-layout-worker/assets/corporate-logo-rounded-bold.woff2";
 
-const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag"];
+const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag", "auto"];
 const ICON_GLYPHS = {
   honey: "🍯", qr: "▦", pig: "🐷", airplane: "✈", live: "●", tiker: "📱",
   mail: "✉", settings: "⚙", updates: "⟳", id: "ID", copy: "⧉", link: "🔗",
-  wifi: "📶", storage: "💾", tag: "🏷",
+  wifi: "📶", storage: "💾", tag: "🏷", auto: "🌪",
 };
 const TILE_KINDS = [
   ["app", "アプリ起動"], ["copy", "コピー"], ["web", "リンク"],
-  ["download", "ダウンロード"], ["update", "アプリ更新"], ["settings", "設定"],
+  ["download", "ダウンロード"], ["update", "アプリ更新"], ["install", "アプリ入手"], ["settings", "設定"],
   ["menu", "せり上がり"], ["wifi", "Wi-Fi"], ["airplane", "機内モード"], ["label", "ラベル"],
 ];
 const ITEM_KINDS = [
@@ -37,6 +37,7 @@ const APP_CATALOG = [
   ["Google開発者サービス", "com.google.android.gms"],
   ["Gmail", "com.google.android.gm"],
   ["YouTube", "com.google.android.youtube"],
+  ["かんたんツール", "com.kantan.app"],
 ];
 
 const PAGE_CSS = `
@@ -143,6 +144,7 @@ export function editorHtml() {
     <div class="secttl">ホーム画面（16マス）― タイルをドラッグで移動、タップで編集</div>
     <div class="grid" id="grid"></div>
   </div>
+  <div style="display:flex; gap:6px; margin-top:4px"><button class="pbtn danger" id="delSelBtn" type="button" style="display:none">削除</button><button class="pbtn" id="closeSelBtn" type="button" style="display:none">閉じる</button></div>
   <div class="secttl">配置外のタイル（ここへドラッグで外せる）</div>
   <div class="pool" id="pool"></div>
   <div id="panelBox"></div>
@@ -161,16 +163,20 @@ var ITEMKINDNAME = {}; ITEM_KINDS.forEach(function (p) { ITEMKINDNAME[p[0]] = p[
 var S = { tiles: {}, slots: [], pool: [], sel: null, selItem: -1, rev: 0, seq: 1 };
 var grid = document.getElementById('grid'), poolEl = document.getElementById('pool'),
     panelBox = document.getElementById('panelBox'), msg = document.getElementById('msg'),
-    meta = document.getElementById('meta'), saveBtn = document.getElementById('saveBtn');
+    meta = document.getElementById('meta'), saveBtn = document.getElementById('saveBtn'),
+    closeSelBtn = document.getElementById('closeSelBtn'),
+    delSelBtn = document.getElementById('delSelBtn');
 
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
 function glyph(t) {
+  if (t.icon && ICON_GLYPHS[t.icon]) return ICON_GLYPHS[t.icon];
+  if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
   if (t.kind === 'app') return '📱';
   if (t.kind === 'download') return '⬇';
   if (t.kind === 'update') return '⟳';
-  if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
-  return ICON_GLYPHS[t.icon] || '▦';
+  if (t.kind === 'install') return '📥';
+  return '▦';
 }
 function kindLabel(t) {
   if (t.kind === 'menu') return 'せり上がり ' + (t.items ? t.items.length : 0) + '件';
@@ -198,6 +204,9 @@ function render() {
   var nb = document.createElement('button'); nb.className = 'newtile'; nb.type = 'button'; nb.textContent = '＋ タイルを作る';
   nb.addEventListener('click', createTile); poolEl.appendChild(nb);
   meta.textContent = 'revision ' + S.rev;
+  var hasSel = Boolean(S.sel && S.tiles[S.sel]);
+  if (closeSelBtn) closeSelBtn.style.display = hasSel ? '' : 'none';
+  if (delSelBtn) delSelBtn.style.display = hasSel ? '' : 'none';
   renderPanel();
 }
 function catalogFieldHtml(currentPkg) {
@@ -221,9 +230,10 @@ function renderPanel() {
   var p = document.createElement('div'); p.className = 'panel';
   var fnHtml = TILE_KINDS.map(function (pr) { return '<button class="fn' + (t.kind === pr[0] ? ' on' : '') + '" data-k="' + pr[0] + '">' + pr[1] + '</button>'; }).join('');
   var fields = '<div class="fld"><label>表示名</label><input id="f_title" value="' + esc(t.title || '') + '"></div>';
-  if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update') {
+  if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update' || t.kind === 'install') {
     fields += catalogFieldHtml(t.pkg);
-    if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
+    if (t.kind === 'install') fields += '<div class="fld"><label>APKのURL（直リンク・必須）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…/app.apk"></div><div class="hint">押すとアプリがAPKをダウンロードしてインストールし、起動します（アプリ側の対応が必要。未対応の間は空白表示）。入っていれば起動だけします。</div>' + iconFieldHtml(t);
+    else if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
   }
   if (t.kind === 'web') {
     fields += '<div class="fld"><label>URL</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
@@ -314,6 +324,11 @@ function renderPanel() {
   document.getElementById('p_del').addEventListener('click', function () { var L = locOf(S.sel); if (L) { if (L.where === 'slot') S.slots[L.idx] = null; else S.pool.splice(L.idx, 1); } delete S.tiles[S.sel]; S.sel = null; S.selItem = -1; render(); });
   document.getElementById('p_close').addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
 }
+if (closeSelBtn) closeSelBtn.addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
+if (delSelBtn) delSelBtn.addEventListener('click', function () {
+  if (!S.sel || !S.tiles[S.sel]) return;
+  removeFromLoc(S.sel); delete S.tiles[S.sel]; S.sel = null; S.selItem = -1; render();
+});
 function createTile() {
   var id = 't' + Date.now().toString(36) + (S.seq++);
   S.tiles[id] = { id: id, kind: 'app', title: '新しいタイル', pkg: '' };
@@ -332,6 +347,7 @@ function cleanTile(t) {
   var o = { id: t.id, kind: t.kind, title: t.title };
   if (t.kind === 'app') o.pkg = t.pkg || '';
   if (t.kind === 'download' || t.kind === 'update') { o.pkg = t.pkg || ''; if (t.url) o.url = t.url; }
+  if (t.kind === 'install') { o.pkg = t.pkg || ''; o.url = t.url || ''; if (t.icon) o.icon = t.icon; }
   if (t.kind === 'web') { o.icon = t.icon || 'link'; o.url = t.url || ''; if (t.browser) o.browser = t.browser; }
   if (t.kind === 'copy') { o.copyType = t.copyType || 'text'; if (t.copyType === 'text') o.text = t.text || ''; if (t.copyType === 'url') o.url = t.url || ''; }
   if (t.kind === 'settings' || t.kind === 'wifi' || t.kind === 'airplane' || t.kind === 'label') o.icon = t.icon || (t.kind === 'settings' ? 'settings' : t.kind === 'wifi' ? 'wifi' : t.kind === 'airplane' ? 'airplane' : 'tag');
