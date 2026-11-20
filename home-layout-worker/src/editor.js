@@ -10,11 +10,11 @@
 
 const FONT_URL = "https://cdn.jsdelivr.net/gh/45kikurage-rgb/aruno-clicker@main/home-layout-worker/assets/corporate-logo-rounded-bold.woff2";
 
-const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag"];
+const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag", "auto"];
 const ICON_GLYPHS = {
   honey: "🍯", qr: "▦", pig: "🐷", airplane: "✈", live: "●", tiker: "📱",
   mail: "✉", settings: "⚙", updates: "⟳", id: "ID", copy: "⧉", link: "🔗",
-  wifi: "📶", storage: "💾", tag: "🏷",
+  wifi: "📶", storage: "💾", tag: "🏷", auto: "🌪",
 };
 const TILE_KINDS = [
   ["app", "アプリ起動"], ["copy", "コピー"], ["web", "リンク"],
@@ -167,12 +167,13 @@ var grid = document.getElementById('grid'), poolEl = document.getElementById('po
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
 function glyph(t) {
+  if (t.icon && ICON_GLYPHS[t.icon]) return ICON_GLYPHS[t.icon];
+  if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
   if (t.kind === 'app') return '📱';
   if (t.kind === 'download') return '⬇';
   if (t.kind === 'update') return '⟳';
   if (t.kind === 'install') return '📥';
-  if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
-  return ICON_GLYPHS[t.icon] || '▦';
+  return '▦';
 }
 function kindLabel(t) {
   if (t.kind === 'menu') return 'せり上がり ' + (t.items ? t.items.length : 0) + '件';
@@ -225,7 +226,7 @@ function renderPanel() {
   var fields = '<div class="fld"><label>表示名</label><input id="f_title" value="' + esc(t.title || '') + '"></div>';
   if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update' || t.kind === 'install') {
     fields += catalogFieldHtml(t.pkg);
-    if (t.kind === 'install') fields += '<div class="fld"><label>APKのURL（直リンク・必須）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…/app.apk"></div><div class="hint">押すとアプリがAPKをダウンロードしてインストールし、起動します（アプリ側の対応が必要。未対応の間は空白表示）。入っていれば起動だけします。</div>';
+    if (t.kind === 'install') fields += '<div class="fld"><label>APKのURL（直リンク・必須）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…/app.apk"></div><div class="hint">押すとアプリがAPKをダウンロードしてインストールし、起動します（アプリ側の対応が必要。未対応の間は空白表示）。入っていれば起動だけします。</div>' + iconFieldHtml(t);
     else if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
   }
   if (t.kind === 'web') {
@@ -335,7 +336,7 @@ function cleanTile(t) {
   var o = { id: t.id, kind: t.kind, title: t.title };
   if (t.kind === 'app') o.pkg = t.pkg || '';
   if (t.kind === 'download' || t.kind === 'update') { o.pkg = t.pkg || ''; if (t.url) o.url = t.url; }
-  if (t.kind === 'install') { o.pkg = t.pkg || ''; o.url = t.url || ''; }
+  if (t.kind === 'install') { o.pkg = t.pkg || ''; o.url = t.url || ''; if (t.icon) o.icon = t.icon; }
   if (t.kind === 'web') { o.icon = t.icon || 'link'; o.url = t.url || ''; if (t.browser) o.browser = t.browser; }
   if (t.kind === 'copy') { o.copyType = t.copyType || 'text'; if (t.copyType === 'text') o.text = t.text || ''; if (t.copyType === 'url') o.url = t.url || ''; }
   if (t.kind === 'settings' || t.kind === 'wifi' || t.kind === 'airplane' || t.kind === 'label') o.icon = t.icon || (t.kind === 'settings' ? 'settings' : t.kind === 'wifi' ? 'wifi' : t.kind === 'airplane' ? 'airplane' : 'tag');

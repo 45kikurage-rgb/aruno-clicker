@@ -20,6 +20,7 @@ export const MAX_URL_LENGTH = 2048;
 export const BUILTIN_ICONS = [
   "honey", "qr", "pig", "airplane", "live", "tiker", "mail",
   "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag",
+  "auto",
 ];
 
 export const SLOT_KINDS = [
@@ -163,12 +164,16 @@ function normalizeTile(raw, field, { inPool }) {
   if (raw.kind === "install") {
     // Download the APK from a direct link, install it, then launch the
     // app (app-side behaviour; the URL is required, unlike download).
+    // An optional built-in icon overrides the target app's own icon.
     const pkg = checkPackage(raw.pkg, `${field}.pkg`);
     if (!pkg.ok) return pkg;
     const url = checkUrl(raw.url, `${field}.url`);
     if (!url.ok) return url;
     out.pkg = pkg.value;
     out.url = url.value;
+    const icon = checkIcon(raw.icon, `${field}.icon`, { required: false });
+    if (!icon.ok) return icon;
+    if (icon.value !== undefined) out.icon = icon.value;
     return pass(out);
   }
   if (raw.kind === "copy") {
