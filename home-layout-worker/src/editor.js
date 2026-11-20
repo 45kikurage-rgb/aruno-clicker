@@ -144,7 +144,7 @@ export function editorHtml() {
     <div class="secttl">ホーム画面（16マス）― タイルをドラッグで移動、タップで編集</div>
     <div class="grid" id="grid"></div>
   </div>
-  <div style="text-align:right; margin-top:4px"><button class="pbtn" id="closeSelBtn" type="button" style="display:none">選択中のタイルを閉じる ✕</button></div>
+  <div style="display:flex; gap:6px; margin-top:4px"><button class="pbtn danger" id="delSelBtn" type="button" style="display:none">削除</button><button class="pbtn" id="closeSelBtn" type="button" style="display:none">閉じる</button></div>
   <div class="secttl">配置外のタイル（ここへドラッグで外せる）</div>
   <div class="pool" id="pool"></div>
   <div id="panelBox"></div>
@@ -164,7 +164,8 @@ var S = { tiles: {}, slots: [], pool: [], sel: null, selItem: -1, rev: 0, seq: 1
 var grid = document.getElementById('grid'), poolEl = document.getElementById('pool'),
     panelBox = document.getElementById('panelBox'), msg = document.getElementById('msg'),
     meta = document.getElementById('meta'), saveBtn = document.getElementById('saveBtn'),
-    closeSelBtn = document.getElementById('closeSelBtn');
+    closeSelBtn = document.getElementById('closeSelBtn'),
+    delSelBtn = document.getElementById('delSelBtn');
 
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
@@ -203,7 +204,9 @@ function render() {
   var nb = document.createElement('button'); nb.className = 'newtile'; nb.type = 'button'; nb.textContent = '＋ タイルを作る';
   nb.addEventListener('click', createTile); poolEl.appendChild(nb);
   meta.textContent = 'revision ' + S.rev;
-  if (closeSelBtn) closeSelBtn.style.display = (S.sel && S.tiles[S.sel]) ? '' : 'none';
+  var hasSel = Boolean(S.sel && S.tiles[S.sel]);
+  if (closeSelBtn) closeSelBtn.style.display = hasSel ? '' : 'none';
+  if (delSelBtn) delSelBtn.style.display = hasSel ? '' : 'none';
   renderPanel();
 }
 function catalogFieldHtml(currentPkg) {
@@ -322,6 +325,10 @@ function renderPanel() {
   document.getElementById('p_close').addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
 }
 if (closeSelBtn) closeSelBtn.addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
+if (delSelBtn) delSelBtn.addEventListener('click', function () {
+  if (!S.sel || !S.tiles[S.sel]) return;
+  removeFromLoc(S.sel); delete S.tiles[S.sel]; S.sel = null; S.selItem = -1; render();
+});
 function createTile() {
   var id = 't' + Date.now().toString(36) + (S.seq++);
   S.tiles[id] = { id: id, kind: 'app', title: '新しいタイル', pkg: '' };

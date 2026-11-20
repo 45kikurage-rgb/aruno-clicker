@@ -195,6 +195,7 @@ test("login with the admin key sets a persistent cookie that authenticates the e
   assert.ok(html.includes("保存"));
   assert.ok(html.includes("タイルを作る"));
   assert.ok(html.includes("closeSelBtn")); // close button for the selected tile's editor
+  assert.ok(html.includes("delSelBtn")); // delete button next to it
 });
 
 test("login with a wrong key is rejected and the editor stays locked", async () => {
