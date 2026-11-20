@@ -18,7 +18,7 @@ const ICON_GLYPHS = {
 };
 const TILE_KINDS = [
   ["app", "アプリ起動"], ["copy", "コピー"], ["web", "リンク"],
-  ["download", "ダウンロード"], ["update", "アプリ更新"], ["settings", "設定"],
+  ["download", "ダウンロード"], ["update", "アプリ更新"], ["install", "アプリ入手"], ["settings", "設定"],
   ["menu", "せり上がり"], ["wifi", "Wi-Fi"], ["airplane", "機内モード"], ["label", "ラベル"],
 ];
 const ITEM_KINDS = [
@@ -169,6 +169,7 @@ function glyph(t) {
   if (t.kind === 'app') return '📱';
   if (t.kind === 'download') return '⬇';
   if (t.kind === 'update') return '⟳';
+  if (t.kind === 'install') return '📥';
   if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
   return ICON_GLYPHS[t.icon] || '▦';
 }
@@ -221,9 +222,10 @@ function renderPanel() {
   var p = document.createElement('div'); p.className = 'panel';
   var fnHtml = TILE_KINDS.map(function (pr) { return '<button class="fn' + (t.kind === pr[0] ? ' on' : '') + '" data-k="' + pr[0] + '">' + pr[1] + '</button>'; }).join('');
   var fields = '<div class="fld"><label>表示名</label><input id="f_title" value="' + esc(t.title || '') + '"></div>';
-  if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update') {
+  if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update' || t.kind === 'install') {
     fields += catalogFieldHtml(t.pkg);
-    if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
+    if (t.kind === 'install') fields += '<div class="fld"><label>APKのURL（直リンク・必須）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…/app.apk"></div><div class="hint">押すとアプリがAPKをダウンロードしてインストールし、起動します（アプリ側の対応が必要。未対応の間は空白表示）。入っていれば起動だけします。</div>';
+    else if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
   }
   if (t.kind === 'web') {
     fields += '<div class="fld"><label>URL</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
@@ -332,6 +334,7 @@ function cleanTile(t) {
   var o = { id: t.id, kind: t.kind, title: t.title };
   if (t.kind === 'app') o.pkg = t.pkg || '';
   if (t.kind === 'download' || t.kind === 'update') { o.pkg = t.pkg || ''; if (t.url) o.url = t.url; }
+  if (t.kind === 'install') { o.pkg = t.pkg || ''; o.url = t.url || ''; }
   if (t.kind === 'web') { o.icon = t.icon || 'link'; o.url = t.url || ''; if (t.browser) o.browser = t.browser; }
   if (t.kind === 'copy') { o.copyType = t.copyType || 'text'; if (t.copyType === 'text') o.text = t.text || ''; if (t.copyType === 'url') o.url = t.url || ''; }
   if (t.kind === 'settings' || t.kind === 'wifi' || t.kind === 'airplane' || t.kind === 'label') o.icon = t.icon || (t.kind === 'settings' ? 'settings' : t.kind === 'wifi' ? 'wifi' : t.kind === 'airplane' ? 'airplane' : 'tag');

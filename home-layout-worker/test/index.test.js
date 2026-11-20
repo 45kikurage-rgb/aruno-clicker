@@ -241,6 +241,12 @@ test("validateLayout enforces the v2 format rules", () => {
   assert.equal(validateLayout({ v: 2, slots }).ok, true); // new kinds
 
   slots = base();
+  slots[0] = { id: "i1", kind: "install", title: "かんたんツール", pkg: "com.example.kantan", url: "https://example.com/app.apk" };
+  assert.equal(validateLayout({ v: 2, slots }).ok, true); // install with an APK URL
+  slots[0] = { id: "i1", kind: "install", title: "かんたんツール", pkg: "com.example.kantan" };
+  assert.equal(validateLayout({ v: 2, slots }).ok, false); // install requires the APK URL
+
+  slots = base();
   const dupPool = [{ id: "s0", kind: "label", title: "重複", icon: "tag" }];
   assert.equal(validateLayout({ v: 2, slots, pool: dupPool }).ok, false); // duplicate id
 
