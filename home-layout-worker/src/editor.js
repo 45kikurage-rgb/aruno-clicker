@@ -144,6 +144,7 @@ export function editorHtml() {
     <div class="secttl">ホーム画面（16マス）― タイルをドラッグで移動、タップで編集</div>
     <div class="grid" id="grid"></div>
   </div>
+  <div style="text-align:right; margin-top:4px"><button class="pbtn" id="closeSelBtn" type="button" style="display:none">選択中のタイルを閉じる ✕</button></div>
   <div class="secttl">配置外のタイル（ここへドラッグで外せる）</div>
   <div class="pool" id="pool"></div>
   <div id="panelBox"></div>
@@ -162,7 +163,8 @@ var ITEMKINDNAME = {}; ITEM_KINDS.forEach(function (p) { ITEMKINDNAME[p[0]] = p[
 var S = { tiles: {}, slots: [], pool: [], sel: null, selItem: -1, rev: 0, seq: 1 };
 var grid = document.getElementById('grid'), poolEl = document.getElementById('pool'),
     panelBox = document.getElementById('panelBox'), msg = document.getElementById('msg'),
-    meta = document.getElementById('meta'), saveBtn = document.getElementById('saveBtn');
+    meta = document.getElementById('meta'), saveBtn = document.getElementById('saveBtn'),
+    closeSelBtn = document.getElementById('closeSelBtn');
 
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
@@ -201,6 +203,7 @@ function render() {
   var nb = document.createElement('button'); nb.className = 'newtile'; nb.type = 'button'; nb.textContent = '＋ タイルを作る';
   nb.addEventListener('click', createTile); poolEl.appendChild(nb);
   meta.textContent = 'revision ' + S.rev;
+  if (closeSelBtn) closeSelBtn.style.display = (S.sel && S.tiles[S.sel]) ? '' : 'none';
   renderPanel();
 }
 function catalogFieldHtml(currentPkg) {
@@ -318,6 +321,7 @@ function renderPanel() {
   document.getElementById('p_del').addEventListener('click', function () { var L = locOf(S.sel); if (L) { if (L.where === 'slot') S.slots[L.idx] = null; else S.pool.splice(L.idx, 1); } delete S.tiles[S.sel]; S.sel = null; S.selItem = -1; render(); });
   document.getElementById('p_close').addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
 }
+if (closeSelBtn) closeSelBtn.addEventListener('click', function () { S.sel = null; S.selItem = -1; render(); });
 function createTile() {
   var id = 't' + Date.now().toString(36) + (S.seq++);
   S.tiles[id] = { id: id, kind: 'app', title: '新しいタイル', pkg: '' };
