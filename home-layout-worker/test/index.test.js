@@ -229,6 +229,10 @@ test("validateLayout enforces the v2 format rules", () => {
   assert.equal(validateLayout({ v: 2, slots }).ok, true); // browser parameter (decided form)
 
   slots = base();
+  slots[0] = { id: "r1", kind: "web", title: "ルーレット", icon: "roulette", url: "https://example.com/" };
+  assert.equal(validateLayout({ v: 2, slots }).ok, true); // roulette icon (8 pockets)
+
+  slots = base();
   slots[0] = { id: "a1", kind: "app", title: "LINE", pkg: "not a package" };
   assert.equal(validateLayout({ v: 2, slots }).ok, false);
 
