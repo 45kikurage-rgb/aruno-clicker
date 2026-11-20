@@ -37,6 +37,7 @@ const APP_CATALOG = [
   ["Google開発者サービス", "com.google.android.gms"],
   ["Gmail", "com.google.android.gm"],
   ["YouTube", "com.google.android.youtube"],
+  ["かんたんツール", "com.kantan.app"],
 ];
 
 const PAGE_CSS = `
