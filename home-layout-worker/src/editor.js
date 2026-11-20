@@ -159,6 +159,7 @@ export function editorHtml() {
 <script>
 var ICONS = ${JSON.stringify(ICONS)};
 var ICON_GLYPHS = ${JSON.stringify(ICON_GLYPHS)};
+var ROULETTE_SVG = ${JSON.stringify(ROULETTE_SVG)};
 var TILE_KINDS = ${JSON.stringify(TILE_KINDS)};
 var ITEM_KINDS = ${JSON.stringify(ITEM_KINDS)};
 var APP_CATALOG = ${JSON.stringify(APP_CATALOG)};
