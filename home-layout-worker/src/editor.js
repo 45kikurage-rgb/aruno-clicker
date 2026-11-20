@@ -10,11 +10,15 @@
 
 const FONT_URL = "https://cdn.jsdelivr.net/gh/45kikurage-rgb/aruno-clicker@main/home-layout-worker/assets/corporate-logo-rounded-bold.woff2";
 
-const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag", "auto"];
+const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag", "auto", "roulette"];
+// Roulette wheel with 8 pockets, drawn in the same line style as the
+// app's built-in icons (honey / qr / pig). Used for the editor preview;
+// the app ships the matching drawable.
+const ROULETTE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M14.5 12h6.5M13.8 13.8l4.6 4.6M12 14.5V21M10.2 13.8l-4.6 4.6M9.5 12H3M10.2 10.2L5.6 5.6M12 9.5V3M13.8 10.2l4.6-4.6"/></svg>';
 const ICON_GLYPHS = {
   honey: "🍯", qr: "▦", pig: "🐷", airplane: "✈", live: "●", tiker: "📱",
   mail: "✉", settings: "⚙", updates: "⟳", id: "ID", copy: "⧉", link: "🔗",
-  wifi: "📶", storage: "💾", tag: "🏷", auto: "🌪",
+  wifi: "📶", storage: "💾", tag: "🏷", auto: "🌪", roulette: "◎",
 };
 const TILE_KINDS = [
   ["app", "アプリ起動"], ["copy", "コピー"], ["web", "リンク"],
@@ -143,8 +147,8 @@ export function editorHtml() {
   <div class="gridbox">
     <div class="secttl">ホーム画面（16マス）― タイルをドラッグで移動、タップで編集</div>
     <div class="grid" id="grid"></div>
+    <div style="display:flex; gap:6px; margin-top:6px"><button class="pbtn danger" id="delSelBtn" type="button" style="display:none">削除</button><button class="pbtn" id="closeSelBtn" type="button" style="display:none">閉じる</button></div>
   </div>
-  <div style="display:flex; gap:6px; margin-top:4px"><button class="pbtn danger" id="delSelBtn" type="button" style="display:none">削除</button><button class="pbtn" id="closeSelBtn" type="button" style="display:none">閉じる</button></div>
   <div class="secttl">配置外のタイル（ここへドラッグで外せる）</div>
   <div class="pool" id="pool"></div>
   <div id="panelBox"></div>
@@ -170,6 +174,7 @@ var grid = document.getElementById('grid'), poolEl = document.getElementById('po
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function setMsg(text, isErr) { msg.textContent = text || ''; msg.className = 'msg' + (isErr ? ' err' : ''); }
 function glyph(t) {
+  if (t.icon === 'roulette') return ROULETTE_SVG;
   if (t.icon && ICON_GLYPHS[t.icon]) return ICON_GLYPHS[t.icon];
   if (t.icon && t.icon.indexOf('pkg:') === 0) return '📱';
   if (t.kind === 'app') return '📱';

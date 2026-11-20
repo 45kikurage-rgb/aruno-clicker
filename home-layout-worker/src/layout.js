@@ -20,7 +20,7 @@ export const MAX_URL_LENGTH = 2048;
 export const BUILTIN_ICONS = [
   "honey", "qr", "pig", "airplane", "live", "tiker", "mail",
   "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag",
-  "auto",
+  "auto", "roulette",
 ];
 
 export const SLOT_KINDS = [
