@@ -239,7 +239,8 @@ function renderPanel() {
   if (t.kind === 'app' || t.kind === 'download' || t.kind === 'update' || t.kind === 'install') {
     fields += catalogFieldHtml(t.pkg);
     if (t.kind === 'install') fields += '<div class="fld"><label>APKのURL（直リンク・必須）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…/app.apk"></div><div class="hint">押すとアプリがAPKをダウンロードしてインストールし、起動します（アプリ側の対応が必要。未対応の間は空白表示）。入っていれば起動だけします。</div>' + iconFieldHtml(t);
-    else if (t.kind !== 'app') fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
+    else if (t.kind === 'app') fields += iconFieldHtml(t) + '<div class="hint">「アプリのアイコンを使う」なら、そのアプリ自身のアイコンで表示します。内蔵アイコンを選ぶとそちらが優先です。</div>';
+    else fields += '<div class="fld"><label>' + (t.kind === 'download' ? '入手ページ' : '更新ページ') + 'のURL（空ならストア画面）</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
   }
   if (t.kind === 'web') {
     fields += '<div class="fld"><label>URL</label><input id="f_url" value="' + esc(t.url || '') + '" placeholder="https://…"></div>';
@@ -309,7 +310,7 @@ function renderPanel() {
   var catSel = p.querySelector('.catalogSel'); if (catSel) catSel.addEventListener('change', function () { if (catSel.value) { t.pkg = catSel.value; render(); } });
   var br = document.getElementById('f_browser'); if (br) br.addEventListener('change', function () { t.browser = br.value || undefined; });
   var ct = document.getElementById('f_ctype'); if (ct) ct.addEventListener('change', function () { t.copyType = ct.value; render(); });
-  var ic = document.getElementById('f_icon'); if (ic) ic.addEventListener('change', function () { t.icon = ic.value === '__pkg' ? 'pkg:' : ic.value; render(); });
+  var ic = document.getElementById('f_icon'); if (ic) ic.addEventListener('change', function () { if (ic.value === '__pkg') t.icon = (t.kind === 'app') ? undefined : 'pkg:'; else t.icon = ic.value; render(); });
   bind('f_iconpkg', t, 'iconpkg');
   var ip = document.getElementById('f_iconpkg'); if (ip) ip.addEventListener('input', function () { t.icon = 'pkg:' + ip.value; });
   p.querySelectorAll('.ritem').forEach(function (b) { b.addEventListener('click', function () { S.selItem = parseInt(b.dataset.i, 10); render(); }); });
@@ -351,7 +352,7 @@ function cleanItem(it) {
 }
 function cleanTile(t) {
   var o = { id: t.id, kind: t.kind, title: t.title };
-  if (t.kind === 'app') o.pkg = t.pkg || '';
+  if (t.kind === 'app') { o.pkg = t.pkg || ''; if (t.icon) o.icon = t.icon; }
   if (t.kind === 'download' || t.kind === 'update') { o.pkg = t.pkg || ''; if (t.url) o.url = t.url; }
   if (t.kind === 'install') { o.pkg = t.pkg || ''; o.url = t.url || ''; if (t.icon) o.icon = t.icon; }
   if (t.kind === 'web') { o.icon = t.icon || 'link'; o.url = t.url || ''; if (t.browser) o.browser = t.browser; }

@@ -234,6 +234,15 @@ test("validateLayout enforces the v2 format rules", () => {
   assert.equal(validateLayout({ v: 2, slots }).ok, true); // roulette icon (8 pockets)
 
   slots = base();
+  slots[0] = { id: "k1", kind: "app", title: "Auto", pkg: "com.kantan.app", icon: "auto" };
+  const kv = validateLayout({ v: 2, slots });
+  assert.equal(kv.ok, true); // app tile with a built-in icon override
+  assert.equal(kv.value.slots[0].icon, "auto");
+  slots = base();
+  slots[0] = { id: "k1", kind: "app", title: "Auto", pkg: "com.kantan.app", icon: "nope" };
+  assert.equal(validateLayout({ v: 2, slots }).ok, false); // unknown icon rejected
+
+  slots = base();
   slots[0] = { id: "a1", kind: "app", title: "LINE", pkg: "not a package" };
   assert.equal(validateLayout({ v: 2, slots }).ok, false);
 

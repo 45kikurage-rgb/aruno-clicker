@@ -154,9 +154,21 @@ function normalizeTile(raw, field, { inPool }) {
   if (!title.ok) return title;
   const out = { id: id.value, kind: raw.kind, title: title.value };
 
-  if (raw.kind === "app" || raw.kind === "download" || raw.kind === "update") {
+  if (raw.kind === "app") {
+    // Normally the tile shows the target app's own icon; an optional
+    // built-in icon overrides it (e.g. the tornado "auto" for
+    // かんたんツール, decided 2026-11-20).
+    const app = checkAppFields(raw, field, { withOptionalUrl: false });
+    if (!app.ok) return app;
+    Object.assign(out, app.value);
+    const icon = checkIcon(raw.icon, `${field}.icon`, { required: false });
+    if (!icon.ok) return icon;
+    if (icon.value !== undefined) out.icon = icon.value;
+    return pass(out);
+  }
+  if (raw.kind === "download" || raw.kind === "update") {
     // The tile icon is the target app's own icon; nothing is stored.
-    const app = checkAppFields(raw, field, { withOptionalUrl: raw.kind !== "app" });
+    const app = checkAppFields(raw, field, { withOptionalUrl: true });
     if (!app.ok) return app;
     Object.assign(out, app.value);
     return pass(out);
