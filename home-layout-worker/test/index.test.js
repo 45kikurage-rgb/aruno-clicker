@@ -190,7 +190,9 @@ test("login with the admin key sets a persistent cookie that authenticates the e
 
   const page = await worker.fetch(req("/home", { headers: { Cookie: cookie.split(";")[0] } }), env);
   assert.equal(page.status, 200);
+  assert.equal(page.headers.get("Cache-Control"), "no-store");
   const html = await page.text();
+  assert.match(html, /rel="manifest" href="\/pwa\/manifest\.webmanifest"/);
   assert.ok(html.includes("ホーム画面の配置"));
   assert.ok(html.includes("保存"));
   assert.ok(html.includes("タイルを作る"));
@@ -208,6 +210,7 @@ test("login with a wrong key is rejected and the editor stays locked", async () 
 
   const page = await worker.fetch(req("/home"), env);
   const html = await page.text();
+  assert.match(html, /rel="manifest" href="\/pwa\/manifest\.webmanifest"/);
   assert.ok(html.includes("管理キー"));
   assert.ok(!html.includes('id="saveBtn"'));
 });

@@ -9,6 +9,13 @@
 // repo via CDN. Falls back to rounded system fonts while unavailable.
 
 const FONT_URL = "https://cdn.jsdelivr.net/gh/45kikurage-rgb/aruno-clicker@main/home-layout-worker/assets/corporate-logo-rounded-bold.woff2";
+const PWA_HEAD = `
+<link rel="manifest" href="/pwa/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/pwa/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon.png">
+<meta name="theme-color" content="#193b47">
+<meta name="apple-mobile-web-app-title" content="ホーム配置">
+<script src="/pwa/register.js" defer></script>`;
 
 const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag", "auto", "roulette"];
 // Roulette wheel with 8 pockets, drawn in the same line style as the
@@ -118,7 +125,7 @@ export function loginHtml(message) {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ホーム画面の配置 - ログイン</title><style>${PAGE_CSS}</style></head>
+<title>ホーム画面の配置 - ログイン</title>${PWA_HEAD}<style>${PAGE_CSS}</style></head>
 <body>
 <div class="login"><div class="card">
   <h3>ホーム画面の配置</h3>
@@ -136,7 +143,7 @@ export function editorHtml() {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ホーム画面の配置</title><style>${PAGE_CSS}</style></head>
+<title>ホーム画面の配置</title>${PWA_HEAD}<style>${PAGE_CSS}</style></head>
 <body>
 <header>
   <div class="title">ホーム画面の配置</div>
