@@ -1,4 +1,4 @@
-// Editor and login pages for the Aruno-Home/T HOME layout site.
+// Editor and login pages for Aruno-16Grid.
 // Tile-based editor (decided 2026-11-20): a sticky 4x4 grid on top, a
 // pool of unplaced tiles below, and a tile editor panel. Tiles are
 // created first, given one function (kind) and its binding (app / text /
@@ -8,13 +8,15 @@
 // SIL Open Font License 1.1), converted to woff2 and served from the
 // repo via CDN. Falls back to rounded system fonts while unavailable.
 
+const SITE_NAME = "Aruno-16Grid";
 const FONT_URL = "https://cdn.jsdelivr.net/gh/45kikurage-rgb/aruno-clicker@main/home-layout-worker/assets/corporate-logo-rounded-bold.woff2";
 const PWA_HEAD = `
 <link rel="manifest" href="/pwa/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/pwa/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/pwa/apple-touch-icon.png">
 <meta name="theme-color" content="#193b47">
-<meta name="apple-mobile-web-app-title" content="ホーム配置">
+<meta name="application-name" content="${SITE_NAME}">
+<meta name="apple-mobile-web-app-title" content="${SITE_NAME}">
 <script src="/pwa/register.js" defer></script>`;
 
 const ICONS = ["honey", "qr", "pig", "airplane", "live", "tiker", "mail", "settings", "updates", "id", "copy", "link", "wifi", "storage", "tag", "auto", "roulette"];
@@ -125,10 +127,10 @@ export function loginHtml(message) {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ホーム画面の配置 - ログイン</title>${PWA_HEAD}<style>${PAGE_CSS}</style></head>
+<title>${SITE_NAME} - ログイン</title>${PWA_HEAD}<style>${PAGE_CSS}</style></head>
 <body>
 <div class="login"><div class="card">
-  <h3>ホーム画面の配置</h3>
+  <h3>${SITE_NAME}</h3>
   <p class="hint">編集は認証済み端末でのみ行えます。管理キーを入力してください。一度認証すると、この端末では以後ずっと認証済みとして扱われます。</p>
   ${message ? `<p class="err">${escapeHtml(message)}</p>` : ""}
   <form method="post" action="/home/login">
@@ -143,10 +145,10 @@ export function editorHtml() {
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ホーム画面の配置</title>${PWA_HEAD}<style>${PAGE_CSS}</style></head>
+<title>${SITE_NAME}</title>${PWA_HEAD}<style>${PAGE_CSS}</style></head>
 <body>
 <header>
-  <div class="title">ホーム画面の配置</div>
+  <div class="title">${SITE_NAME}</div>
   <div class="meta" id="meta">読み込み中…</div>
   <button id="saveBtn" type="button">保存</button>
 </header>
