@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { validateLayout, upgradeLayout } from "../src/layout.js";
 
@@ -193,7 +194,9 @@ test("login with the admin key sets a persistent cookie that authenticates the e
   assert.equal(page.headers.get("Cache-Control"), "no-store");
   const html = await page.text();
   assert.match(html, /rel="manifest" href="\/pwa\/manifest\.webmanifest"/);
-  assert.ok(html.includes("ホーム画面の配置"));
+  assert.ok(html.includes("<title>Aruno-16Grid</title>"));
+  assert.ok(html.includes('<div class="title">Aruno-16Grid</div>'));
+  assert.ok(html.includes('<meta name="apple-mobile-web-app-title" content="Aruno-16Grid">'));
   assert.ok(html.includes("保存"));
   assert.ok(html.includes("タイルを作る"));
   assert.ok(html.includes("closeSelBtn")); // close button for the selected tile's editor
@@ -211,8 +214,18 @@ test("login with a wrong key is rejected and the editor stays locked", async () 
   const page = await worker.fetch(req("/home"), env);
   const html = await page.text();
   assert.match(html, /rel="manifest" href="\/pwa\/manifest\.webmanifest"/);
+  assert.ok(html.includes("<title>Aruno-16Grid - ログイン</title>"));
+  assert.ok(html.includes("<h3>Aruno-16Grid</h3>"));
   assert.ok(html.includes("管理キー"));
   assert.ok(!html.includes('id="saveBtn"'));
+});
+
+test("the installed PWA uses the same name and editor entry point", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../public/pwa/manifest.webmanifest", import.meta.url), "utf8"));
+  assert.equal(manifest.name, "Aruno-16Grid");
+  assert.equal(manifest.short_name, manifest.name);
+  assert.equal(manifest.id, "/home");
+  assert.equal(manifest.start_url, "/home");
 });
 
 test("validateLayout enforces the v2 format rules", () => {
